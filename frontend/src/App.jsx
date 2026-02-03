@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Plus, Edit2, MapPin, FileText, CheckCircle, AlertCircle, Search, Loader2, X, Cpu, Zap, Activity } from 'lucide-react';
+import { Upload, Plus, Edit2, MapPin, FileText, CheckCircle, AlertCircle, Search, Loader2, X, Cpu, Zap, Activity, TrendingUp, BarChart3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SubstationForm from './components/SubstationForm';
 
 import ConfigurationEditor from './components/ConfigurationEditor';
+import LoadProfileUpload from './components/LoadProfileUpload';
+import LoadDashboard from './components/LoadDashboard';
 
 // API Service
 const api = axios.create({ baseURL: '/api/v1' });
@@ -145,10 +147,38 @@ const App = () => {
                 </div>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                     {view === 'list' ? (
-                        <button className="btn-primary" onClick={() => { setSelectedSub(null); setView('create'); }}>
-                            <Plus size={18} style={{ marginRight: '8px' }} />
-                            Manual Entry
-                        </button>
+                        <>
+                            <button
+                                className="btn-primary"
+                                onClick={() => setView('dashboard')}
+                                style={{
+                                    background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}
+                            >
+                                <BarChart3 size={18} style={{ marginRight: '4px' }} />
+                                Dashboard
+                            </button>
+                            <button
+                                className="btn-primary"
+                                onClick={() => setView('load-profile')}
+                                style={{
+                                    background: 'linear-gradient(135deg, #00ffa3 0%, #00e5ff 100%)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}
+                            >
+                                <TrendingUp size={18} style={{ marginRight: '4px' }} />
+                                Load Profile
+                            </button>
+                            <button className="btn-primary" onClick={() => { setSelectedSub(null); setView('create'); }}>
+                                <Plus size={18} style={{ marginRight: '8px' }} />
+                                Manual Entry
+                            </button>
+                        </>
                     ) : (
                         <button className="btn-secondary" onClick={() => setView('list')} style={{ background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.5rem', padding: '0.75rem 1.5rem' }}>
                             View List
@@ -213,6 +243,20 @@ const App = () => {
                 <ConfigurationEditor
                     substation={selectedSub}
                     onSave={handleSave}
+                    onCancel={() => setView('list')}
+                />
+            )}
+
+            {view === 'dashboard' && (
+                <LoadDashboard />
+            )}
+
+            {view === 'load-profile' && (
+                <LoadProfileUpload
+                    onUploadComplete={(results) => {
+                        setStatus({ type: 'success', msg: `Load data uploaded: ${results.matched} matched, ${results.unmatched} unmatched` });
+                        fetchSubstations(); // Refresh substations with load data
+                    }}
                     onCancel={() => setView('list')}
                 />
             )}
@@ -301,14 +345,14 @@ const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProce
                         <div style={{ marginTop: '10px', fontSize: '0.8rem' }}>
                             <div style={{ marginBottom: '8px' }}>
                                 <div style={{ color: 'var(--accent-blue)', fontSize: '0.7rem', marginBottom: '4px' }}>TRANSFORMERS</div>
-                                    {substation.transformers.map(t => (
-                                        <div key={t.id} style={{ borderLeft: '2px solid rgba(0,229,255,0.3)', paddingLeft: '8px', marginBottom: '4px' }}>
-                                            <div style={{ fontWeight: '500' }}>{t.bay_name} ({t.capacity_mva}MVA)</div>
-                                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>
-                                                HV: {t.hv_breaker_number}, LV: {t.lv_breaker_number}
-                                            </div>
+                                {substation.transformers.map(t => (
+                                    <div key={t.id} style={{ borderLeft: '2px solid rgba(0,229,255,0.3)', paddingLeft: '8px', marginBottom: '4px' }}>
+                                        <div style={{ fontWeight: '500' }}>{t.bay_name} ({t.capacity_mva}MVA)</div>
+                                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>
+                                            HV: {t.hv_breaker_number}, LV: {t.lv_breaker_number}
                                         </div>
-                                    ))}
+                                    </div>
+                                ))}
                             </div>
                             <div>
                                 <div style={{ color: 'var(--accent-blue)', fontSize: '0.7rem', marginBottom: '4px' }}>LINE BAYS</div>

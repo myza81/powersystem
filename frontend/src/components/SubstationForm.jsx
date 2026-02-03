@@ -76,6 +76,7 @@ const SubstationForm = ({ substation, onSave, onCancel }) => {
                         <option value="DC">Data Centre (DC)</option>
                         <option value="LSS">Large Scale Solar (LSS)</option>
                         <option value="IPP">Independent Power Producer (IPP)</option>
+                        <option value="LPC">Large Power Consumer (LPC)</option>
                     </select>
                 </div>
 

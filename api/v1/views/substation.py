@@ -7,12 +7,10 @@ from api.v1.serializers.substation import SubstationSerializer
 from services.substation_sync import SubstationSyncService
 import tempfile
 import os
-import django.db.transaction
 import logging
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
-
-import django.db
 
 class SubstationViewSet(viewsets.ModelViewSet):
     queryset = Substation.objects.all()
@@ -22,8 +20,9 @@ class SubstationViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         # Auto-generate substation_id before saving if manually creating
-        mnemonic = self.request.data.get('mnemonic')
-        voltage = self.request.data.get('voltage')
+        validated_data = serializer.validated_data
+        mnemonic = validated_data.get('mnemonic')
+        voltage = validated_data.get('voltage')
         if mnemonic and voltage:
             substation_id = f"{mnemonic.upper()}{int(voltage)}"
             serializer.save(substation_id=substation_id)
@@ -68,7 +67,7 @@ class SubstationViewSet(viewsets.ModelViewSet):
             return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate file extension
-        ext = sld_file.name.split('.')[-1].lower()
+        ext = os.path.splitext(sld_file.name)[1].lower().lstrip('.')
         if ext not in ['pdf', 'png', 'jpg', 'jpeg', 'dxf', 'svg']:
             return Response({"error": "Only PDF, Image, DXF, or SVG files are allowed"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -118,7 +117,7 @@ class SubstationViewSet(viewsets.ModelViewSet):
             )
             
             # 2. Update Database (Atomic transaction with soft-delete)
-            with django.db.transaction.atomic():
+            with transaction.atomic():
                 # Update Substation metadata if present
                 if parsed_data.get('commission_date'):
                     substation.commission_date = parsed_data['commission_date']

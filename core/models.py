@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.core.files.storage import FileSystemStorage
 from django.conf import settings
@@ -26,6 +27,7 @@ class Substation(models.Model):
         ('DC', 'Data Centre (DC)'),
         ('LSS', 'Large Scale Solar (LSS)'),
         ('IPP', 'Independent Power Producer (IPP)'),
+        ('LPC', 'Large Power Consumer (LPC)'),
     ]
 
     GRID_CHOICES = [
@@ -134,6 +136,30 @@ class Substation(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.substation_id})"
+    
+    @property
+    def total_pload_mw(self):
+        """Aggregate active power load from all transformers and incoming bays."""
+        from django.db.models import Sum
+        transformer_load = self.transformers.aggregate(
+            total=Sum('load_data__pload_mw')
+        )['total'] or 0
+        bay_load = self.incoming_bays.aggregate(
+            total=Sum('load_data__pload_mw')
+        )['total'] or 0
+        return transformer_load + bay_load
+    
+    @property
+    def total_qload_mvar(self):
+        """Aggregate reactive power load from all transformers and incoming bays."""
+        from django.db.models import Sum
+        transformer_load = self.transformers.aggregate(
+            total=Sum('load_data__qload_mvar')
+        )['total'] or 0
+        bay_load = self.incoming_bays.aggregate(
+            total=Sum('load_data__qload_mvar')
+        )['total'] or 0
+        return transformer_load + bay_load
 
 class Transformer(models.Model):
     substation = models.ForeignKey(Substation, related_name='transformers', on_delete=models.CASCADE)
@@ -169,3 +195,51 @@ class IncomingBay(models.Model):
         if self.bay_name and self.substation:
             self.bay_id = f"{self.substation.substation_id}_{self.bay_name}"
         super().save(*args, **kwargs)
+
+class BayLoad(models.Model):
+    """
+    Stores load profile data (MW/Mvar) linked to transformer or incoming bay.
+    Data is replaced on each new upload.
+    """
+    # Foreign keys (nullable to support unmatched data logging)
+    transformer = models.OneToOneField(
+        Transformer, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name='load_data'
+    )
+    incoming_bay = models.OneToOneField(
+        IncomingBay, 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name='load_data'
+    )
+    
+    # Load data from Excel
+    pload_mw = models.FloatField(help_text="Active power load in MW")
+    qload_mvar = models.FloatField(help_text="Reactive power load in Mvar")
+    
+    # Metadata from Excel (for traceability)
+    bus_name = models.CharField(max_length=100)
+    mnemonic = models.CharField(max_length=10)
+    bay_identifier = models.CharField(max_length=20, help_text="T1, T2, F1, etc.")
+    
+    # Upload tracking
+    upload_timestamp = models.DateTimeField(auto_now_add=True)
+    upload_batch_id = models.UUIDField(default=uuid.uuid4, help_text="Groups rows from same upload")
+    matched = models.BooleanField(default=False, help_text="Successfully matched to bay_id")
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['upload_batch_id']),
+            models.Index(fields=['matched']),
+        ]
+    
+    def __str__(self):
+        if self.transformer:
+            return f"Load: {self.transformer.bay_id} ({self.pload_mw} MW)"
+        elif self.incoming_bay:
+            return f"Load: {self.incoming_bay.bay_id} ({self.pload_mw} MW)"
+        return f"Unmatched Load: {self.mnemonic}-{self.bay_identifier}"
