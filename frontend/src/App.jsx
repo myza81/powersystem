@@ -3,6 +3,7 @@ import { Upload, Plus, Edit2, MapPin, FileText, CheckCircle, AlertCircle, Search
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SubstationForm from './components/SubstationForm';
+import SldViewer from './components/SldViewer';
 
 import ConfigurationEditor from './components/ConfigurationEditor';
 import LoadProfileUpload from './components/LoadProfileUpload';
@@ -18,6 +19,7 @@ const App = () => {
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
     const [status, setStatus] = useState(null);
+    const [viewingSld, setViewingSld] = useState(null);
 
     // Fetch Substations
     const fetchSubstations = async () => {
@@ -100,6 +102,19 @@ const App = () => {
             await api.post(`/substations/${subId}/upload_sld/`, formData);
             setStatus({ type: 'success', msg: 'SLD file standards applied and stored' });
             fetchSubstations();
+
+            // If the currently selected substation is the one being updated, refresh it too
+            // Note: Since api.post only uploads, we might need to re-fetch the specific sub
+            // But usually we just need to know the file is there. 
+            // Better to rely on fetchSubstations updating the list, and then syncing selectedSub.
+            // However, fetchSubstations is async. 
+            // A quick fix is to manually update the sld_file field in selectedSub if it matches
+            if (selectedSub && selectedSub.substation_id === subId) {
+                // We don't have the full object returned here usually, but we know the file is set.
+                // Re-fetching or just optimistic update:
+                const res = await api.get(`/substations/${subId}/`);
+                setSelectedSub(res.data);
+            }
         } catch (err) {
             setStatus({ type: 'error', msg: 'SLD rejection: File must be PDF, Image, DXF, or SVG' });
         }
@@ -112,12 +127,39 @@ const App = () => {
         try {
             const res = await api.post(`/substations/${substationId}/process_sld/`);
             setSubstations(prev => prev.map(s => s.substation_id === substationId ? res.data : s));
+
+            // Sync selectedSub if it's the one being processed
+            if (selectedSub && selectedSub.substation_id === substationId) {
+                setSelectedSub(res.data);
+            }
+
             setStatus({ type: 'success', msg: `SLD Intelligence extracted for ${substationId}` });
         } catch (err) {
             console.error(err);
             setStatus({ type: 'error', msg: err.response?.data?.error || "SLD Analysis failed" });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleResolveIssue = (issue) => {
+        if (issue.type === 'create_substation') {
+            setSelectedSub({
+                mnemonic: issue.data.mnemonic,
+                voltage: issue.data.voltage,
+                name: '',
+                ownership: 'TNB',
+                grid: '',
+            });
+            setView('create');
+        } else if (issue.type === 'edit_substation') {
+            const sub = substations.find(s => s.substation_id === issue.data.substation_id);
+            if (sub) {
+                setSelectedSub(sub);
+                setView('edit');
+            } else {
+                setStatus({ type: 'error', msg: `Substation ${issue.data.substation_id} not found locally. Try syncing or check ID.` });
+            }
         }
     };
 
@@ -204,7 +246,7 @@ const App = () => {
                     <div className="substation-grid">
                         <AnimatePresence>
                             {substations
-                                .filter(s => s.name.toLowerCase().includes(search.toLowerCase()) || s.mnemonic.toLowerCase().includes(search.toLowerCase()))
+                                .filter(s => (s.name || '').toLowerCase().includes(search.toLowerCase()) || (s.mnemonic || '').toLowerCase().includes(search.toLowerCase()))
                                 .map(sub => (
                                     <SubstationCard
                                         key={sub.substation_id}
@@ -214,6 +256,7 @@ const App = () => {
                                         onSLDUpload={handleSLDUpload}
                                         onProcess={handleProcessSLD}
                                         processing={loading}
+                                        onViewSld={setViewingSld}
                                     />
                                 ))}
                         </AnimatePresence>
@@ -236,6 +279,8 @@ const App = () => {
                     substation={selectedSub}
                     onSave={handleSave}
                     onCancel={() => setView('list')}
+                    onConfigEdit={() => setView('config')}
+                    onSLDUpload={handleSLDUpload}
                 />
             ) : null}
 
@@ -244,6 +289,9 @@ const App = () => {
                     substation={selectedSub}
                     onSave={handleSave}
                     onCancel={() => setView('list')}
+                    onProcess={() => handleProcessSLD(selectedSub.substation_id)}
+                    processing={loading}
+                    onViewSld={setViewingSld}
                 />
             )}
 
@@ -258,13 +306,21 @@ const App = () => {
                         fetchSubstations(); // Refresh substations with load data
                     }}
                     onCancel={() => setView('list')}
+                    onResolveIssue={handleResolveIssue}
+                />
+            )}
+
+            {viewingSld && (
+                <SldViewer
+                    substation={viewingSld}
+                    onClose={() => setViewingSld(null)}
                 />
             )}
         </div>
     );
 };
 
-const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProcess, processing }) => {
+const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProcess, processing, onViewSld }) => {
     const [showConfig, setShowConfig] = useState(false);
     const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -320,9 +376,22 @@ const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProce
 
                 <div style={{ color: 'var(--text-secondary)', gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <FileText size={14} />
-                    <span style={{ color: substation.sld_file ? 'var(--accent-cyan)' : 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                        {substation.sld}
-                    </span>
+                    {substation.sld_file ? (
+                        <span
+                            onClick={(e) => { e.stopPropagation(); onViewSld(substation); }}
+                            style={{
+                                color: 'var(--accent-cyan)',
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                textDecoration: 'underline'
+                            }}
+                            title="Click to view SLD"
+                        >
+                            {typeof substation.sld_file === 'string' ? decodeURIComponent(substation.sld_file.split('/').pop()) : 'SLD File'}
+                        </span>
+                    ) : (
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>No SLD</span>
+                    )}
                 </div>
             </div>
 
@@ -381,14 +450,6 @@ const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProce
                         <Upload size={12} /> {substation.sld_file ? 'Update SLD' : 'Upload SLD'}
                     </label>
                 </div>
-                {substation.sld_file && !hasConfig && (
-                    <span
-                        onClick={() => onProcess(substation.substation_id)}
-                        style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                        {processing ? <Loader2 size={12} className="animate-spin" /> : <><Cpu size={12} /> Run Intelligence</>}
-                    </span>
-                )}
             </div>
         </motion.div>
     );

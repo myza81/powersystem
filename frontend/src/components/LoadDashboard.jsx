@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Zap, TrendingUp, MapPin, Building2, Database, Loader2, BarChart3, AlertCircle } from 'lucide-react';
+import { Search, Zap, TrendingUp, MapPin, Building2, Database, Loader2, BarChart3, AlertCircle, AlertTriangle, CheckCircle2, FileText, ZoomIn, ZoomOut, X, Edit3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
+import SldViewer from './SldViewer';
+import BayIdEditor from './BayIdEditor';
 
 const api = axios.create({ baseURL: '/api/v1' });
 
@@ -13,6 +15,8 @@ const LoadDashboard = () => {
     const [selectedSubstation, setSelectedSubstation] = useState(null);
     const [substationDetails, setSubstationDetails] = useState(null);
     const [activeView, setActiveView] = useState('overview'); // 'overview' | 'regions' | 'states'
+    const [viewingSld, setViewingSld] = useState(null); // SLD Viewer State
+    const [showBayEditor, setShowBayEditor] = useState(false);
 
     // Fetch grid overview on mount
     useEffect(() => {
@@ -79,6 +83,16 @@ const LoadDashboard = () => {
             background: 'linear-gradient(135deg, #0a0e1a 0%, #1a1f35 100%)'
         }}>
             <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+                {/* SLD Viewer Overlay */}
+                <AnimatePresence>
+                    {viewingSld && (
+                        <SldViewer
+                            substation={viewingSld}
+                            onClose={() => setViewingSld(null)}
+                        />
+                    )}
+                </AnimatePresence>
+
                 {/* Header */}
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
@@ -296,6 +310,8 @@ const LoadDashboard = () => {
                     <StatesView regions={gridData?.breakdown || []} />
                 )}
 
+
+
                 {/* Search Section */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -367,6 +383,7 @@ const LoadDashboard = () => {
                                     substation={sub}
                                     onClick={() => handleSelectSubstation(sub)}
                                     isSelected={selectedSubstation?.substation_id === sub.substation_id}
+                                    onViewSld={setViewingSld}
                                 />
                             ))}
                         </div>
@@ -381,10 +398,26 @@ const LoadDashboard = () => {
                                 setSelectedSubstation(null);
                                 setSubstationDetails(null);
                             }}
+                            onViewSld={setViewingSld}
+                            onEditBayIds={() => setShowBayEditor(true)}
                         />
                     )}
                 </motion.div>
             </div>
+
+            {/* Bay ID Editor Overlay */}
+            <AnimatePresence>
+                {showBayEditor && selectedSubstation && (
+                    <BayIdEditor
+                        substation={selectedSubstation}
+                        onClose={() => setShowBayEditor(false)}
+                        onSuccess={() => {
+                            handleSelectSubstation(selectedSubstation); // Refresh details
+                            setShowBayEditor(false);
+                        }}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 };
@@ -574,7 +607,7 @@ const StatesView = ({ regions }) => (
 );
 
 // Substation Search Card
-const SubstationSearchCard = ({ substation, onClick, isSelected }) => (
+const SubstationSearchCard = ({ substation, onClick, url, onViewSld, isSelected }) => (
     <motion.div
         whileHover={{ scale: 1.02 }}
         onClick={onClick}
@@ -588,7 +621,7 @@ const SubstationSearchCard = ({ substation, onClick, isSelected }) => (
         }}
     >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
+            <div style={{ flex: 1 }}>
                 <div style={{ color: '#fff', fontWeight: 600, marginBottom: '0.25rem' }}>
                     {substation.name}
                 </div>
@@ -596,13 +629,36 @@ const SubstationSearchCard = ({ substation, onClick, isSelected }) => (
                     {substation.substation_id} • {substation.state || 'N/A'}
                 </div>
             </div>
-            <Building2 size={20} color={isSelected ? '#00e5ff' : 'rgba(255,255,255,0.3)'} />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onViewSld(substation);
+                    }}
+                    title="View Single Line Diagram"
+                    style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '6px',
+                        color: '#00e5ff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}
+                >
+                    <FileText size={16} />
+                </button>
+                <Building2 size={20} color={isSelected ? '#00e5ff' : 'rgba(255,255,255,0.3)'} />
+            </div>
         </div>
     </motion.div>
 );
 
 // Substation Details Panel
-const SubstationDetailsPanel = ({ substation, details, onClose }) => (
+const SubstationDetailsPanel = ({ substation, details, onClose, onViewSld, onEditBayIds }) => (
     <motion.div
         initial={{ opacity: 0, height: 0 }}
         animate={{ opacity: 1, height: 'auto' }}
@@ -617,9 +673,46 @@ const SubstationDetailsPanel = ({ substation, details, onClose }) => (
     >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1.5rem' }}>
             <div>
-                <h4 style={{ fontSize: '1.5rem', color: '#fff', marginBottom: '0.5rem' }}>
-                    {substation.name}
-                </h4>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+                    <h4 style={{ fontSize: '1.5rem', color: '#fff', margin: 0 }}>
+                        {substation.name}
+                    </h4>
+                    <button
+                        onClick={() => onViewSld(substation)}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.25rem 0.75rem',
+                            background: 'rgba(0, 229, 255, 0.1)',
+                            border: '1px solid rgba(0, 229, 255, 0.3)',
+                            borderRadius: '6px',
+                            color: '#00e5ff',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        <FileText size={14} /> View SLD
+                    </button>
+                    <button
+                        onClick={onEditBayIds}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.25rem 0.75rem',
+                            background: 'rgba(237, 137, 54, 0.1)', // Orange tint
+                            border: '1px solid rgba(237, 137, 54, 0.3)',
+                            borderRadius: '6px',
+                            color: '#ed8936',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        <Edit3 size={14} /> Edit Bay IDs
+                    </button>
+
+                </div>
                 <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
                     {substation.substation_id} • {substation.state}
                 </p>
@@ -680,7 +773,9 @@ const SubstationDetailsPanel = ({ substation, details, onClose }) => (
                     Individual Bay Loads
                 </h5>
                 <div style={{ display: 'grid', gap: '0.75rem' }}>
-                    {details.breakdown.map((bay, idx) => (
+                    {[...details.breakdown].sort((a, b) =>
+                        a.bay_name.localeCompare(b.bay_name, undefined, { numeric: true, sensitivity: 'base' })
+                    ).map((bay, idx) => (
                         <div
                             key={idx}
                             style={{
@@ -731,5 +826,8 @@ const SubstationDetailsPanel = ({ substation, details, onClose }) => (
         )}
     </motion.div>
 );
+
+
+
 
 export default LoadDashboard;

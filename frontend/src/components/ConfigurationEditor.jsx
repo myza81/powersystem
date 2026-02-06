@@ -1,11 +1,25 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Save, X, Zap, Activity } from 'lucide-react';
+import { Plus, Trash2, Save, X, Zap, Activity, Cpu, Loader2, FileText } from 'lucide-react';
 
-const ConfigurationEditor = ({ substation, onSave, onCancel }) => {
+const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processing, onViewSld }) => {
+    // Safety check
+    if (!substation) {
+        console.error("ConfigurationEditor: substation prop is missing!");
+        return <div style={{ padding: '2rem', color: 'red' }}>Error: No substation data provided.</div>;
+    }
+
     const [transformers, setTransformers] = useState(substation.transformers || []);
     const [bays, setBays] = useState(substation.incoming_bays || []);
+
+    // Sync state when substation prop updates (e.g. after Run Intelligence)
+    useEffect(() => {
+        if (substation) {
+            setTransformers(substation.transformers || []);
+            setBays(substation.incoming_bays || []);
+        }
+    }, [substation]);
 
     // Transformers Logic
     const addTransformer = () => {
@@ -74,11 +88,55 @@ const ConfigurationEditor = ({ substation, onSave, onCancel }) => {
 
     return (
         <div className="glass-card" style={{ padding: '2rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem', alignItems: 'center' }}>
                 <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Edit Substation Configuration</h3>
-                <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                    <X size={24} />
-                </button>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    {substation.sld_file && (
+                        <>
+                            <button
+                                onClick={() => onViewSld(substation)}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    background: 'rgba(255, 255, 255, 0.1)',
+                                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                                    color: 'white',
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 600
+                                }}
+                            >
+                                <FileText size={16} /> SLD
+                            </button>
+                            <button
+                                onClick={onProcess}
+                                disabled={processing}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    background: 'rgba(0, 229, 255, 0.1)',
+                                    border: '1px solid rgba(0, 229, 255, 0.3)',
+                                    color: 'var(--accent-cyan)',
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: '6px',
+                                    cursor: processing ? 'not-allowed' : 'pointer',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 600
+                                }}
+                            >
+                                {processing ? <Loader2 size={16} className="animate-spin" /> : <Cpu size={16} />}
+                                Run Intelligence
+                            </button>
+                        </>
+                    )}
+                    <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <X size={24} />
+                    </button>
+                </div>
             </div>
 
             {/* Transformers Section */}

@@ -1,36 +1,106 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileSpreadsheet, TrendingUp, AlertTriangle, CheckCircle2, X, Zap, Database, Loader2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, TrendingUp, AlertTriangle, CheckCircle2, X, Zap, Database, Loader2, AlertCircle, Search, MapPin, Edit2, Plus, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api/v1' });
 
-const LoadProfileUpload = ({ onUploadComplete, onCancel }) => {
+const LoadProfileUpload = ({ onUploadComplete, onCancel, onResolveIssue }) => {
     const [dragActive, setDragActive] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [results, setResults] = useState(null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [inspectorData, setInspectorData] = useState(null);
+    const [inspectorSearch, setInspectorSearch] = useState('');
+    const [analysisData, setAnalysisData] = useState(null); // Contains both missing_substations and missing_bays
+    const [expandedMnemonics, setExpandedMnemonics] = useState({}); // { mnemonic: boolean }
+    const [detailsCache, setDetailsCache] = useState({}); // { mnemonic: [rows] }
     const fileInputRef = useRef(null);
+
+    const toggleMnemonic = async (mnemonic) => {
+        const isExpanded = !!expandedMnemonics[mnemonic];
+
+        // Toggle state
+        setExpandedMnemonics(prev => ({ ...prev, [mnemonic]: !isExpanded }));
+
+        // Fetch details if expanding and not cached
+        if (!isExpanded && !detailsCache[mnemonic]) {
+            try {
+                const response = await api.get('/load-profiles/mnemonic_details/', {
+                    params: { mnemonic }
+                });
+                setDetailsCache(prev => ({ ...prev, [mnemonic]: response.data.rows }));
+            } catch (err) {
+                console.error("Failed to fetch details for", mnemonic, err);
+            }
+        }
+    };
 
     // Fetch latest upload results on mount
     React.useEffect(() => {
-        const fetchLatestUpload = async () => {
-            try {
-                const response = await api.get('/load-profiles/latest_upload/');
-                if (response.data.has_data) {
-                    setResults(response.data);
-                }
-            } catch (err) {
-                console.error('Failed to fetch latest upload:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchLatestUpload();
+        fetchInspector();
+        fetchAnalysis();
     }, []);
+
+    const fetchLatestUpload = async () => {
+        try {
+            const response = await api.get('/load-profiles/latest_upload/');
+            if (response.data.has_data) {
+                setResults(response.data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch latest upload:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchInspector = async () => {
+        try {
+            const response = await api.get('/load-profiles/uploaded_mnemonics/');
+            if (response.data.has_data) {
+                setInspectorData(response.data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch inspector data:', err);
+        }
+    };
+
+    const fetchAnalysis = async () => {
+        try {
+            const response = await api.get('/load-profiles/unmatched_analysis/');
+            setAnalysisData(response.data);
+        } catch (err) {
+            console.error('Failed to fetch analysis:', err);
+        }
+    };
+
+    const handleResolve = (type, item) => {
+        if (!onResolveIssue) return;
+
+        if (type === 'create_substation') {
+            // item is { substation_id, voltage, mnemonic ... }
+            // Mnemonic parsing is redundant if backend provides it, but here's a fallback or direct pass
+            onResolveIssue({
+                type: 'create_substation',
+                data: {
+                    mnemonic: item.mnemonic,
+                    voltage: item.voltage,
+                    substation_id: item.substation_id
+                }
+            });
+        } else if (type === 'edit_substation') {
+            onResolveIssue({
+                type: 'edit_substation',
+                data: {
+                    substation_id: item.substation_id
+                }
+            });
+        }
+    };
 
     const handleDrag = (e) => {
         e.preventDefault();
@@ -89,6 +159,7 @@ const LoadProfileUpload = ({ onUploadComplete, onCancel }) => {
             setUploadProgress(100);
 
             setResults(response.data);
+            fetchInspector(); // Refresh inspector after new upload
 
             setTimeout(() => {
                 if (onUploadComplete) onUploadComplete(response.data);
@@ -129,13 +200,19 @@ const LoadProfileUpload = ({ onUploadComplete, onCancel }) => {
         setUploadProgress(0);
     };
 
+    // Filter inspector data
+    const filteredMnemonics = inspectorData?.mnemonics.filter(m =>
+        m.mnemonic.toLowerCase().includes(inspectorSearch.toLowerCase()) ||
+        m.sample_bus.toLowerCase().includes(inspectorSearch.toLowerCase())
+    ) || [];
+
     return (
         <div style={{
             minHeight: '100vh',
             padding: '3rem 2rem',
             background: 'linear-gradient(135deg, #0a0e1a 0%, #1a1f35 100%)'
         }}>
-            <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+            <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                 {/* Header */}
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
@@ -501,33 +578,7 @@ const LoadProfileUpload = ({ onUploadComplete, onCancel }) => {
                                         />
                                     </div>
 
-                                    {results?.unmatched > 0 && results?.unmatched_details && (
-                                        <div style={{
-                                            marginTop: '2rem',
-                                            padding: '1.5rem',
-                                            background: 'rgba(255, 149, 0, 0.1)',
-                                            border: '1px solid rgba(255, 149, 0, 0.3)',
-                                            borderRadius: '12px'
-                                        }}>
-                                            <h4 style={{ color: '#ff9500', marginBottom: '1rem', fontSize: '1.1rem' }}>
-                                                Unmatched Entries ({results.unmatched})
-                                            </h4>
-                                            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                                {results.unmatched_details.slice(0, 10).map((item, idx) => (
-                                                    <div key={idx} style={{
-                                                        padding: '0.75rem',
-                                                        background: 'rgba(0,0,0,0.2)',
-                                                        marginBottom: '0.5rem',
-                                                        borderRadius: '8px',
-                                                        fontSize: '0.85rem',
-                                                        color: 'rgba(255,255,255,0.7)'
-                                                    }}>
-                                                        <strong>{item.mnemonic}-{item.id}</strong>: {item.reason}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+
 
                                     <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', justifyContent: 'center' }}>
                                         <button
@@ -566,6 +617,302 @@ const LoadProfileUpload = ({ onUploadComplete, onCancel }) => {
                             </motion.div>
                         )}
                     </AnimatePresence>
+                )}
+
+                {/* Consolidated Data Inspector */}
+                {inspectorData && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        style={{
+                            marginTop: '3rem',
+                            background: 'rgba(0,0,0,0.3)',
+                            borderRadius: '16px',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            overflow: 'hidden',
+                            backdropFilter: 'blur(20px)'
+                        }}
+                    >
+                        <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h3 style={{ color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <FileSpreadsheet size={20} color="#00e5ff" />
+                                    File Content Inspector
+                                </h3>
+                                {/* Analysis Summaries */}
+                                {analysisData && (
+                                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem' }}>
+                                        {analysisData.missing_substations.length > 0 && (
+                                            <span style={{
+                                                fontSize: '0.8rem',
+                                                color: '#ff3b30',
+                                                background: 'rgba(255, 59, 48, 0.1)',
+                                                border: '1px solid rgba(255, 59, 48, 0.3)',
+                                                padding: '4px 8px',
+                                                borderRadius: '6px',
+                                                fontWeight: 600
+                                            }}>
+                                                Substations Not Created: {analysisData.missing_substations.length}
+                                            </span>
+                                        )}
+                                        {analysisData.missing_bays.length > 0 && (
+                                            <span style={{
+                                                fontSize: '0.8rem',
+                                                color: '#ff9500',
+                                                background: 'rgba(255, 149, 0, 0.1)',
+                                                border: '1px solid rgba(255, 149, 0, 0.3)',
+                                                padding: '4px 8px',
+                                                borderRadius: '6px',
+                                                fontWeight: 600
+                                            }}>
+                                                Bays Not Matched: {analysisData.missing_bays.length}
+                                            </span>
+                                        )}
+                                        {analysisData.missing_substations.length === 0 && analysisData.missing_bays.length === 0 && (
+                                            <span style={{
+                                                fontSize: '0.8rem',
+                                                color: '#34c759',
+                                                background: 'rgba(52, 199, 89, 0.1)',
+                                                border: '1px solid rgba(52, 199, 89, 0.3)',
+                                                padding: '4px 8px',
+                                                borderRadius: '6px',
+                                                fontWeight: 600,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}>
+                                                <CheckCircle2 size={12} /> Ready for Sync
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div style={{ position: 'relative', width: '300px' }}>
+                                <Search
+                                    size={16}
+                                    style={{
+                                        position: 'absolute',
+                                        left: '12px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        color: 'rgba(255,255,255,0.4)'
+                                    }}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Search mnemonics..."
+                                    value={inspectorSearch}
+                                    onChange={(e) => setInspectorSearch(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        background: 'rgba(255,255,255,0.1)',
+                                        border: '1px solid rgba(255,255,255,0.2)',
+                                        borderRadius: '8px',
+                                        padding: '10px 12px 10px 40px',
+                                        color: '#fff',
+                                        outline: 'none',
+                                        fontSize: '0.9rem'
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Combined Content Table */}
+                        <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                <thead style={{ background: 'rgba(0,0,0,0.2)', position: 'sticky', top: 0 }}>
+                                    <tr>
+                                        <th style={{ padding: '1rem', color: 'rgba(255,255,255,0.6)', fontWeight: 500, fontSize: '0.9rem' }}>Mnemonic</th>
+                                        <th style={{ padding: '1rem', color: 'rgba(255,255,255,0.6)', fontWeight: 500, fontSize: '0.9rem' }}>Sample Bus Name</th>
+                                        <th style={{ padding: '1rem', color: 'rgba(255,255,255,0.6)', fontWeight: 500, fontSize: '0.9rem' }}>Total Rows</th>
+                                        <th style={{ padding: '1rem', color: 'rgba(255,255,255,0.6)', fontWeight: 500, fontSize: '0.9rem' }}>Status</th>
+                                        <th style={{ padding: '1rem', color: 'rgba(255,255,255,0.6)', fontWeight: 500, fontSize: '0.9rem' }}>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredMnemonics.length > 0 ? (
+                                        filteredMnemonics.map((m, idx) => {
+                                            const isExpanded = !!expandedMnemonics[m.mnemonic];
+                                            const details = detailsCache[m.mnemonic];
+                                            // Debug log
+                                            // console.log('Rendering row:', m.mnemonic, isExpanded);
+
+                                            // Check analysis data for specific issues to determine button action
+                                            const missingSub = analysisData?.missing_substations.find(s => s.mnemonic === m.mnemonic);
+                                            // Since mnemonics map to substations 1:1 usually, check bays if sub exists
+                                            // Note: m.mnemonic is raw, analysisData.missing_bays uses substation_id. We need a bridge or assume mnemonic match.
+                                            // Looking at backend, unmatched_analysis returns 'mnemonic' for missing_substations.
+                                            // For missing_bays, it returns substation_id and bay_name.
+                                            // We might need to match m.mnemonic to the substation_id derived from it?
+                                            // Or simplified: Status 'Unmatched' means SOMETHING is wrong.
+
+                                            // Logic:
+                                            // 1. Is it a missing substation? -> Create
+                                            // 2. Is it a missing bay (but sub exists)? -> Edit
+
+                                            let actionButton = null;
+
+                                            if (missingSub) {
+                                                actionButton = (
+                                                    <button
+                                                        onClick={() => handleResolve('create_substation', missingSub)}
+                                                        style={{
+                                                            background: 'rgba(255, 59, 48, 0.2)',
+                                                            color: '#ff3b30',
+                                                            border: '1px solid rgba(255, 59, 48, 0.3)',
+                                                            padding: '6px 12px',
+                                                            borderRadius: '6px',
+                                                            cursor: 'pointer',
+                                                            fontSize: '0.8rem',
+                                                            fontWeight: 600,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '4px'
+                                                        }}
+                                                    >
+                                                        <Plus size={14} /> Create Sub
+                                                    </button>
+                                                );
+                                            } else if (m.status === 'Partial' || m.status === 'Unmatched') {
+                                                // If not a missing sub, it must be missing bays or config
+                                                // We need the Substation ID to edit. The mnemonic table might not have it if it wasn't matched?
+                                                // Actually, if status is Partial, it matched a substation but failed bays.
+                                                // If Unmatched, it might have failed regex entirely OR failed substation lookup.
+                                                // Since we checked missingSub (failed lookup), this else block implies Sub exists but bays failed.
+
+                                                // We need to find the substation_id associated with this mnemonic.
+                                                // The 'inspectorData' doesn't explicitly give substation_id for every row, just raw mnemonic.
+                                                // But 'analysisData.missing_bays' has {substation_id...}
+                                                // We can try to find a missing_bay entry that logically corresponds, or just ask user to find it.
+
+                                                // Safer bet: If we can't link to a precise ID, maybe disable or generic link?
+                                                // But usually standard mnemonic -> ID is predictable.
+                                                // Let's rely on finding a matching entry in missing_bays to get the ID.
+
+                                                const relatedBayIssue = analysisData?.missing_bays.find(b => b.substation_id.includes(m.mnemonic) || m.sample_bus.includes(b.substation_id));
+                                                // This is fuzzy.
+                                                // Better approach: API sends enough info.
+                                                // Let's assume for 'Partial', we act on the matched substation.
+                                                // The backend 'uploaded_mnemonics' could be enriched with 'matched_substation_id'.
+                                                // For now, let's look for it in missing_bays by simple string check or just generic "Edit" if we can't find it.
+
+                                                if (relatedBayIssue) {
+                                                    actionButton = (
+                                                        <button
+                                                            onClick={() => handleResolve('edit_substation', { substation_id: relatedBayIssue.substation_id })}
+                                                            style={{
+                                                                background: 'rgba(255, 149, 0, 0.2)',
+                                                                color: '#ff9500',
+                                                                border: '1px solid rgba(255, 149, 0, 0.3)',
+                                                                padding: '6px 12px',
+                                                                borderRadius: '6px',
+                                                                cursor: 'pointer',
+                                                                fontSize: '0.8rem',
+                                                                fontWeight: 600,
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px'
+                                                            }}
+                                                        >
+                                                            <Edit2 size={14} /> Update Config
+                                                        </button>
+                                                    );
+                                                }
+                                            }
+
+                                            return (
+                                                <React.Fragment key={idx}>
+                                                    <tr
+                                                        onClick={() => toggleMnemonic(m.mnemonic)}
+                                                        style={{
+                                                            borderBottom: isExpanded ? 'none' : '1px solid rgba(255,255,255,0.05)',
+                                                            cursor: 'pointer',
+                                                            background: isExpanded ? 'rgba(255,255,255,0.03)' : 'transparent',
+                                                            transition: 'background 0.2s'
+                                                        }}
+                                                    >
+                                                        <td style={{ padding: '1rem', color: '#fff', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                            {isExpanded ? <ChevronDown size={16} color="rgba(255,255,255,0.5)" /> : <ChevronRight size={16} color="rgba(255,255,255,0.5)" />}
+                                                            {m.mnemonic}
+                                                        </td>
+                                                        <td style={{ padding: '1rem', color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem' }}>{m.sample_bus}</td>
+                                                        <td style={{ padding: '1rem', color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem' }}>{m.total_rows}</td>
+                                                        <td style={{ padding: '1rem' }}>
+                                                            <span style={{
+                                                                padding: '4px 8px',
+                                                                borderRadius: '4px',
+                                                                fontSize: '0.8rem',
+                                                                fontWeight: 600,
+                                                                background: m.status === 'Complete' ? 'rgba(52, 199, 89, 0.1)' : m.status === 'Unmatched' ? 'rgba(255, 59, 48, 0.1)' : 'rgba(255, 149, 0, 0.1)',
+                                                                color: m.status === 'Complete' ? '#34c759' : m.status === 'Unmatched' ? '#ff3b30' : '#ff9500',
+                                                                border: `1px solid ${m.status === 'Complete' ? 'rgba(52, 199, 89, 0.3)' : m.status === 'Unmatched' ? 'rgba(255, 59, 48, 0.3)' : 'rgba(255, 149, 0, 0.3)'}`
+                                                            }}>
+                                                                {m.status}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ padding: '1rem' }}>
+                                                            {actionButton}
+                                                        </td>
+                                                    </tr>
+                                                    {isExpanded && (
+                                                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.2)' }}>
+                                                            <td colSpan="5" style={{ padding: '0 0 1rem 3rem' }}>
+                                                                <div style={{ padding: '1rem', borderLeft: '2px solid rgba(255,255,255,0.1)' }}>
+                                                                    {!details ? (
+                                                                        <div style={{ color: 'rgba(255,255,255,0.5)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                            <Loader2 size={16} className="animate-spin" /> Loading details...
+                                                                        </div>
+                                                                    ) : (
+                                                                        <table style={{ width: '100%', fontSize: '0.85rem' }}>
+                                                                            <thead>
+                                                                                <tr style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'left' }}>
+                                                                                    <th style={{ paddingBottom: '8px' }}>Bay ID</th>
+                                                                                    <th style={{ paddingBottom: '8px' }}>Bus Name</th>
+                                                                                    <th style={{ paddingBottom: '8px' }}>Load (MW / MVar)</th>
+                                                                                    <th style={{ paddingBottom: '8px' }}>Status Detail</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {details.map((row, rIdx) => (
+                                                                                    <tr key={rIdx} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                                                                        <td style={{ padding: '8px 0', fontFamily: 'monospace', color: '#fff' }}>{row.bay_identifier}</td>
+                                                                                        <td style={{ padding: '8px 0', color: 'rgba(255,255,255,0.7)' }}>{row.bus_name}</td>
+                                                                                        <td style={{ padding: '8px 0', color: 'rgba(255,255,255,0.7)' }}>
+                                                                                            {row.pload_mw} MW / {row.qload_mvar} MVar
+                                                                                        </td>
+                                                                                        <td style={{ padding: '8px 0' }}>
+                                                                                            <span style={{
+                                                                                                color: row.matched ? '#34c759' : '#ff3b30',
+                                                                                                display: 'flex', alignItems: 'center', gap: '6px'
+                                                                                            }}>
+                                                                                                {row.matched ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                                                                                                {row.status_detail}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={5} style={{ padding: '2rem', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+                                                No mnemonics found matching "{inspectorSearch}"
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </motion.div>
                 )}
             </div>
         </div>

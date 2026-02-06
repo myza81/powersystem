@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status, permissions
+from rest_framework import viewsets, status, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -17,6 +17,8 @@ class SubstationViewSet(viewsets.ModelViewSet):
     serializer_class = SubstationSerializer
     authentication_classes = [] # Disable CSRF check for local dev
     permission_classes = [permissions.AllowAny]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['name', 'mnemonic', 'substation_id']
 
     def perform_create(self, serializer):
         # Auto-generate substation_id before saving if manually creating
@@ -95,7 +97,6 @@ class SubstationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Get parsing options from request
         use_llm = request.data.get('use_llm', True)
         llm_provider = request.data.get('llm_provider', 'auto')
         
@@ -212,4 +213,159 @@ class SubstationViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": f"Processing failed: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'])
+    def update_bay_ids(self, request, pk=None):
+        """
+        Manually update bay_ids for specific assets (Transformers/IncomingBays).
+        Payload:
+        {
+            "updates": [
+                {"type": "transformer", "id": 1, "bay_id": "T-New"},
+                {"type": "bay", "id": 5, "bay_id": "L-New"}
+            ]
+        }
+        """
+        substation = self.get_object()
+        updates = request.data.get('updates', [])
+        
+        if not updates:
+            return Response({"error": "No updates provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        updated_count = 0
+        errors = []
+
+        with transaction.atomic():
+            for update in updates:
+                asset_type = update.get('type')
+                asset_id = update.get('id')
+                new_bay_id = update.get('bay_id')
+
+                if not all([asset_type, asset_id, new_bay_id]):
+                    errors.append(f"Invalid entry: {update}")
+                    continue
+
+                try:
+                    if asset_type == 'transformer':
+                        # Use update() to bypass model.save() which overrides bay_id
+                        rows = Transformer.objects.filter(id=asset_id, substation=substation).update(bay_id=new_bay_id)
+                        if rows == 0:
+                            raise Transformer.DoesNotExist
+                        # Fetch object for logging details if needed, or just log IDs
+                        old_id = "unknown" # Optimization: Skip fetching if purely for logging, or fetch before update if crucial.
+                        # For logging purposes, let's just log the intent.
+                        
+                    elif asset_type == 'bay':
+                        rows = IncomingBay.objects.filter(id=asset_id, substation=substation).update(bay_id=new_bay_id)
+                        if rows == 0:
+                            raise IncomingBay.DoesNotExist
+                    else:
+                        errors.append(f"Unknown type: {asset_type}")
+                        continue
+                    
+                    updated_count += 1
+                    logger.info(f"Updated {asset_type} {asset_id} to {new_bay_id}")
+
+                except (Transformer.DoesNotExist, IncomingBay.DoesNotExist):
+                    errors.append(f"{asset_type} {asset_id} not found in this substation")
+                except Exception as e:
+                    errors.append(f"Error updating {asset_type} {asset_id}: {str(e)}")
+
+        # Trigger Load Rematching manually since we bypassed save()
+        if updated_count > 0:
+            try:
+                from services.load_profile_service import LoadProfileService
+                LoadProfileService.rematch_unmatched_loads()
+            except Exception as e:
+                logger.error(f"Failed to rematch loads after bulk update: {e}")
+
+        if errors:
+            return Response({
+                "message": f"Updated {updated_count} assets with errors",
+                "errors": errors,
+                "partial_success": updated_count > 0
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "message": "Bay IDs updated successfully",
+            "count": updated_count
+        }, status=status.HTTP_200_OK)
+
+
+    @action(detail=True, methods=['get'])
+    def view_sld(self, request, pk=None):
+        """
+        Retrieve the SLD for viewing.
+        - Converts DXF to SVG on the fly.
+        - Returns URL for PDF/Images.
+        """
+        import ezdxf
+        from ezdxf.addons.drawing import RenderContext, Frontend
+        from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import io
+        
+        substation = self.get_object()
+        
+        if not substation.sld_file:
+            return Response(
+                {"error": "No SLD file uploaded for this substation"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        file_path = substation.sld_file.path
+        ext = os.path.splitext(file_path)[1].lower().lstrip('.')
+        
+        if ext in ['dxf']:
+            try:
+                # Convert DXF to SVG
+                doc = ezdxf.readfile(file_path)
+                msp = doc.modelspace()
+                
+                # Setup drawing context
+                ctx = RenderContext(doc)
+                fig = plt.figure()
+                ax = fig.add_axes([0, 0, 1, 1])
+                out = MatplotlibBackend(ax)
+                
+                # Render
+                Frontend(ctx, out).draw_layout(msp, finalize=True)
+                
+                # Save to SVG buffer
+                f = io.BytesIO()
+                fig.savefig(f, format='svg', transparent=True)
+                plt.close(fig)
+                
+                svg_content = f.getvalue().decode('utf-8')
+                return Response({
+                    'type': 'svg',
+                    'content': svg_content
+                })
+                
+            except Exception as e:
+                logger.error(f"DXF to SVG conversion failed: {str(e)}")
+                return Response(
+                    {"error": f"Failed to render DXF: {str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        elif ext in ['pdf']:
+            return Response({
+                'type': 'pdf',
+                'url': request.build_absolute_uri(substation.sld_file.url)
+            })
+            
+        elif ext in ['png', 'jpg', 'jpeg', 'svg']:
+            return Response({
+                'type': 'image',
+                'url': request.build_absolute_uri(substation.sld_file.url)
+            })
+            
+        else:
+            return Response(
+                {"error": "Unsupported file format for viewing"},
+                status=status.HTTP_400_BAD_REQUEST
             )

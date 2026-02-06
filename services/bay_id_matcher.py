@@ -38,13 +38,19 @@ class BayIDMatcher:
         Returns:
             Voltage as integer (132, 275, 500) or None if not found
         """
-        # Try pattern: "MNEMONIC123 123.00"
+        # 1. Try finding explicitly 500, 275, 132 (Most reliable)
+        # Matches "132", "132kV", "132.00", "ABBA132"
+        match = re.search(r'(500|275|132)', bus_name)
+        if match:
+            return int(match.group(1))
+
+        # 2. Legacy Pattern: "MNEMONIC123 123.00"
         match = re.search(r'\s+(\d{3})\.', bus_name)
         if match:
             return int(match.group(1))
         
-        # Try extracting last 3 digits from first word
-        match = re.search(r'(\d{3})\s+', bus_name)
+        # 3. Digits followed by kV
+        match = re.search(r'(\d{3})\s*kV', bus_name, re.IGNORECASE)
         if match:
             return int(match.group(1))
         
@@ -93,49 +99,62 @@ class BayIDMatcher:
         # Determine bay type from Id pattern
         bay_id_upper = bay_identifier.upper().strip()
         
+        # Construct target bay_id (Strict format: SubstationID_BayName)
+        target_bay_id = f"{substation_id}_{bay_identifier}"
+        
         if bay_id_upper.startswith('T'):
-            # Transformer match
+            # Transformer match by ID
             try:
-                transformer = Transformer.objects.get(
-                    substation__substation_id=substation_id,
-                    bay_name=bay_identifier
-                )
+                transformer = Transformer.objects.get(bay_id=target_bay_id)
                 return transformer, 'transformer'
             except Transformer.DoesNotExist:
                 return None, None
-            except Transformer.MultipleObjectsReturned:
-                # Should not happen with unique bay_id, but handle gracefully
-                return None, None
         
-        elif bay_id_upper.startswith('F'):
+        if bay_id_upper.startswith('F'):
             # IncomingBay/Feeder match
+            
+            # 1. Standard Match (Exact ID)
             try:
-                incoming_bay = IncomingBay.objects.get(
-                    substation__substation_id=substation_id,
-                    bay_name=bay_identifier
-                )
+                incoming_bay = IncomingBay.objects.get(bay_id=target_bay_id)
                 return incoming_bay, 'incoming_bay'
             except IncomingBay.DoesNotExist:
-                return None, None
-            except IncomingBay.MultipleObjectsReturned:
-                return None, None
+                pass
+
+            # 2. Non-TNB Aliasing Logic (F1, F2 -> Sorted Breaker Number)
+            # Check substation ownership
+            try:
+                substation = None
+                if substations_cache:
+                    substation = substations_cache.get(substation_id)
+                
+                if not substation:
+                    substation = Substation.objects.filter(substation_id=substation_id).first()
+                
+                if substation and substation.ownership != 'TNB':
+                    # Only apply if pattern is F<number>
+                    f_match = re.match(r'^F(\d+)$', bay_id_upper)
+                    if f_match:
+                        index = int(f_match.group(1)) - 1 # 1-based to 0-based
+                        if index >= 0:
+                            bays = IncomingBay.objects.filter(substation=substation).order_by('breaker_number')
+                            bays_list = list(bays)
+                            if index < len(bays_list):
+                                return bays_list[index], 'incoming_bay'
+            except Exception as e:
+                 print(f"Error in Non-TNB matching: {e}")
+
+            return None, None
         
         else:
-            # Unknown pattern - try both, prioritize Transformer
+            # Unknown pattern - try both by ID
             try:
-                transformer = Transformer.objects.get(
-                    substation__substation_id=substation_id,
-                    bay_name=bay_identifier
-                )
+                transformer = Transformer.objects.get(bay_id=target_bay_id)
                 return transformer, 'transformer'
             except Transformer.DoesNotExist:
                 pass
             
             try:
-                incoming_bay = IncomingBay.objects.get(
-                    substation__substation_id=substation_id,
-                    bay_name=bay_identifier
-                )
+                incoming_bay = IncomingBay.objects.get(bay_id=target_bay_id)
                 return incoming_bay, 'incoming_bay'
             except IncomingBay.DoesNotExist:
                 return None, None

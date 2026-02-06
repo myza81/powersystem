@@ -158,7 +158,130 @@ class LoadProfileViewSet(viewsets.ViewSet):
             'unmatched_details': unmatched_details
         }, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get'])
+    def unmatched_analysis(self, request):
+        """
+        Analyze unmatched records to group them by missing substation or bay.
+        """
+        from services.bay_id_matcher import BayIDMatcher
+        
+        # Get latest batch
+        latest_load = BayLoad.objects.order_by('-upload_timestamp').first()
+        if not latest_load:
+            return Response({'has_data': False}, status=status.HTTP_200_OK)
+            
+        unmatched_records = BayLoad.objects.filter(
+            upload_batch_id=latest_load.upload_batch_id, 
+            matched=False
+        )
+        
+        if not unmatched_records.exists():
+             return Response({
+                'has_data': True,
+                'total_unmatched': 0,
+                'missing_substations': [],
+                'missing_bays': []
+            })
+
+        # Cache known substations
+        substations_cache = BayIDMatcher.build_substations_cache()
+        
+        missing_substations = {}
+        missing_bays = {}
+        
+        for record in unmatched_records:
+            bus_name = record.bus_name or ""
+            voltage = BayIDMatcher.extract_voltage_from_bus_name(bus_name)
+            
+            if not record.mnemonic or not voltage:
+                continue
+                
+            substation_id = f"{record.mnemonic}{voltage}"
+            
+            # Check if Substation exists
+            if substation_id not in substations_cache:
+                if substation_id not in missing_substations:
+                    missing_substations[substation_id] = {
+                        'substation_id': substation_id,
+                        'mnemonic': record.mnemonic,
+                        'voltage': voltage,
+                        'count': 0,
+                        'total_pload': 0
+                    }
+                missing_substations[substation_id]['count'] += 1
+                missing_substations[substation_id]['total_pload'] += record.pload_mw
+            else:
+                # Substation exists, so it's a Missing Bay
+                key = f"{substation_id}_{record.bay_identifier}"
+                if key not in missing_bays:
+                    missing_bays[key] = {
+                        'key': key,
+                        'substation_id': substation_id,
+                        'bay_name': record.bay_identifier,
+                        'count': 0,
+                        'total_pload': 0
+                    }
+                missing_bays[key]['count'] += 1
+                missing_bays[key]['total_pload'] += record.pload_mw
+
+        return Response({
+            'has_data': True,
+            'total_unmatched': unmatched_records.count(),
+            'missing_substations': sorted(
+                missing_substations.values(), 
+                key=lambda x: x['total_pload'], 
+                reverse=True
+            ),
+            'missing_bays': sorted(
+                missing_bays.values(), 
+                key=lambda x: x['total_pload'], 
+                reverse=True
+            )
+        })
+
     
+    @action(detail=False, methods=['get'])
+    def uploaded_mnemonics(self, request):
+        """
+        Get list of unique mnemonics from the latest upload batch.
+        Useful for debugging missing data.
+        """
+        from django.db.models import Count, Q
+        
+        # Get latest batch ID
+        latest_load = BayLoad.objects.order_by('-upload_timestamp').first()
+        if not latest_load:
+            return Response({"has_data": False})
+            
+        batch_id = latest_load.upload_batch_id
+        
+        # Aggregate mnemonics
+        mnemonics = BayLoad.objects.filter(upload_batch_id=batch_id).values('mnemonic').annotate(
+            count=Count('id'),
+            matched_count=Count('id', filter=Q(matched=True)),
+            unmatched_count=Count('id', filter=Q(matched=False))
+        ).order_by('mnemonic')
+        
+        results = []
+        for m in mnemonics:
+            # Get a sample bus name for context
+            sample = BayLoad.objects.filter(upload_batch_id=batch_id, mnemonic=m['mnemonic']).first()
+            results.append({
+                'mnemonic': m['mnemonic'],
+                'total_rows': m['count'],
+                'matched': m['matched_count'],
+                'unmatched': m['unmatched_count'],
+                'status': 'Complete' if m['unmatched_count'] == 0 else 'Partial' if m['matched_count'] > 0 else 'Unmatched',
+                'sample_bus': sample.bus_name if sample else 'N/A'
+            })
+            
+        return Response({
+            "has_data": True,
+            "upload_timestamp": latest_load.upload_timestamp,
+            "total_mnemonics": len(results),
+            "mnemonics": results
+        })
+
     @action(detail=False, methods=['get'])
     def aggregate(self, request):
         """
@@ -405,12 +528,70 @@ class LoadProfileViewSet(viewsets.ViewSet):
                     'pload_mw': bay.load_data.pload_mw,
                     'qload_mvar': bay.load_data.qload_mvar
                 })
-        
+
         return Response({
             'level': 'substation',
             'key': substation_id,
-            'name': substation.name,
             'total_pload_mw': substation.total_pload_mw,
             'total_qload_mvar': substation.total_qload_mvar,
             'breakdown': breakdown
+        })
+        
+    @action(detail=False, methods=['get'])
+    def mnemonic_details(self, request):
+        """
+        Get detailed rows for a specific mnemonic in the latest upload.
+        """
+        mnemonic = request.query_params.get('mnemonic')
+        if not mnemonic:
+            return Response({'error': 'Mnemonic required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get latest batch ID
+        latest_load = BayLoad.objects.order_by('-upload_timestamp').first()
+        if not latest_load:
+            return Response({"has_data": False})
+            
+        batch_id = latest_load.upload_batch_id
+        
+        # Fetch records
+        records = BayLoad.objects.filter(upload_batch_id=batch_id, mnemonic=mnemonic)
+        
+        # Pre-check substation existence for efficient status determination
+        # We need to know if the substation exists for the voltage found in the bus name
+        from services.bay_id_matcher import BayIDMatcher
+        
+        results = []
+        for record in records:
+            status_detail = "Unknown"
+            if record.matched:
+                status_detail = "Matched"
+            else:
+                bus_name = record.bus_name or ""
+                voltage = BayIDMatcher.extract_voltage_from_bus_name(bus_name)
+                
+                if not voltage:
+                    status_detail = "Unmatched (Invalid Voltage)"
+                else:
+                    substation_id = f"{record.mnemonic}{voltage}"
+                    if not Substation.objects.filter(substation_id=substation_id).exists():
+                        status_detail = "Not Created (Substation Missing)"
+                    else:
+                        status_detail = "Unmatched (Bay Not Found)"
+            
+            results.append({
+                'id': record.id,
+                'bay_identifier': record.bay_identifier,
+                'bus_name': record.bus_name,
+                'pload_mw': record.pload_mw,
+                'qload_mvar': record.qload_mvar,
+                'matched': record.matched,
+                'status_detail': status_detail,
+                # If matched, include what it matched to?
+                'matched_to': record.transformer.bay_name if record.transformer else (record.incoming_bay.bay_name if record.incoming_bay else None)
+            })
+            
+        return Response({
+            "mnemonic": mnemonic,
+            "count": len(results),
+            "rows": results
         })

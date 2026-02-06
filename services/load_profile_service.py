@@ -67,8 +67,8 @@ class LoadProfileService:
         if not is_valid:
             raise ValueError(error_msg)
         
-        # Clean up data
-        df = df.dropna(subset=['Mnemonic', 'Id', 'Pload (MW)', 'Qload (Mvar)'])
+        # Clean up data - remove empty rows only
+        df = df.dropna(how='all')
         
         return df
     
@@ -112,11 +112,32 @@ class LoadProfileService:
             
             # Process each row
             for idx, row in df.iterrows():
+                # Validate required fields
+                if pd.isna(row['Mnemonic']) or pd.isna(row['Id']) or \
+                   pd.isna(row['Pload (MW)']) or pd.isna(row['Qload (Mvar)']):
+                    unmatched_count += 1
+                    unmatched_details.append({
+                        'mnemonic': 'N/A' if pd.isna(row['Mnemonic']) else str(row['Mnemonic']),
+                        'id': 'N/A' if pd.isna(row['Id']) else str(row['Id']),
+                        'reason': 'Missing required data (Mnemonic, Id, or Load values)'
+                    })
+                    continue
+
                 mnemonic = str(row['Mnemonic']).strip()
                 bay_identifier = str(row['Id']).strip()
-                bus_name = str(row['Bus Name']).strip()
-                pload_mw = float(row['Pload (MW)'])
-                qload_mvar = float(row['Qload (Mvar)'])
+                bus_name = str(row['Bus Name']).strip() if not pd.isna(row['Bus Name']) else ""
+                
+                try:
+                    pload_mw = float(row['Pload (MW)'])
+                    qload_mvar = float(row['Qload (Mvar)'])
+                except (ValueError, TypeError):
+                    unmatched_count += 1
+                    unmatched_details.append({
+                        'mnemonic': mnemonic,
+                        'id': bay_identifier,
+                        'reason': 'Invalid load values (must be numbers)'
+                    })
+                    continue
                 
                 # Extract voltage from Bus Name
                 voltage = BayIDMatcher.extract_voltage_from_bus_name(bus_name)
@@ -202,3 +223,59 @@ class LoadProfileService:
             'upload_batch_id': str(batch_id),
             'unmatched_details': unmatched_details
         }
+    
+    @staticmethod
+    def rematch_unmatched_loads():
+        """
+        Attempt to rematch all unmatched BayLoad records.
+        This should be called when Substation, Transformer, or IncomingBay 
+        records are created or updated.
+        """
+        unmatched_loads = BayLoad.objects.filter(matched=False)
+        if not unmatched_loads.exists():
+            return
+            
+        # Re-build cache as new substations might have been added
+        substations_cache = BayIDMatcher.build_substations_cache()
+        rematch_count = 0
+        
+        # Avoid circular imports if any
+        # BayIDMatcher is already imported
+        
+        with transaction.atomic():
+            for load in unmatched_loads:
+                voltage = BayIDMatcher.extract_voltage_from_bus_name(load.bus_name)
+                
+                if voltage is None:
+                    continue
+                
+                matched_obj, model_type = BayIDMatcher.match_bay(
+                    load.mnemonic,
+                    load.bay_identifier,
+                    voltage,
+                    substations_cache
+                )
+                
+                if matched_obj:
+                    # Check for existing OneToOne relation to avoid IntegrityError
+                    # If this asset is already matched to a load, but we found a NEW match for it (likely via better ID match),
+                    # we assume the new match is correct and "detach" the old one.
+                    if hasattr(matched_obj, 'load_data') and matched_obj.load_data:
+                        # Optimization: check if it's the SAME load object (unlikely in this loop, but good practice)
+                        if matched_obj.load_data.id != load.id:
+                            old_load = matched_obj.load_data
+                            old_load.transformer = None
+                            old_load.incoming_bay = None
+                            old_load.matched = False
+                            old_load.save()
+
+                    if model_type == 'transformer':
+                        load.transformer = matched_obj
+                        load.incoming_bay = None # Ensure exclusivity
+                    else:
+                        load.incoming_bay = matched_obj
+                        load.transformer = None
+                        
+                    load.matched = True
+                    load.save()
+                    rematch_count += 1

@@ -128,6 +128,13 @@ class Substation(models.Model):
             self.sld = f"{self.substation_id}.pdf"
         
         super().save(*args, **kwargs)
+        
+        # Trigger rematch of potential unmatched loads
+        try:
+            from services.load_profile_service import LoadProfileService
+            LoadProfileService.rematch_unmatched_loads()
+        except Exception as e:
+            logger.error(f"Failed to rematch loads after Substation save: {e}")
 
     class Meta:
         verbose_name = "Substation"
@@ -180,6 +187,13 @@ class Transformer(models.Model):
         if self.bay_name and self.substation:
             self.bay_id = f"{self.substation.substation_id}_{self.bay_name}"
         super().save(*args, **kwargs)
+        
+        # Trigger rematch of potential unmatched loads
+        try:
+            from services.load_profile_service import LoadProfileService
+            LoadProfileService.rematch_unmatched_loads()
+        except Exception as e:
+            logger.error(f"Failed to rematch loads after Transformer save: {e}")
 
 class IncomingBay(models.Model):
     substation = models.ForeignKey(Substation, related_name='incoming_bays', on_delete=models.CASCADE)
@@ -195,6 +209,13 @@ class IncomingBay(models.Model):
         if self.bay_name and self.substation:
             self.bay_id = f"{self.substation.substation_id}_{self.bay_name}"
         super().save(*args, **kwargs)
+        
+        # Trigger rematch of potential unmatched loads
+        try:
+            from services.load_profile_service import LoadProfileService
+            LoadProfileService.rematch_unmatched_loads()
+        except Exception as e:
+            logger.error(f"Failed to rematch loads after IncomingBay save: {e}")
 
 class BayLoad(models.Model):
     """
@@ -204,14 +225,14 @@ class BayLoad(models.Model):
     # Foreign keys (nullable to support unmatched data logging)
     transformer = models.OneToOneField(
         Transformer, 
-        on_delete=models.CASCADE, 
+        on_delete=models.SET_NULL, 
         null=True, 
         blank=True, 
         related_name='load_data'
     )
     incoming_bay = models.OneToOneField(
         IncomingBay, 
-        on_delete=models.CASCADE, 
+        on_delete=models.SET_NULL, 
         null=True, 
         blank=True, 
         related_name='load_data'

@@ -63,8 +63,11 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 'django.middleware.clickjacking.XFrameOptionsMiddleware', # Disabled for local dev (PDF iframe support)
 ]
+
+# Allow iframes from same origin (or looser for dev)
+# X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 ROOT_URLCONF = 'powersystem_core.urls'
 
