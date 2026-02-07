@@ -19,6 +19,29 @@ class GeocodingService:
     GOOGLE_PLACES_LEGACY_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
 
     @staticmethod
+    def normalize_state(state_name):
+        """
+        Normalize state names to standard Malay spelling.
+        """
+        if not state_name:
+            return None
+            
+        mapping = {
+            "Malacca": "Melaka",
+            "Penang": "Pulau Pinang",
+            "Johore": "Johor",
+            "Trengganu": "Terengganu",
+            "Kelantan Darul Naim": "Kelantan",
+            "Pahang Darul Makmur": "Pahang",
+            "Perak Darul Ridzuan": "Perak",
+            "Selangor Darul Ehsan": "Selangor",
+            "Kedah Darul Aman": "Kedah",
+            "Negeri Sembilan Darul Khusus": "Negeri Sembilan",
+            "Perlis Indera Kayangan": "Perlis"
+        }
+        return mapping.get(state_name, state_name)
+
+    @staticmethod
     def get_coordinates(name, mnemonic):
         """
         Hybrid Geocoding.
@@ -49,6 +72,8 @@ class GeocodingService:
                         if "administrative_area_level_1" in component.get("types", []):
                             state = component.get("long_name")
                             break
+                    if state:
+                        state = GeocodingService.normalize_state(state)
                     logger.info(f"Google Places (New) success for {name}")
                     return lat, lng, state
             except Exception as e:
@@ -70,6 +95,8 @@ class GeocodingService:
                         if s in address:
                             state = s
                             break
+                    if state:
+                        state = GeocodingService.normalize_state(state)
                     logger.info(f"Google Places (Legacy) success for {name}")
                     return lat, lng, state
             except Exception as e:
@@ -90,6 +117,8 @@ class GeocodingService:
                         if "administrative_area_level_1" in comp["types"]:
                             state = comp["long_name"]
                             break
+                    if state:
+                        state = GeocodingService.normalize_state(state)
                     logger.info(f"Google Geocode success for {name}")
                     return lat, lng, state
             except Exception as e:
@@ -109,6 +138,8 @@ class GeocodingService:
                     item = data[0]
                     address = item.get("address", {})
                     state = address.get("state") or address.get("state_district")
+                    if state:
+                        state = GeocodingService.normalize_state(state)
                     return float(item["lat"]), float(item["lon"]), state
             except: continue
 
@@ -132,7 +163,8 @@ class GeocodingService:
                     for result in data["results"]:
                         for component in result["address_components"]:
                             if "administrative_area_level_1" in component["types"]:
-                                return component["long_name"]
+                                state = component["long_name"]
+                                return GeocodingService.normalize_state(state)
             except Exception as e:
                 logger.error(f"Google Reverse Geocode error: {e}")
 
@@ -145,7 +177,8 @@ class GeocodingService:
             response = requests.get(url, params=params, headers=headers, timeout=10)
             data = response.json()
             address = data.get("address", {})
-            return address.get("state") or address.get("state_district")
+            state = address.get("state") or address.get("state_district")
+            return GeocodingService.normalize_state(state)
         except Exception as e:
             logger.error(f"OSM Reverse Geocode error: {e}")
 

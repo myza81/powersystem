@@ -361,7 +361,7 @@ class LoadProfileViewSet(viewsets.ViewSet):
         breakdown.sort(key=lambda x: x['region'] or '')
         
         # Calculate ownership breakdown (DC, LPC, IPP, LSS, etc.)
-        ownership_types = ['DC', 'LPC', 'IPP', 'LSS']
+        ownership_types = ['TNB', 'DC', 'LPC', 'IPP', 'LSS']
         ownership_breakdown = []
         
         for owner_type in ownership_types:
@@ -391,11 +391,49 @@ class LoadProfileViewSet(viewsets.ViewSet):
                     'total_qload_mvar': total_mvar
                 })
         
+        # Calculate State Breakdown
+        excluded_states = ['Sabah', 'Sarawak', 'Labuan', 'Wilayah Persekutuan Labuan']
+        all_states = Substation.objects.exclude(state__in=excluded_states).order_by().values('state').distinct()
+        state_breakdown = []
+        for state_data in all_states:
+            state = state_data['state']
+            if not state:
+                continue
+                
+            state_totals_t = BayLoad.objects.filter(
+                matched=True,
+                transformer__substation__state=state
+            ).aggregate(
+                total_pload=Sum('pload_mw'),
+                total_qload=Sum('qload_mvar')
+            )
+            
+            state_totals_b = BayLoad.objects.filter(
+                matched=True,
+                incoming_bay__substation__state=state
+            ).aggregate(
+                total_pload=Sum('pload_mw'),
+                total_qload=Sum('qload_mvar')
+            )
+            
+            total_mw = (state_totals_t['total_pload'] or 0) + (state_totals_b['total_pload'] or 0)
+            total_mvar = (state_totals_t['total_qload'] or 0) + (state_totals_b['total_qload'] or 0)
+            
+            # Include all states, even if load is 0
+            state_breakdown.append({
+                'state': state,
+                'total_pload_mw': total_mw,
+                'total_qload_mvar': total_mvar
+            })
+        
+        state_breakdown.sort(key=lambda x: x['total_pload_mw'], reverse=True)
+
         return Response({
             'level': 'grid',
             'total_pload_mw': totals['total_pload'] or 0,
             'total_qload_mvar': totals['total_qload'] or 0,
             'breakdown': breakdown,
+            'state_breakdown': state_breakdown,
             'ownership_breakdown': ownership_breakdown
         })
     

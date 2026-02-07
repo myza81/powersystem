@@ -1,21 +1,34 @@
+# Core Django
 django
 djangorestframework
 django-cors-headers
+django-environ
+python-dotenv
+gunicorn
+whitenoise
+
+# Database
 psycopg2-binary
+redis
+
+# Data Science & Processing
+numpy
 pandas
 openpyxl
-celery
-redis
-python-dotenv
-django-environ
-requests
+matplotlib
+
+# Computer Vision & PDF
+opencv-python
+Pillow
 pdf2image
 pdfplumber
 pytesseract
-opencv-python
-numpy
-Pillow
 ezdxf
+
+# AI & LLM
 openai
 google-generativeai
-matplotlib
+
+# Utilities
+requests
+celery

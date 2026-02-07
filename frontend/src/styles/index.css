@@ -19,7 +19,9 @@ body {
   background-color: var(--bg-deep);
   color: var(--text-primary);
   font-family: 'Outfit', sans-serif;
-  overflow-x: hidden;
+  overflow: hidden; /* Disable global scroll */
+  height: 100vh;
+  margin: 0;
   background-image: 
     radial-gradient(circle at 50% 50%, rgba(0, 229, 255, 0.05), transparent 70%),
     linear-gradient(rgba(10, 12, 16, 0.8) 1px, transparent 1px),
@@ -114,10 +116,12 @@ button {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
 }
+
+
 /* Layout */
 .app-container {
   display: flex;
-  min-height: 100vh;
+  height: 100vh; /* Fixed height */
   width: 100vw;
   overflow: hidden;
 }
