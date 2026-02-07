@@ -249,31 +249,7 @@ const LoadProfileUpload = ({ onUploadComplete, onCancel, onResolveIssue }) => {
                                 </p>
                             </div>
                         </div>
-                        {onCancel && (
-                            <button
-                                onClick={onCancel}
-                                style={{
-                                    background: 'rgba(255,255,255,0.05)',
-                                    border: '1px solid rgba(255,255,255,0.1)',
-                                    color: 'rgba(255,255,255,0.7)',
-                                    padding: '0.75rem 1.5rem',
-                                    borderRadius: '8px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.9rem',
-                                    transition: 'all 0.3s'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.target.style.background = 'rgba(255,255,255,0.1)';
-                                    e.target.style.color = '#fff';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.target.style.background = 'rgba(255,255,255,0.05)';
-                                    e.target.style.color = 'rgba(255,255,255,0.7)';
-                                }}
-                            >
-                                Back to Dashboard
-                            </button>
-                        )}
+
                     </div>
                 </motion.div>
 

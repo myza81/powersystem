@@ -123,7 +123,7 @@ const LoadDashboard = () => {
                                 Load Analytics Dashboard
                             </h1>
                             <p style={{ color: 'rgba(255,255,255,0.6)', margin: '4px 0 0 0', fontSize: '0.95rem' }}>
-                                Real-time grid demand monitoring & substation analytics
+                                Grid Demand Analytics
                             </p>
                         </div>
                     </div>
@@ -138,59 +138,58 @@ const LoadDashboard = () => {
                                 icon={<Zap size={24} />}
                                 label="Total System Demand"
                                 value={`${gridData.total_pload_mw.toFixed(1)} MW`}
-                                subValue={`${gridData.total_qload_mvar.toFixed(1)} MVAr (Reactive)`}
+                                subValue="Real-time Active Load"
                                 color="#00e5ff"
-                                progress={75} // Simulated usage
-                                trend="+2.3% vs yesterday"
+                            //progress={75} // Simulated usage
+                            //trend="+2.3% vs yesterday"
                             />
                             <MetricCard
                                 icon={<TrendingUp size={24} />}
-                                label="System Peak Demand"
-                                value={`${Math.max(...(gridData.breakdown || []).map(r => r.total_pload_mw || 0)).toFixed(1)} MW`}
-                                subValue="Highest recorded regional load"
+                                label="Total Reactive Power"
+                                value={`${gridData.total_qload_mvar.toFixed(1)} MVAr`}
+                                subValue="System Reactive Load"
                                 color="#ff9500"
-                                progress={90}
                             />
                             <MetricCard
-                                icon={<Database size={24} />}
-                                label="Active Regions"
-                                value={gridData.breakdown?.length || 0}
-                                subValue="Monitoring points active"
+                                icon={<Zap size={24} />}
+                                label="System Power Factor"
+                                value={
+                                    (gridData.total_pload_mw / Math.sqrt(Math.pow(gridData.total_pload_mw, 2) + Math.pow(gridData.total_qload_mvar, 2))).toFixed(3)
+                                }
+                                subValue="Grid Efficiency"
                                 color="#34c759"
-                                progress={100}
                             />
                         </div>
 
-                        {/* Section 2: Ownership Breakdown */}
-                        {gridData.ownership_breakdown && gridData.ownership_breakdown.length > 0 && (
-                            <div>
-                                <h3 style={{ fontSize: '1.25rem', color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <Building2 size={20} color="#00e5ff" /> Ownership Load Distribution
-                                </h3>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
-                                    {gridData.ownership_breakdown.map((owner, idx) => {
-                                        const totalLoad = gridData.total_pload_mw || 1;
-                                        const share = (owner.total_pload_mw / totalLoad) * 100;
-                                        const color = owner.type === 'TNB' ? '#ef4444' : owner.type === 'LPC' ? '#f59e0b' : '#3b82f6'; // Red, Amber, Blue
+                        {/* 3-Column Layout: Ownership, Regional, State */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', alignItems: 'stretch' }}>
 
-                                        return (
-                                            <MetricCard
-                                                key={idx}
-                                                icon={<Building2 size={24} />}
-                                                label={`${owner.type} Consumption`}
-                                                value={`${owner.total_pload_mw.toFixed(1)} MW`}
-                                                subValue={`${share.toFixed(1)}% of Total System Load`}
-                                                color={color}
-                                                progress={share}
-                                            />
-                                        );
-                                    })}
+                            {/* Ownership Breakdown */}
+                            {gridData.ownership_breakdown && gridData.ownership_breakdown.length > 0 && (
+                                <div style={{
+                                    background: 'rgba(0,0,0,0.3)',
+                                    backdropFilter: 'blur(20px)',
+                                    borderRadius: '16px',
+                                    border: '1px solid rgba(0,229,255,0.2)',
+                                    padding: '1.5rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    minHeight: '380px' // Compact height
+                                }}>
+                                    <h3 style={{ fontSize: '1.1rem', color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <Building2 size={18} color="#00e5ff" /> Ownership
+                                    </h3>
+
+                                    <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                        <SpiralChart
+                                            data={gridData.ownership_breakdown || []}
+                                            labelKey="type"
+                                            valueKey="total_pload_mw"
+                                            colorFunction={(item) => item.type === 'TNB' ? '#ef4444' : item.type === 'LPC' ? '#f59e0b' : '#3b82f6'}
+                                        />
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-
-                        {/* Analysis Grid: Regional & State */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(600px, 1fr))', gap: '2rem' }}>
+                            )}
 
                             {/* Regional Analysis */}
                             <div style={{
@@ -198,37 +197,55 @@ const LoadDashboard = () => {
                                 backdropFilter: 'blur(20px)',
                                 borderRadius: '16px',
                                 border: '1px solid rgba(0,229,255,0.2)',
-                                padding: '2rem'
+                                padding: '1.5rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                minHeight: '380px'
                             }}>
-                                <h3 style={{ fontSize: '1.25rem', color: '#fff', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <MapPin size={20} color="#00e5ff" /> Regional Load Breakdown
+                                <h3 style={{ fontSize: '1.1rem', color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <MapPin size={18} color="#00e5ff" /> Regional Load
                                 </h3>
 
                                 <div style={{
+                                    flex: 1,
                                     display: 'flex',
                                     flexWrap: 'wrap',
-                                    gap: '2rem',
+                                    gap: '1rem',
                                     alignItems: 'center',
                                     justifyContent: 'space-around'
                                 }}>
-                                    <RegionPieChart breakdown={gridData.breakdown || []} />
-                                    <RegionBarChart breakdown={gridData.breakdown || []} />
+                                    <SpiralChart
+                                        data={gridData.breakdown || []}
+                                        labelKey="region"
+                                        valueKey="total_pload_mw"
+                                    />
                                 </div>
                             </div>
 
-                            {/* State Analysis */}
+                            {/* State Analysis (Vertical List) */}
                             <div style={{
                                 background: 'rgba(0,0,0,0.3)',
                                 backdropFilter: 'blur(20px)',
                                 borderRadius: '16px',
                                 border: '1px solid rgba(255, 149, 0, 0.2)', // Orange tint border
-                                padding: '2rem'
+                                padding: '1.5rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                minHeight: '380px',
+                                maxHeight: '380px' // constrain height
                             }}>
-                                <h3 style={{ fontSize: '1.25rem', color: '#fff', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <MapPin size={20} color="#ff9500" /> State Consumption
+                                <h3 style={{ fontSize: '1.1rem', color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <MapPin size={18} color="#ff9500" /> State Load
                                 </h3>
 
-                                <StateBarChart breakdown={gridData.state_breakdown || []} />
+                                <div style={{ flex: 1, overflow: 'hidden' }}>
+                                    <ProgressBarChart
+                                        data={gridData.state_breakdown || []}
+                                        labelKey="state"
+                                        valueKey="total_pload_mw"
+                                        unit="MW"
+                                    />
+                                </div>
                             </div>
 
                         </div>
@@ -435,29 +452,29 @@ const MetricCard = ({ icon, label, value, subValue, color, trend, progress }) =>
     </motion.div>
 );
 
-// Region Pie Chart Component
-const RegionPieChart = ({ breakdown }) => {
-    const totalLoad = breakdown.reduce((acc, curr) => acc + curr.total_pload_mw, 0);
+// Spiral Chart Component (Generic)
+const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', colorFunction }) => {
+    const totalLoad = data.reduce((acc, curr) => acc + (curr[valueKey] || 0), 0);
     const [hoveredIndex, setHoveredIndex] = useState(null);
 
-    // Sort breakdown by load (descending) to determine track order
-    // Largest load = Outer track
-    const sortedBreakdown = [...breakdown].sort((a, b) => b.total_pload_mw - a.total_pload_mw);
+    // Sort data by value (descending)
+    const sortedData = [...data].sort((a, b) => (b[valueKey] || 0) - (a[valueKey] || 0));
 
     return (
-        <div style={{ position: 'relative', width: '500px', height: '340px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'relative', width: '100%', maxWidth: '500px', margin: '0 auto', aspectRatio: '500/340', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg viewBox="0 0 500 340" style={{ overflow: 'visible' }}>
-                {sortedBreakdown.map((region, idx) => {
-                    const percent = totalLoad > 0 ? (region.total_pload_mw / totalLoad) : 0;
+                {sortedData.map((item, idx) => {
+                    const value = item[valueKey] || 0;
+                    const percent = totalLoad > 0 ? (value / totalLoad) : 0;
+                    const label = item[labelKey];
 
                     // Track config
-                    const center = { x: 300, y: 190 }; // Shifted right to make room for text on left
+                    const center = { x: 300, y: 190 };
                     const maxRadius = 160;
                     const trackWidth = 16;
-                    const gap = 12; // Increased gap slightly for text readability
+                    const gap = 12;
                     const radius = maxRadius - (idx * (trackWidth + gap));
 
-                    // Helper to calculation coordinates
                     const getCoords = (angleInDegrees) => {
                         const angleInRad = (angleInDegrees * Math.PI) / 180;
                         return {
@@ -466,31 +483,26 @@ const RegionPieChart = ({ breakdown }) => {
                         };
                     };
 
-                    // 270 Degree Sweep
-                    // Start: -90 degrees (12 o'clock)
-                    // End: 180 degrees (9 o'clock)
-                    // 0 degrees is 3 o'clock. 
                     const startDeg = -90;
                     const fullSweep = 270;
                     const endDeg = startDeg + fullSweep;
 
                     const bgStart = getCoords(startDeg);
                     const bgEnd = getCoords(endDeg);
-
-                    // Path for background track (full 270)
                     const bgPath = `M ${bgStart.x} ${bgStart.y} A ${radius} ${radius} 0 1 1 ${bgEnd.x} ${bgEnd.y}`;
 
-                    // Path for foreground (percentage)
                     const percentDeg = startDeg + (percent * fullSweep);
                     const fgEnd = getCoords(percentDeg);
-
                     const largeArcFlag = (percent * fullSweep) > 180 ? 1 : 0;
-
                     const fgPath = percent > 0
                         ? `M ${bgStart.x} ${bgStart.y} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${fgEnd.x} ${fgEnd.y}`
                         : '';
 
-                    const color = `hsl(${190 + (idx * 30)}, 90%, 50%)`;
+                    // Default color logic or custom function
+                    const color = colorFunction
+                        ? colorFunction(item, idx)
+                        : `hsl(${190 + (idx * 30)}, 90%, 50%)`;
+
                     const isHovered = hoveredIndex === idx;
 
                     return (
@@ -499,11 +511,10 @@ const RegionPieChart = ({ breakdown }) => {
                             onMouseLeave={() => setHoveredIndex(null)}
                             style={{ cursor: 'pointer' }}
                         >
-                            {/* Legend Text at Start (Left Side) */}
                             <text
-                                x={bgStart.x - 12} // 12px gap from start of bar
-                                y={bgStart.y + 5}  // Vertically centered relative to stroke
-                                textAnchor="end"   // Align to the right (end at the bar start)
+                                x={bgStart.x - 12}
+                                y={bgStart.y + 5}
+                                textAnchor="end"
                                 style={{
                                     fill: isHovered ? '#fff' : 'rgba(255,255,255,0.7)',
                                     fontSize: '0.85rem',
@@ -512,12 +523,11 @@ const RegionPieChart = ({ breakdown }) => {
                                     transition: 'all 0.3s ease'
                                 }}
                             >
-                                <tspan style={{ fontWeight: 700, fill: color }}>{region.region}</tspan>
-                                <tspan dx="8">{region.total_pload_mw.toFixed(1)}MW</tspan>
+                                <tspan style={{ fontWeight: 700, fill: color }}>{label}</tspan>
+                                <tspan dx="8">{value.toFixed(1)}MW</tspan>
                                 <tspan dx="8" style={{ fill: 'rgba(255,255,255,0.5)' }}>{(percent * 100).toFixed(1)}%</tspan>
                             </text>
 
-                            {/* Background Track */}
                             <path
                                 d={bgPath}
                                 fill="none"
@@ -526,7 +536,6 @@ const RegionPieChart = ({ breakdown }) => {
                                 strokeLinecap="round"
                             />
 
-                            {/* Foreground Progress */}
                             <motion.path
                                 d={fgPath}
                                 fill="none"
@@ -545,7 +554,6 @@ const RegionPieChart = ({ breakdown }) => {
                 })}
             </svg>
 
-            {/* Center Summary */}
             <div style={{ position: 'absolute', textAlign: 'center', pointerEvents: 'none', top: '50%', transform: 'translateY(-20%)' }}>
                 <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>Total System Load</div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
@@ -553,7 +561,6 @@ const RegionPieChart = ({ breakdown }) => {
                 </div>
             </div>
 
-            {/* Tooltip */}
             <AnimatePresence>
                 {hoveredIndex !== null && (
                     <motion.div
@@ -562,14 +569,14 @@ const RegionPieChart = ({ breakdown }) => {
                         exit={{ opacity: 0, y: 10, scale: 0.9 }}
                         style={{
                             position: 'absolute',
-                            bottom: '100%', // Position above the chart
+                            bottom: '100%',
                             left: '50%',
                             x: '-50%',
-                            marginBottom: '20px',
+                            marginBottom: '10px',
                             background: 'rgba(10, 12, 16, 0.95)',
-                            border: `1px solid ${`hsl(${190 + (hoveredIndex * 30)}, 90%, 50%)`}`,
-                            padding: '0.75rem 1rem',
-                            borderRadius: '12px',
+                            border: `1px solid ${colorFunction ? colorFunction(sortedData[hoveredIndex], hoveredIndex) : `hsl(${190 + (hoveredIndex * 30)}, 90%, 50%)`}`,
+                            padding: '0.5rem 0.75rem',
+                            borderRadius: '8px',
                             zIndex: 40,
                             backdropFilter: 'blur(12px)',
                             pointerEvents: 'none',
@@ -578,26 +585,23 @@ const RegionPieChart = ({ breakdown }) => {
                             boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
                         }}
                     >
-                        <div style={{ color: '#fff', fontWeight: 600, fontSize: '1rem', marginBottom: '4px' }}>
-                            {sortedBreakdown[hoveredIndex].region}
+                        <div style={{ color: '#fff', fontWeight: 600, fontSize: '0.85rem', marginBottom: '4px' }}>
+                            {sortedData[hoveredIndex][labelKey]}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{
-                                color: `hsl(${190 + (hoveredIndex * 30)}, 90%, 50%)`,
+                                color: colorFunction ? colorFunction(sortedData[hoveredIndex], hoveredIndex) : `hsl(${190 + (hoveredIndex * 30)}, 90%, 50%)`,
                                 fontWeight: 700,
-                                fontSize: '1.2rem',
+                                fontSize: '1rem',
                                 fontFamily: 'monospace'
                             }}>
-                                {sortedBreakdown[hoveredIndex].total_pload_mw.toFixed(1)} MW
+                                {sortedData[hoveredIndex][valueKey].toFixed(1)} MW
                             </span>
                             <span style={{
-                                background: 'rgba(255,255,255,0.1)',
-                                padding: '2px 6px',
-                                borderRadius: '4px',
                                 fontSize: '0.8rem',
-                                color: '#aaa'
+                                color: 'rgba(255,255,255,0.5)'
                             }}>
-                                {((sortedBreakdown[hoveredIndex].total_pload_mw / totalLoad) * 100).toFixed(1)}%
+                                ({((sortedData[hoveredIndex][valueKey] / totalLoad) * 100).toFixed(1)}%)
                             </span>
                         </div>
                     </motion.div>
@@ -607,122 +611,7 @@ const RegionPieChart = ({ breakdown }) => {
     );
 };
 
-// Region Vertical Bar Chart Component
-const RegionBarChart = ({ breakdown }) => {
-    const maxLoad = Math.max(...breakdown.map(r => r.total_pload_mw));
-    const [hoveredRegion, setHoveredRegion] = useState(null);
 
-    return (
-        <div style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            height: '300px',
-            gap: '1.5rem',
-            padding: '1rem 0 2rem 0',
-            position: 'relative'
-        }}>
-            {breakdown.map((region, idx) => {
-                const heightPercentage = (region.total_pload_mw / maxLoad) * 100;
-                const isHovered = hoveredRegion === idx;
-
-                return (
-                    <div
-                        key={idx}
-                        style={{
-                            flex: 1,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            height: '100%',
-                            justifyContent: 'flex-end',
-                            position: 'relative'
-                        }}
-                        onMouseEnter={() => setHoveredRegion(idx)}
-                        onMouseLeave={() => setHoveredRegion(null)}
-                    >
-                        {/* Tooltip */}
-                        <AnimatePresence>
-                            {isHovered && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                                    animate={{ opacity: 1, y: -10, scale: 1 }}
-                                    exit={{ opacity: 0, y: 10, scale: 0.9 }}
-                                    style={{
-                                        position: 'absolute',
-                                        bottom: '100%',
-                                        marginBottom: '6px',
-                                        background: 'rgba(10, 12, 16, 0.95)',
-                                        border: '1px solid rgba(0, 229, 255, 0.3)',
-                                        borderRadius: '12px',
-                                        padding: '1rem',
-                                        zIndex: 20,
-                                        backdropFilter: 'blur(12px)',
-                                        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                                        minWidth: '160px',
-                                        textAlign: 'center',
-                                        pointerEvents: 'none'
-                                    }}
-                                >
-                                    <div style={{ color: '#fff', fontSize: '0.9rem', marginBottom: '0.25rem', fontWeight: 600 }}>
-                                        {region.region}
-                                    </div>
-                                    <div style={{ color: '#00e5ff', fontWeight: 700, fontSize: '1.25rem', fontFamily: 'monospace' }}>
-                                        {region.total_pload_mw.toFixed(1)} MW
-                                    </div>
-                                    <div style={{ color: '#ff9500', fontSize: '0.85rem', marginTop: '0.2rem' }}>
-                                        {region.total_qload_mvar.toFixed(1)} MVAr
-                                    </div>
-                                    {/* Arrow */}
-                                    <div style={{
-                                        position: 'absolute',
-                                        bottom: '-6px',
-                                        left: '50%',
-                                        transform: 'translateX(-50%) rotate(45deg)',
-                                        width: '12px',
-                                        height: '12px',
-                                        background: 'rgba(10, 12, 16, 0.95)',
-                                        borderRight: '1px solid rgba(0, 229, 255, 0.3)',
-                                        borderBottom: '1px solid rgba(0, 229, 255, 0.3)',
-                                    }} />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-
-                        {/* Bar */}
-                        <motion.div
-                            initial={{ height: 0 }}
-                            animate={{ height: `${heightPercentage}%` }}
-                            transition={{ duration: 1, delay: idx * 0.1, type: "spring", stiffness: 100 }}
-                            style={{
-                                width: '100%',
-                                maxWidth: '60px',
-                                background: isHovered
-                                    ? 'linear-gradient(180deg, #00e5ff 0%, #00a8ff 100%)'
-                                    : 'linear-gradient(180deg, rgba(0, 229, 255, 0.6) 0%, rgba(0, 168, 255, 0.4) 100%)',
-                                borderRadius: '30px', // Fully rounded pill
-                                position: 'relative',
-                                boxShadow: isHovered ? '0 0 20px rgba(0, 229, 255, 0.4)' : 'none',
-                                transition: 'background 0.3s, box-shadow 0.3s'
-                            }}
-                        />
-
-                        {/* Label */}
-                        <div style={{
-                            marginTop: '1rem',
-                            fontSize: '0.85rem',
-                            color: isHovered ? '#fff' : 'rgba(255,255,255,0.6)',
-                            fontWeight: isHovered ? 600 : 400,
-                            textAlign: 'center',
-                            transition: 'color 0.3s'
-                        }}>
-                            {region.region}
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-    );
-};
 
 // Regions View Component
 const RegionsView = ({ breakdown }) => (
@@ -777,121 +666,81 @@ const RegionsView = ({ breakdown }) => (
     </div>
 );
 
-// State Vertical Bar Chart Component
-const StateBarChart = ({ breakdown }) => {
-    const maxLoad = Math.max(...breakdown.map(r => r.total_pload_mw));
-    const [hoveredState, setHoveredState] = useState(null);
+// Progress Bar Chart Component (Generic)
+const ProgressBarChart = ({ data, labelKey = 'label', valueKey = 'value', unit = '', colorFunction }) => {
+    const maxVal = Math.max(...data.map(r => r[valueKey] || 0));
+    const [hoveredIndex, setHoveredIndex] = useState(null);
+
+    // Sort by value descending
+    const sortedData = [...data].sort((a, b) => (b[valueKey] || 0) - (a[valueKey] || 0));
 
     return (
         <div style={{
             display: 'flex',
-            alignItems: 'flex-end',
-            height: '400px', // Increased height
-            gap: '1rem',
-            padding: '100px 0 2rem 0', // Increased top padding for tooltip space
-            position: 'relative',
-            overflowX: 'auto', // Allow scrolling if many states
-            minWidth: '100%'
+            flexDirection: 'column',
+            height: '100%',
+            overflowY: 'auto',
+            paddingRight: '0.5rem',
+            gap: '0.75rem'
         }}>
-            {breakdown.map((item, idx) => {
-                const heightPercentage = (item.total_pload_mw / maxLoad) * 100;
-                const isHovered = hoveredState === idx;
+            {sortedData.map((item, idx) => {
+                const val = item[valueKey] || 0;
+                const widthPercentage = maxVal > 0 ? (val / maxVal) * 100 : 0;
+                const isHovered = hoveredIndex === idx;
+                const label = item[labelKey] || 'Unknown';
 
                 return (
                     <div
                         key={idx}
                         style={{
-                            flex: 1,
-                            minWidth: '40px',
                             display: 'flex',
-                            flexDirection: 'column',
                             alignItems: 'center',
-                            height: '100%',
-                            justifyContent: 'flex-end',
-                            position: 'relative'
+                            gap: '1rem',
+                            padding: '0.5rem',
+                            borderRadius: '8px',
+                            background: isHovered ? 'rgba(255, 149, 0, 0.1)' : 'transparent',
+                            transition: 'background 0.2s',
+                            cursor: 'default'
                         }}
-                        onMouseEnter={() => setHoveredState(idx)}
-                        onMouseLeave={() => setHoveredState(null)}
+                        onMouseEnter={() => setHoveredIndex(idx)}
+                        onMouseLeave={() => setHoveredIndex(null)}
                     >
-                        {/* Tooltip */}
-                        <AnimatePresence>
-                            {isHovered && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                                    animate={{ opacity: 1, y: -10, scale: 1 }}
-                                    exit={{ opacity: 0, y: 10, scale: 0.9 }}
-                                    style={{
-                                        position: 'absolute',
-                                        bottom: '100%',
-                                        marginBottom: '6px',
-                                        background: 'rgba(10, 12, 16, 0.95)',
-                                        border: '1px solid rgba(255, 149, 0, 0.3)', // Orange tint
-                                        borderRadius: '12px',
-                                        padding: '1rem',
-                                        zIndex: 20,
-                                        backdropFilter: 'blur(12px)',
-                                        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                                        minWidth: '140px',
-                                        textAlign: 'center',
-                                        pointerEvents: 'none',
-                                        left: '50%',
-                                        x: '-50%'
-                                    }}
-                                >
-                                    <div style={{ color: '#fff', fontSize: '0.9rem', marginBottom: '0.25rem', fontWeight: 600 }}>
-                                        {item.state}
-                                    </div>
-                                    <div style={{ color: '#ff9500', fontWeight: 700, fontSize: '1.25rem', fontFamily: 'monospace' }}>
-                                        {item.total_pload_mw.toFixed(1)} MW
-                                    </div>
-                                    {/* Arrow */}
-                                    <div style={{
-                                        position: 'absolute',
-                                        bottom: '-6px',
-                                        left: '50%',
-                                        transform: 'translateX(-50%) rotate(45deg)',
-                                        width: '12px',
-                                        height: '12px',
-                                        background: 'rgba(10, 12, 16, 0.95)',
-                                        borderRight: '1px solid rgba(255, 149, 0, 0.3)',
-                                        borderBottom: '1px solid rgba(255, 149, 0, 0.3)',
-                                    }} />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-
-                        {/* Bar */}
-                        <motion.div
-                            initial={{ height: 0 }}
-                            animate={{ height: `${heightPercentage}%` }}
-                            transition={{ duration: 1, delay: idx * 0.1, type: "spring", stiffness: 100 }}
-                            style={{
-                                width: '100%',
-                                maxWidth: '30px',
-                                background: isHovered
-                                    ? 'linear-gradient(180deg, #ff9500 0%, #ff5e3a 100%)' // Orange gradient
-                                    : 'linear-gradient(180deg, rgba(255, 149, 0, 0.6) 0%, rgba(255, 94, 58, 0.4) 100%)',
-                                borderRadius: '30px',
-                                position: 'relative',
-                                boxShadow: isHovered ? '0 0 20px rgba(255, 149, 0, 0.4)' : 'none',
-                                transition: 'background 0.3s, box-shadow 0.3s'
-                            }}
-                        />
-
                         {/* Label */}
                         <div style={{
-                            marginTop: '1rem',
+                            width: '40px',
                             fontSize: '0.75rem',
-                            color: isHovered ? '#fff' : 'rgba(255,255,255,0.6)',
+                            color: isHovered ? '#fff' : 'rgba(255,255,255,0.7)',
                             fontWeight: isHovered ? 600 : 400,
-                            textAlign: 'center',
-                            transition: 'color 0.3s',
-                            transform: 'rotate(-45deg)',
-                            transformOrigin: 'top center',
-                            whiteSpace: 'nowrap',
-                            height: '20px'
+                            textAlign: 'right',
+                            flexShrink: 0
                         }}>
-                            {item.state}
+                            {label}
+                        </div>
+
+                        {/* Bar Container */}
+                        <div style={{ flex: 1, height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                            <motion.div
+                                initial={{ width: 0 }}
+                                animate={{ width: `${widthPercentage}%` }}
+                                transition={{ duration: 1, delay: idx * 0.05 }}
+                                style={{
+                                    height: '100%',
+                                    background: colorFunction ? colorFunction(item, idx) : 'linear-gradient(90deg, #ff9500 0%, #ff5e3a 100%)',
+                                    borderRadius: '4px'
+                                }}
+                            />
+                        </div>
+
+                        {/* Value */}
+                        <div style={{
+                            minWidth: '70px',
+                            textAlign: 'right',
+                            fontSize: '0.8rem',
+                            fontFamily: 'monospace',
+                            color: '#fff',
+                            fontWeight: 500
+                        }}>
+                            {val.toFixed(1)} <span style={{ fontSize: '0.7rem', color: '#aaa', fontWeight: 400 }}>{unit}</span>
                         </div>
                     </div>
                 );
