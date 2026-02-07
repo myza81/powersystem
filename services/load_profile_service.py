@@ -216,6 +216,9 @@ class LoadProfileService:
                     )
                     unmatched_count += 1
         
+        # Populate telemetry cache with aggregated substation loads
+        LoadProfileService._update_telemetry_cache()
+        
         return {
             'total_rows': len(df),
             'matched': matched_count,
@@ -279,3 +282,90 @@ class LoadProfileService:
                     load.matched = True
                     load.save()
                     rematch_count += 1
+        
+        # Update telemetry cache after rematch
+        LoadProfileService._update_telemetry_cache()
+    
+    @staticmethod
+    def _update_telemetry_cache():
+        """
+        Aggregate substation loads and populate Redis telemetry cache.
+        Called after upload or rematch operations.
+        """
+        from services.telemetry_cache import get_telemetry_cache
+        from django.db.models import Sum
+        
+        cache = get_telemetry_cache()
+        
+        # Get all substations
+        substations = Substation.objects.all()
+        
+        # Aggregation containers
+        region_totals = {}
+        state_totals = {}
+        ownership_totals = {}
+        grid_mw = 0
+        grid_mvar = 0
+        
+        for substation in substations:
+            # Aggregate loads from transformers
+            transformer_loads = BayLoad.objects.filter(
+                matched=True,
+                transformer__substation=substation
+            ).aggregate(
+                total_pload=Sum('pload_mw'),
+                total_qload=Sum('qload_mvar')
+            )
+            
+            # Aggregate loads from incoming bays
+            bay_loads = BayLoad.objects.filter(
+                matched=True,
+                incoming_bay__substation=substation
+            ).aggregate(
+                total_pload=Sum('pload_mw'),
+                total_qload=Sum('qload_mvar')
+            )
+            
+            # Calculate totals for this substation
+            total_pload = (transformer_loads['total_pload'] or 0) + (bay_loads['total_pload'] or 0)
+            total_qload = (transformer_loads['total_qload'] or 0) + (bay_loads['total_qload'] or 0)
+            
+            # Update substation-level cache
+            cache.update_substation_load(
+                substation.substation_id,
+                total_pload,
+                total_qload
+            )
+            
+            # Accumulate for aggregations
+            grid_mw += total_pload
+            grid_mvar += total_qload
+            
+            # Region aggregation
+            if substation.region:
+                if substation.region not in region_totals:
+                    region_totals[substation.region] = {"mw": 0, "mvar": 0}
+                region_totals[substation.region]["mw"] += total_pload
+                region_totals[substation.region]["mvar"] += total_qload
+            
+            # State aggregation
+            if substation.state:
+                if substation.state not in state_totals:
+                    state_totals[substation.state] = {"mw": 0, "mvar": 0}
+                state_totals[substation.state]["mw"] += total_pload
+                state_totals[substation.state]["mvar"] += total_qload
+            
+            # Ownership aggregation
+            if substation.ownership:
+                if substation.ownership not in ownership_totals:
+                    ownership_totals[substation.ownership] = {"mw": 0, "mvar": 0}
+                ownership_totals[substation.ownership]["mw"] += total_pload
+                ownership_totals[substation.ownership]["mvar"] += total_qload
+        
+        # Update aggregated metrics in cache
+        cache.update_aggregated_metrics(
+            region_totals,
+            state_totals,
+            ownership_totals,
+            {"mw": grid_mw, "mvar": grid_mvar}
+        )

@@ -10,6 +10,7 @@ whitenoise
 # Database
 psycopg2-binary
 redis
+django-redis
 
 # Data Science & Processing
 numpy

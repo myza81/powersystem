@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileSpreadsheet, TrendingUp, AlertTriangle, CheckCircle2, X, Zap, Database, Loader2, AlertCircle, Search, MapPin, Edit2, Plus, ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { Upload, FileSpreadsheet, TrendingUp, AlertTriangle, CheckCircle2, X, Zap, Database, Loader2, AlertCircle, Search, MapPin, Edit2, Plus, ChevronDown, ChevronRight, Info, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
@@ -10,6 +10,7 @@ const LoadProfileUpload = ({ onUploadComplete, onCancel, onResolveIssue }) => {
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [results, setResults] = useState(null);
+    const [previousResults, setPreviousResults] = useState(null); // Store previous results for Go Back
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
     const [inspectorData, setInspectorData] = useState(null);
@@ -195,9 +196,19 @@ const LoadProfileUpload = ({ onUploadComplete, onCancel, onResolveIssue }) => {
     };
 
     const resetUpload = () => {
+        // Preserve current results before clearing
+        if (results) {
+            setPreviousResults(results);
+        }
         setResults(null);
         setError(null);
         setUploadProgress(0);
+    };
+
+    const restorePreviousResults = () => {
+        if (previousResults) {
+            setResults(previousResults);
+        }
     };
 
     // Filter inspector data
@@ -339,18 +350,47 @@ const LoadProfileUpload = ({ onUploadComplete, onCancel, onResolveIssue }) => {
                                                 or click to browse • Excel files only (.xlsx, .xls)
                                             </p>
 
-                                            <div style={{
-                                                display: 'inline-block',
-                                                padding: '1rem 2.5rem',
-                                                background: 'linear-gradient(135deg, #00e5ff 0%, #00a8ff 100%)',
-                                                color: '#000',
-                                                borderRadius: '12px',
-                                                fontWeight: 600,
-                                                fontSize: '1rem',
-                                                boxShadow: '0 8px 24px rgba(0, 229, 255, 0.4)',
-                                                transition: 'all 0.3s'
-                                            }}>
-                                                Select File
+                                            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                                                <div style={{
+                                                    display: 'inline-block',
+                                                    padding: '1rem 2.5rem',
+                                                    background: 'linear-gradient(135deg, #00e5ff 0%, #00a8ff 100%)',
+                                                    color: '#000',
+                                                    borderRadius: '12px',
+                                                    fontWeight: 600,
+                                                    fontSize: '1rem',
+                                                    boxShadow: '0 8px 24px rgba(0, 229, 255, 0.4)',
+                                                    transition: 'all 0.3s'
+                                                }}>
+                                                    Select File
+                                                </div>
+
+                                                {previousResults && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                            restorePreviousResults();
+                                                        }}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '8px',
+                                                            padding: '1rem 2rem',
+                                                            background: 'rgba(255,255,255,0.1)',
+                                                            color: '#fff',
+                                                            border: '1px solid rgba(255,255,255,0.2)',
+                                                            borderRadius: '12px',
+                                                            fontWeight: 600,
+                                                            fontSize: '1rem',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.3s'
+                                                        }}
+                                                    >
+                                                        <ArrowLeft size={18} />
+                                                        Go Back
+                                                    </button>
+                                                )}
                                             </div>
 
                                             <div style={{

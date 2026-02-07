@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Zap, TrendingUp, MapPin, Building2, Database, Loader2, BarChart3, AlertCircle, AlertTriangle, CheckCircle2, FileText, ZoomIn, ZoomOut, X, Edit3 } from 'lucide-react';
+import { Search, Zap, TrendingUp, MapPin, Building2, Database, Loader2, BarChart3, AlertCircle, AlertTriangle, CheckCircle2, FileText, ZoomIn, ZoomOut, X, Edit3, Radio } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SldViewer from './SldViewer';
 import BayIdEditor from './BayIdEditor';
+import SubstationMap from './SubstationMap';
+import { useRealtimeTelemetry } from '../hooks/useRealtimeTelemetry';
 
 const api = axios.create({ baseURL: '/api/v1' });
 
-const LoadDashboard = () => {
+const LoadDashboard = ({ substations = [] }) => {
     const [loading, setLoading] = useState(true);
     const [gridData, setGridData] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -16,21 +18,88 @@ const LoadDashboard = () => {
     const [substationDetails, setSubstationDetails] = useState(null);
     const [viewingSld, setViewingSld] = useState(null); // SLD Viewer State
     const [showBayEditor, setShowBayEditor] = useState(false);
+    const [mapData, setMapData] = useState([]);
+    const [realtimeEnabled, setRealtimeEnabled] = useState(false);
 
-    // Fetch grid overview on mount
+    // Subscribe to real-time telemetry (modular service)
+    const { loads: liveLoads, aggregates: liveAggregates, isLive } = useRealtimeTelemetry({
+        enabled: realtimeEnabled,
+        interval: 5000,
+        includeAggregates: true
+    });
+
+
+    // Update map data whenever substations prop or live loads change
     useEffect(() => {
-        const fetchGridData = async () => {
+        if (substations) {
+            const mappedData = substations.map(s => ({
+                ...s,
+                // Prefer live telemetry data if available, otherwise use static data
+                load_mw: (realtimeEnabled && liveLoads[s.substation_id])
+                    ? liveLoads[s.substation_id].mw
+                    : (s.total_pload_mw || s.current_load_mw || (s.load_mw || 0))
+            }));
+            setMapData(mappedData);
+        }
+    }, [substations, liveLoads, realtimeEnabled]);
+
+    // Fetch grid overview on mount or when substations change
+    useEffect(() => {
+        const fetchData = async () => {
             try {
-                const response = await api.get('/load-profiles/aggregate/?level=grid');
-                setGridData(response.data);
+                // Fetch static aggregates as baseline
+                const gridRes = await api.get('/load-profiles/aggregate/?level=grid');
+                setGridData(gridRes.data);
             } catch (err) {
-                console.error('Failed to fetch grid data:', err);
+                console.error('Failed to fetch data:', err);
             } finally {
                 setLoading(false);
             }
         };
-        fetchGridData();
-    }, []);
+        fetchData();
+    }, [substations]);
+
+    // Merge live telemetry aggregates when real-time mode is enabled
+    useEffect(() => {
+        if (realtimeEnabled && liveAggregates && gridData) {
+            // Transform live aggregates to match gridData structure
+            const liveGridData = {
+                ...gridData,
+                // Grid totals
+                total_pload_mw: liveAggregates.grid?.mw || gridData.total_pload_mw,
+                total_qload_mvar: liveAggregates.grid?.mvar || gridData.total_qload_mvar,
+
+                // Regional breakdown
+                regional_breakdown: liveAggregates.regions
+                    ? Object.entries(liveAggregates.regions).map(([region, data]) => ({
+                        region,
+                        total_pload_mw: data.mw,
+                        total_qload_mvar: data.mvar
+                    }))
+                    : gridData.regional_breakdown,
+
+                // State breakdown
+                state_breakdown: liveAggregates.states
+                    ? Object.entries(liveAggregates.states).map(([state, data]) => ({
+                        state,
+                        total_pload_mw: data.mw,
+                        total_qload_mvar: data.mvar
+                    }))
+                    : gridData.state_breakdown,
+
+                // Ownership breakdown
+                ownership_breakdown: liveAggregates.ownership
+                    ? Object.entries(liveAggregates.ownership).map(([ownership, data]) => ({
+                        ownership,
+                        total_pload_mw: data.mw,
+                        total_qload_mvar: data.mvar
+                    }))
+                    : gridData.ownership_breakdown
+            };
+
+            setGridData(liveGridData);
+        }
+    }, [realtimeEnabled, liveAggregates]);
 
     // Search substations
     const handleSearch = async (query) => {
@@ -126,6 +195,30 @@ const LoadDashboard = () => {
                                 Grid Demand Analytics
                             </p>
                         </div>
+
+                        {/* Real-Time Mode Toggle */}
+                        <button
+                            onClick={() => setRealtimeEnabled(!realtimeEnabled)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '10px 16px',
+                                background: realtimeEnabled ? 'rgba(0, 229, 255, 0.2)' : 'rgba(255,255,255,0.1)',
+                                border: realtimeEnabled ? '1px solid #00e5ff' : '1px solid rgba(255,255,255,0.2)',
+                                borderRadius: '8px',
+                                color: realtimeEnabled ? '#00e5ff' : '#fff',
+                                cursor: 'pointer',
+                                fontSize: '0.9rem',
+                                fontWeight: '500',
+                                transition: 'all 0.3s ease'
+                            }}
+                        >
+                            <Radio size={16} style={{
+                                animation: isLive ? 'pulse 2s infinite' : 'none'
+                            }} />
+                            {realtimeEnabled ? 'Live Mode' : 'Static Mode'}
+                        </button>
                     </div>
                 </motion.div>
 
@@ -249,6 +342,27 @@ const LoadDashboard = () => {
                             </div>
 
                         </div>
+
+                        {/* Map Section */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.3 }}
+                            style={{
+                                marginTop: '2rem',
+                                background: 'rgba(0,0,0,0.3)',
+                                backdropFilter: 'blur(20px)',
+                                borderRadius: '16px',
+                                border: '1px solid rgba(0,229,255,0.2)',
+                                padding: '1.5rem'
+                            }}
+                        >
+                            <h3 style={{ fontSize: '1.25rem', color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <MapPin size={20} color="#00e5ff" />
+                                Geospatial Load Distribution
+                            </h3>
+                            <SubstationMap data={mapData} />
+                        </motion.div>
 
                     </div>
                 )}

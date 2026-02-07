@@ -21,11 +21,13 @@ from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from api.v1.views.substation import SubstationViewSet
 from api.v1.views.load_profile import LoadProfileViewSet
+from api.v1.views.telemetry import TelemetryViewSet
 from core.views_dev import DatabaseSyncStatusView, DatabaseExportView, DatabaseImportView
 
 router = DefaultRouter()
 router.register(r'substations', SubstationViewSet)
 router.register(r'load-profiles', LoadProfileViewSet, basename='load-profile')
+router.register(r'telemetry', TelemetryViewSet, basename='telemetry')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

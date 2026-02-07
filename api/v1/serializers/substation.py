@@ -26,8 +26,8 @@ class SubstationSerializer(serializers.ModelSerializer):
         fields = ['substation_id', 'mnemonic', 'name', 'ownership', 'voltage', 
                   'grid', 'state', 'region', 'latitude', 'longitude', 
                   'sync_log', 'commission_date', 'sld', 'sld_file', 'transformers', 'incoming_bays',
-                  'created_at', 'updated_at']
-        read_only_fields = ['substation_id', 'sld', 'created_at', 'updated_at', 'region', 'state']
+                  'created_at', 'updated_at', 'total_pload_mw', 'total_qload_mvar']
+        read_only_fields = ['substation_id', 'sld', 'created_at', 'updated_at', 'region', 'state', 'total_pload_mw', 'total_qload_mvar']
 
     def update(self, instance, validated_data):
         transformers_data = validated_data.pop('transformers', None)

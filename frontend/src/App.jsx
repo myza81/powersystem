@@ -269,7 +269,7 @@ const App = () => {
                 )}
 
                 {view === 'dashboard' && (
-                    <LoadDashboard />
+                    <LoadDashboard substations={substations} />
                 )}
 
                 {view === 'load-profile' && (
@@ -278,7 +278,7 @@ const App = () => {
                             setStatus({ type: 'success', msg: `Load data uploaded: ${results.matched} matched, ${results.unmatched} unmatched` });
                             fetchSubstations(); // Refresh substations with load data
                         }}
-                        onCancel={() => setView('list')}
+                        onCancel={() => setView('dashboard')}
                         onResolveIssue={handleResolveIssue}
                     />
                 )}
