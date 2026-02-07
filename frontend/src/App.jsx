@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Plus, Edit2, MapPin, FileText, CheckCircle, AlertCircle, Search, Loader2, X, Cpu, Zap, Activity, TrendingUp, BarChart3 } from 'lucide-react';
+import { Upload, Plus, Edit2, MapPin, FileText, CheckCircle, AlertCircle, Search, Loader2, X, Cpu, Zap, Activity, TrendingUp, BarChart3, Database } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SubstationForm from './components/SubstationForm';
@@ -8,6 +8,9 @@ import SldViewer from './components/SldViewer';
 import ConfigurationEditor from './components/ConfigurationEditor';
 import LoadProfileUpload from './components/LoadProfileUpload';
 import LoadDashboard from './components/LoadDashboard';
+import DevTools from './components/DevTools';
+import MainLayout from './components/MainLayout';
+
 
 // API Service
 const api = axios.create({ baseURL: '/api/v1' });
@@ -164,159 +167,134 @@ const App = () => {
     };
 
     return (
-        <div className="dashboard-container">
-            {status && (
-                <motion.div
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    style={{
-                        position: 'fixed', top: '2rem', right: '2rem', zIndex: 1000,
-                        background: status.type === 'success' ? 'var(--accent-cyan)' : '#f56565',
-                        color: '#000', padding: '1rem 2rem', borderRadius: '0.5rem',
-                        display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 600, boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
-                    }}
-                >
-                    {status.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-                    {status.msg}
-                    <X size={16} style={{ marginLeft: '1rem', cursor: 'pointer' }} onClick={() => setStatus(null)} />
-                </motion.div>
-            )}
+        <MainLayout currentView={view} onViewChange={setView}>
+            <div className="dashboard-container">
+                {status && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        style={{
+                            position: 'fixed', top: '2rem', right: '2rem', zIndex: 1000,
+                            background: status.type === 'success' ? 'var(--accent-cyan)' : '#f56565',
+                            color: '#000', padding: '1rem 2rem', borderRadius: '0.5rem',
+                            display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 600, boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
+                        }}
+                    >
+                        {status.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                        {status.msg}
+                        <X size={16} style={{ marginLeft: '1rem', cursor: 'pointer' }} onClick={() => setStatus(null)} />
+                    </motion.div>
+                )}
 
-            <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
-                <div>
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700 }}>GridDefense <span style={{ color: 'var(--accent-blue)' }}>Ops</span></h1>
-                    <p style={{ color: 'var(--text-secondary)' }}>Substation Asset Management & Protection Sync</p>
-                </div>
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                    {view === 'list' ? (
-                        <>
-                            <button
-                                className="btn-primary"
-                                onClick={() => setView('dashboard')}
-                                style={{
-                                    background: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px'
-                                }}
-                            >
-                                <BarChart3 size={18} style={{ marginRight: '4px' }} />
-                                Dashboard
-                            </button>
-                            <button
-                                className="btn-primary"
-                                onClick={() => setView('load-profile')}
-                                style={{
-                                    background: 'linear-gradient(135deg, #00ffa3 0%, #00e5ff 100%)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px'
-                                }}
-                            >
-                                <TrendingUp size={18} style={{ marginRight: '4px' }} />
-                                Load Profile
-                            </button>
-                            <button className="btn-primary" onClick={() => { setSelectedSub(null); setView('create'); }}>
-                                <Plus size={18} style={{ marginRight: '8px' }} />
-                                Manual Entry
-                            </button>
-                        </>
-                    ) : (
-                        <button className="btn-secondary" onClick={() => setView('list')} style={{ background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '0.5rem', padding: '0.75rem 1.5rem' }}>
-                            View List
-                        </button>
-                    )}
-                </div>
-            </header>
-
-            {view === 'list' && (
-                <>
-                    <section className="glass-card" style={{ marginBottom: '2rem' }}>
-                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                            <Search size={20} color="var(--text-secondary)" />
-                            <input
-                                className="input-field"
-                                placeholder="Search substations by name, mnemonic, or ID..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                            />
-                        </div>
-                    </section>
-
-                    <div className="substation-grid">
-                        <AnimatePresence>
-                            {substations
-                                .filter(s => (s.name || '').toLowerCase().includes(search.toLowerCase()) || (s.mnemonic || '').toLowerCase().includes(search.toLowerCase()))
-                                .map(sub => (
-                                    <SubstationCard
-                                        key={sub.substation_id}
-                                        substation={sub}
-                                        onEdit={() => { setSelectedSub(sub); setView('edit'); }}
-                                        onConfigEdit={() => { setSelectedSub(sub); setView('config'); }}
-                                        onSLDUpload={handleSLDUpload}
-                                        onProcess={handleProcessSLD}
-                                        processing={loading}
-                                        onViewSld={setViewingSld}
-                                    />
-                                ))}
-                        </AnimatePresence>
+                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    {/* Header content like Title is now in Sidebar, or can be kept as Page Title */}
+                    <div>
+                        <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
+                            {view === 'dashboard' && 'System Dashboard'}
+                            {view === 'load-profile' && 'Load Profile Management'}
+                            {view === 'list' && 'Substation Assets'}
+                            {view === 'create' && 'New Substation Entry'}
+                            {view === 'edit' && 'Edit Substation'}
+                            {view === 'config' && 'Configuration Editor'}
+                            {view === 'dev-tools' && 'Developer Tools'}
+                        </h2>
                     </div>
+                    {/* Action buttons specific to views can go here if needed, or remain in view components */}
+                </header>
 
-                    <section className="glass-card" style={{ marginTop: '3rem', textAlign: 'center', borderStyle: 'dashed', borderColor: 'rgba(0, 229, 255, 0.3)' }}>
-                        <Upload size={48} color="var(--accent-blue)" style={{ marginBottom: '1rem' }} />
-                        <h3>Bulk Sync Terminal</h3>
-                        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Upload .xlsx or .csv provided by system operators</p>
-                        <input type="file" id="bulk-upload" hidden onChange={handleBulkUpload} accept=".xlsx,.xls,.csv" />
-                        <label htmlFor="bulk-upload" className="btn-primary" style={{ display: 'inline-block' }}>
-                            {loading ? <Loader2 className="animate-spin" /> : "Select Grid Asset File"}
-                        </label>
-                    </section>
-                </>
-            )}
+                {view === 'list' && (
+                    <>
+                        <section className="glass-card" style={{ marginBottom: '2rem' }}>
+                            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                <Search size={20} color="var(--text-secondary)" />
+                                <input
+                                    className="input-field"
+                                    placeholder="Search substations by name, mnemonic, or ID..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                />
+                            </div>
+                        </section>
 
-            {view === 'create' || view === 'edit' ? (
-                <SubstationForm
-                    substation={selectedSub}
-                    onSave={handleSave}
-                    onCancel={() => setView('list')}
-                    onConfigEdit={() => setView('config')}
-                    onSLDUpload={handleSLDUpload}
-                />
-            ) : null}
+                        <div className="substation-grid">
+                            <AnimatePresence>
+                                {substations
+                                    .filter(s => (s.name || '').toLowerCase().includes(search.toLowerCase()) || (s.mnemonic || '').toLowerCase().includes(search.toLowerCase()))
+                                    .map(sub => (
+                                        <SubstationCard
+                                            key={sub.substation_id}
+                                            substation={sub}
+                                            onEdit={() => { setSelectedSub(sub); setView('edit'); }}
+                                            onConfigEdit={() => { setSelectedSub(sub); setView('config'); }}
+                                            onSLDUpload={handleSLDUpload}
+                                            onProcess={handleProcessSLD}
+                                            processing={loading}
+                                            onViewSld={setViewingSld}
+                                        />
+                                    ))}
+                            </AnimatePresence>
+                        </div>
 
-            {view === 'config' && (
-                <ConfigurationEditor
-                    substation={selectedSub}
-                    onSave={handleSave}
-                    onCancel={() => setView('list')}
-                    onProcess={() => handleProcessSLD(selectedSub.substation_id)}
-                    processing={loading}
-                    onViewSld={setViewingSld}
-                />
-            )}
+                        <section className="glass-card" style={{ marginTop: '3rem', textAlign: 'center', borderStyle: 'dashed', borderColor: 'rgba(0, 229, 255, 0.3)' }}>
+                            <Upload size={48} color="var(--accent-blue)" style={{ marginBottom: '1rem' }} />
+                            <h3>Bulk Sync Terminal</h3>
+                            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Upload .xlsx or .csv provided by system operators</p>
+                            <input type="file" id="bulk-upload" hidden onChange={handleBulkUpload} accept=".xlsx,.xls,.csv" />
+                            <label htmlFor="bulk-upload" className="btn-primary" style={{ display: 'inline-block' }}>
+                                {loading ? <Loader2 className="animate-spin" /> : "Select Grid Asset File"}
+                            </label>
+                        </section>
+                    </>
+                )}
 
-            {view === 'dashboard' && (
-                <LoadDashboard />
-            )}
+                {view === 'create' || view === 'edit' ? (
+                    <SubstationForm
+                        substation={selectedSub}
+                        onSave={handleSave}
+                        onCancel={() => setView('list')}
+                        onConfigEdit={() => setView('config')}
+                        onSLDUpload={handleSLDUpload}
+                    />
+                ) : null}
 
-            {view === 'load-profile' && (
-                <LoadProfileUpload
-                    onUploadComplete={(results) => {
-                        setStatus({ type: 'success', msg: `Load data uploaded: ${results.matched} matched, ${results.unmatched} unmatched` });
-                        fetchSubstations(); // Refresh substations with load data
-                    }}
-                    onCancel={() => setView('list')}
-                    onResolveIssue={handleResolveIssue}
-                />
-            )}
+                {view === 'config' && (
+                    <ConfigurationEditor
+                        substation={selectedSub}
+                        onSave={handleSave}
+                        onCancel={() => setView('list')}
+                        onProcess={() => handleProcessSLD(selectedSub.substation_id)}
+                        processing={loading}
+                        onViewSld={setViewingSld}
+                    />
+                )}
 
-            {viewingSld && (
-                <SldViewer
-                    substation={viewingSld}
-                    onClose={() => setViewingSld(null)}
-                />
-            )}
-        </div>
+                {view === 'dashboard' && (
+                    <LoadDashboard />
+                )}
+
+                {view === 'load-profile' && (
+                    <LoadProfileUpload
+                        onUploadComplete={(results) => {
+                            setStatus({ type: 'success', msg: `Load data uploaded: ${results.matched} matched, ${results.unmatched} unmatched` });
+                            fetchSubstations(); // Refresh substations with load data
+                        }}
+                        onCancel={() => setView('list')}
+                        onResolveIssue={handleResolveIssue}
+                    />
+                )}
+
+                {view === 'dev-tools' && (
+                    <DevTools onBack={() => setView('list')} />
+                )}
+
+                {viewingSld && (
+                    <SldViewer
+                        substation={viewingSld}
+                        onClose={() => setViewingSld(null)}
+                    />
+                )}
+            </div>
+        </MainLayout>
     );
 };
 

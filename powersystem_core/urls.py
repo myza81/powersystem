@@ -21,6 +21,7 @@ from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from api.v1.views.substation import SubstationViewSet
 from api.v1.views.load_profile import LoadProfileViewSet
+from core.views_dev import DatabaseSyncStatusView, DatabaseExportView, DatabaseImportView
 
 router = DefaultRouter()
 router.register(r'substations', SubstationViewSet)
@@ -29,6 +30,9 @@ router.register(r'load-profiles', LoadProfileViewSet, basename='load-profile')
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', include(router.urls)),
+    path('api/v1/dev/sync-status/', DatabaseSyncStatusView.as_view(), name='db-sync-status'),
+    path('api/v1/dev/export/', DatabaseExportView.as_view(), name='db-export'),
+    path('api/v1/dev/import/', DatabaseImportView.as_view(), name='db-import'),
 ]
 
 if settings.DEBUG:
