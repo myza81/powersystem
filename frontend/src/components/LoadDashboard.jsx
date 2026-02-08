@@ -12,10 +12,6 @@ const api = axios.create({ baseURL: '/api/v1' });
 const LoadDashboard = ({ substations = [] }) => {
     const [loading, setLoading] = useState(true);
     const [gridData, setGridData] = useState(null);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState([]);
-    const [selectedSubstation, setSelectedSubstation] = useState(null);
-    const [substationDetails, setSubstationDetails] = useState(null);
     const [viewingSld, setViewingSld] = useState(null); // SLD Viewer State
     const [showBayEditor, setShowBayEditor] = useState(false);
     const [mapData, setMapData] = useState([]);
@@ -101,34 +97,7 @@ const LoadDashboard = ({ substations = [] }) => {
         }
     }, [realtimeEnabled, liveAggregates]);
 
-    // Search substations
-    const handleSearch = async (query) => {
-        setSearchQuery(query);
-        if (!query.trim()) {
-            setSearchResults([]);
-            return;
-        }
 
-        try {
-            const response = await api.get(`/substations/?search=${query}`);
-            setSearchResults(response.data.results || response.data || []);
-        } catch (err) {
-            console.error('Search failed:', err);
-            setSearchResults([]);
-        }
-    };
-
-    // Fetch substation details
-    const handleSelectSubstation = async (substation) => {
-        setSelectedSubstation(substation);
-        try {
-            const response = await api.get(`/load-profiles/aggregate/?level=substation&key=${substation.substation_id}`);
-            setSubstationDetails(response.data);
-        } catch (err) {
-            console.error('Failed to fetch substation details:', err);
-            setSubstationDetails(null);
-        }
-    };
 
     if (loading) {
         return (
@@ -369,107 +338,16 @@ const LoadDashboard = ({ substations = [] }) => {
 
 
 
-                {/* Search Section */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    style={{
-                        background: 'rgba(0,0,0,0.3)',
-                        backdropFilter: 'blur(20px)',
-                        borderRadius: '16px',
-                        border: '1px solid rgba(0,229,255,0.2)',
-                        padding: '2rem',
-                        marginTop: '2rem'
-                    }}
-                >
-                    <h3 style={{
-                        fontSize: '1.25rem',
-                        color: '#fff',
-                        marginBottom: '1.5rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem'
-                    }}>
-                        <Search size={20} color="#00e5ff" />
-                        Substation Load Lookup
-                    </h3>
 
-                    {/* Search Input */}
-                    <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
-                        <Search
-                            size={20}
-                            style={{
-                                position: 'absolute',
-                                left: '1rem',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                color: 'rgba(255,255,255,0.5)'
-                            }}
-                        />
-                        <input
-                            type="text"
-                            placeholder="Search by name or mnemonic (e.g., ABBA, Butterworth)"
-                            value={searchQuery}
-                            onChange={(e) => handleSearch(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '1rem 1rem 1rem 3rem',
-                                background: 'rgba(0,0,0,0.4)',
-                                border: '1px solid rgba(0,229,255,0.3)',
-                                borderRadius: '12px',
-                                color: '#fff',
-                                fontSize: '1rem',
-                                outline: 'none'
-                            }}
-                        />
-                    </div>
-
-                    {/* Search Results */}
-                    {searchResults.length > 0 && (
-                        <div style={{
-                            display: 'grid',
-                            gap: '0.75rem',
-                            marginBottom: '2rem',
-                            maxHeight: '300px',
-                            overflowY: 'auto'
-                        }}>
-                            {searchResults.map(sub => (
-                                <SubstationSearchCard
-                                    key={sub.substation_id}
-                                    substation={sub}
-                                    onClick={() => handleSelectSubstation(sub)}
-                                    isSelected={selectedSubstation?.substation_id === sub.substation_id}
-                                    onViewSld={setViewingSld}
-                                />
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Substation Details */}
-                    {substationDetails && selectedSubstation && (
-                        <SubstationDetailsPanel
-                            substation={selectedSubstation}
-                            details={substationDetails}
-                            onClose={() => {
-                                setSelectedSubstation(null);
-                                setSubstationDetails(null);
-                            }}
-                            onViewSld={setViewingSld}
-                            onEditBayIds={() => setShowBayEditor(true)}
-                        />
-                    )}
-                </motion.div>
             </div>
 
             {/* Bay ID Editor Overlay */}
             <AnimatePresence>
-                {showBayEditor && selectedSubstation && (
+                {showBayEditor && (
                     <BayIdEditor
-                        substation={selectedSubstation}
+                        substation={null}
                         onClose={() => setShowBayEditor(false)}
                         onSuccess={() => {
-                            handleSelectSubstation(selectedSubstation); // Refresh details
                             setShowBayEditor(false);
                         }}
                     />
