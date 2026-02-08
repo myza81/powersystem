@@ -4,114 +4,163 @@ import './TopologyValidation.css';
 
 const API_BASE = 'http://localhost:8000/api/v1/network-topology';
 
-const TopologyValidation = () => {
-    const [pendingBays, setPendingBays] = useState([]);
+// Configure axios to send credentials (session cookies) with requests
+axios.defaults.withCredentials = true;
+
+const TopologyValidation = ({ onEditSubstation }) => {
+    const [bays, setBays] = useState([]);
     const [statistics, setStatistics] = useState(null);
     const [loading, setLoading] = useState(true);
     const [selectedBays, setSelectedBays] = useState(new Set());
-    const [filter, setFilter] = useState('all');
-    const [modifyingBay, setModifyingBay] = useState(null);
+    const [filter, setFilter] = useState('all'); // all, rejected, pending, low_confidence, equipment_info
 
     useEffect(() => {
         fetchData();
-    }, [filter]);
+    }, []);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [pendingRes, statsRes] = await Promise.all([
-                axios.get(`${API_BASE}/pending_validations/`, {
-                    params: filter !== 'all' ? { confidence_max: 0.5 } : {}
-                }),
+            // Fetch all items (limit 1000) including validated ones for the Equipment Log
+            // We'll filter client-side to separate Equipment from actual issues
+            const [baysRes, statsRes] = await Promise.all([
+                axios.get(`${API_BASE}/pending_validations/?limit=1000&include_all=true`),
                 axios.get(`${API_BASE}/statistics/`)
             ]);
 
-            setPendingBays(pendingRes.data.results);
+            setBays(baysRes.data.results);
             setStatistics(statsRes.data);
         } catch (error) {
             console.error('Error fetching data:', error);
-        }
-        setLoading(false);
-    };
-
-    const handleValidate = async (bayId, action, data = {}) => {
-        try {
-            await axios.post(`${API_BASE}/validate_connection/`, {
-                bay_id: bayId,
-                action,
-                ...data
-            });
-
-            fetchData();
-            setModifyingBay(null);
-            setSelectedBays(new Set());
-        } catch (error) {
-            console.error('Error validating:', error);
-            alert('Validation failed: ' + (error.response?.data?.error || error.message));
+            alert('Failed to load validation data');
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleBulkValidate = async (action) => {
-        if (selectedBays.size === 0) {
-            alert('Please select at least one bay');
-            return;
-        }
+        if (selectedBays.size === 0) return;
+        if (!confirm(`Are you sure you want to ${action} ${selectedBays.size} bays?`)) return;
 
         try {
             await axios.post(`${API_BASE}/bulk_validate/`, {
                 bay_ids: Array.from(selectedBays),
-                action
+                action: action
             });
-
             fetchData();
             setSelectedBays(new Set());
         } catch (error) {
-            console.error('Error bulk validating:', error);
-            alert('Bulk validation failed');
+            console.error('Error validating:', error);
+            alert('Bulk action failed');
         }
     };
 
     const toggleSelection = (bayId) => {
-        const newSelected = new Set(selectedBays);
-        if (newSelected.has(bayId)) {
-            newSelected.delete(bayId);
+        const newSelection = new Set(selectedBays);
+        if (newSelection.has(bayId)) {
+            newSelection.delete(bayId);
         } else {
-            newSelected.add(bayId);
+            newSelection.add(bayId);
         }
-        setSelectedBays(newSelected);
+        setSelectedBays(newSelection);
     };
 
-    const getConfidenceColor = (confidence) => {
-        if (confidence >= 0.95) return '#28a745';
-        if (confidence >= 0.70) return '#ffc107';
-        if (confidence >= 0.50) return '#fd7e14';
-        return '#dc3545';
-    };
+    // Filter Logic
+    const getFilteredBays = () => {
+        if (!bays) return [];
 
-    const getStatusBadge = (status) => {
-        const colors = {
-            'PENDING': '#ffc107',
-            'VALIDATED': '#28a745',
-            'AUTO_VALIDATED': '#007bff',
-            'REJECTED': '#dc3545'
-        };
-        return colors[status] || '#6c757d';
-    };
+        // EQUIPMENT TAB: Show Equipment and Autotransformers
+        if (filter === 'equipment_info') {
+            return bays.filter(bay =>
+                bay.connection_type === 'EQUIPMENT' ||
+                bay.connection_type === 'AUTOTRANSFORMER'
+            );
+        }
 
-    if (loading) {
-        return (
-            <div className="topology-validation">
-                <div className="loading">Loading topology data...</div>
-            </div>
+        // Actionable Items (Exclude Equipment/Autotransformers from other tabs to reduce noise)
+        const actionableBays = bays.filter(bay =>
+            bay.connection_type !== 'EQUIPMENT' &&
+            bay.connection_type !== 'AUTOTRANSFORMER'
         );
-    }
+
+        switch (filter) {
+            case 'rejected':
+                return actionableBays.filter(bay => bay.validation_status === 'REJECTED');
+            case 'pending':
+                return actionableBays.filter(bay => bay.validation_status === 'PENDING');
+            case 'low_confidence':
+                return actionableBays.filter(bay => bay.detection_confidence < 0.5);
+            case 'all':
+            default:
+                // Only show Actionable Items that are PENDING or REJECTED
+                return actionableBays.filter(bay => ['REJECTED', 'PENDING'].includes(bay.validation_status));
+        }
+    };
+
+    const filteredBays = getFilteredBays();
+    const isEquipmentTab = filter === 'equipment_info';
+    const isReadonly = isEquipmentTab;
+
+    // Helper counts for tabs
+    const getTabCounts = () => {
+        const equipmentCount = bays.filter(b => b.connection_type === 'EQUIPMENT' || b.connection_type === 'AUTOTRANSFORMER').length;
+
+        // Actionable items are those that are NOT equipment/autotransformers AND are either REJECTED or PENDING
+        const actionable = bays.filter(b =>
+            b.connection_type !== 'EQUIPMENT' &&
+            b.connection_type !== 'AUTOTRANSFORMER' &&
+            ['REJECTED', 'PENDING'].includes(b.validation_status)
+        );
+
+        return {
+            all: actionable.length,
+            rejected: actionable.filter(b => b.validation_status === 'REJECTED').length,
+            pending: actionable.filter(b => b.validation_status === 'PENDING').length,
+            equipment: equipmentCount
+        };
+    };
+
+    const counts = getTabCounts();
+
+    if (loading) return <div className="loading">Loading validation data...</div>;
 
     return (
         <div className="topology-validation">
-            {/* Header */}
             <div className="header">
                 <h1>🔗 Network Topology Validation</h1>
                 <p className="subtitle">Review and validate auto-detected substation connections</p>
+                <div className="actions">
+                    <button className="btn-cancel" onClick={fetchData}>🔄 Refresh</button>
+                    <button
+                        className="btn-primary"
+                        onClick={async () => {
+                            if (confirm('Run auto-detection on all bays? This may take a moment.')) {
+                                setLoading(true);
+                                try {
+                                    const response = await axios.post(`${API_BASE}/run_detection/`);
+                                    const data = response.data;
+                                    alert(
+                                        `Detection complete!\n\n` +
+                                        `Processed: ${data.processed}\n` +
+                                        `Auto-Validated: ${data.auto_validated}\n` +
+                                        `Rejected: ${data.rejected}\n` +
+                                        `Pending Review: ${data.pending_review}`
+                                    );
+                                    await fetchData();
+                                } catch (error) {
+                                    console.error('Detection error:', error);
+                                    const errorMsg = error.response?.data?.error || error.response?.data?.detail || error.message || 'Unknown error';
+                                    alert(`Detection failed: ${errorMsg}`);
+                                } finally {
+                                    setLoading(false);
+                                }
+                            }
+                        }}
+                        disabled={loading}
+                    >
+                        ⚡ Run Detection
+                    </button>
+                </div>
             </div>
 
             {/* Statistics Dashboard */}
@@ -129,44 +178,51 @@ const TopologyValidation = () => {
                         <div className="stat-percent">{statistics.validation_rate}%</div>
                     </div>
                     <div className="stat-card warning">
-                        <div className="stat-label">Pending Review</div>
+                        <div className="stat-label">Actionable</div>
                         <div className="stat-value">
-                            {statistics.validation_status.pending + statistics.validation_status.rejected}
+                            {counts.all}
                         </div>
                     </div>
                     <div className="stat-card info">
-                        <div className="stat-label">Standard Connections</div>
-                        <div className="stat-value">{statistics.connection_types.standard}</div>
-                    </div>
-                    <div className="stat-card info">
-                        <div className="stat-label">Tee-Off</div>
-                        <div className="stat-value">{statistics.connection_types.tee_off}</div>
-                    </div>
-                    <div className="stat-card info">
-                        <div className="stat-label">Autotransformers</div>
-                        <div className="stat-value">{statistics.connection_types.autotransformer}</div>
+                        <div className="stat-label">Equipment Log</div>
+                        <div className="stat-value">
+                            {counts.equipment}
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* Filters and Bulk Actions */}
+            {/* Filter Tabs */}
             <div className="controls">
                 <div className="filters">
                     <button
                         className={filter === 'all' ? 'active' : ''}
                         onClick={() => setFilter('all')}
                     >
-                        All ({pendingBays.length})
+                        All Needing Action ({counts.all})
                     </button>
                     <button
-                        className={filter === 'low' ? 'active' : ''}
-                        onClick={() => setFilter('low')}
+                        className={filter === 'rejected' ? 'active' : ''}
+                        onClick={() => setFilter('rejected')}
                     >
-                        Low Confidence Only
+                        Rejected ({counts.rejected})
+                    </button>
+                    <button
+                        className={filter === 'pending' ? 'active' : ''}
+                        onClick={() => setFilter('pending')}
+                    >
+                        Pending ({counts.pending})
+                    </button>
+                    <button
+                        className={`filter-tab-equipment ${filter === 'equipment_info' ? 'active' : ''}`}
+                        onClick={() => setFilter('equipment_info')}
+                        style={{ marginLeft: '1rem', borderLeft: '2px solid rgba(255,255,255,0.1)' }}
+                    >
+                        📋 Equipment & Info Log ({counts.equipment})
                     </button>
                 </div>
 
-                {selectedBays.size > 0 && (
+                {!isReadonly && selectedBays.size > 0 && (
                     <div className="bulk-actions">
                         <span className="selected-count">{selectedBays.size} selected</span>
                         <button
@@ -185,29 +241,36 @@ const TopologyValidation = () => {
                 )}
             </div>
 
-            {/* Pending Validations List */}
+            {/* Validation List */}
             <div className="validations-list">
-                {pendingBays.length === 0 ? (
+                {filteredBays.length === 0 ? (
                     <div className="empty-state">
-                        <h3>🎉 All connections validated!</h3>
-                        <p>No pending validations at this time.</p>
+                        <h3>
+                            {filter === 'equipment_info'
+                                ? 'No equipment logs found'
+                                : '🎉 All connections processed!'}
+                        </h3>
+                        <p>
+                            {filter === 'equipment_info'
+                                ? 'Equipment logs will appear here when detected.'
+                                : 'No bays requiring attention in this category.'}
+                        </p>
                     </div>
                 ) : (
-                    pendingBays.map(bay => (
-                        <div key={bay.bay_id} className="validation-card">
+                    filteredBays.map(bay => (
+                        <div key={bay.bay_id} className={`validation-card ${isReadonly ? 'readonly-mode' : ''}`}>
                             <div className="card-header">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedBays.has(bay.bay_id)}
-                                    onChange={() => toggleSelection(bay.bay_id)}
-                                />
+                                {!isReadonly && (
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedBays.has(bay.bay_id)}
+                                        onChange={() => toggleSelection(bay.bay_id)}
+                                    />
+                                )}
                                 <div className="bay-info">
                                     <h3>{bay.bay_id}</h3>
                                     <span className="bay-name">{bay.bay_name}</span>
-                                    <span
-                                        className="status-badge"
-                                        style={{ backgroundColor: getStatusBadge(bay.validation_status) }}
-                                    >
+                                    <span className={`status-badge ${bay.validation_status.toLowerCase()}`}>
                                         {bay.validation_status}
                                     </span>
                                 </div>
@@ -216,12 +279,26 @@ const TopologyValidation = () => {
                                         className="confidence-bar"
                                         style={{
                                             width: `${bay.detection_confidence * 100}%`,
-                                            backgroundColor: getConfidenceColor(bay.detection_confidence)
+                                            backgroundColor: bay.detection_confidence > 0.8 ? '#28a745' :
+                                                bay.detection_confidence > 0.5 ? '#ffc107' : '#dc3545'
                                         }}
                                     />
-                                    <span className="confidence-value">
-                                        {(bay.detection_confidence * 100).toFixed(0)}%
-                                    </span>
+                                    <span className="confidence-value">{Math.round(bay.detection_confidence * 100)}%</span>
+                                </div>
+                                <div className="actions">
+                                    {isReadonly ? (
+                                        <span className="readonly-badge">INFO ONLY</span>
+                                    ) : (
+                                        <>
+                                            <button
+                                                className="btn-modify"
+                                                onClick={() => onEditSubstation(bay.substation.substation_id)}
+                                                title="Edit Substation Configuration"
+                                            >
+                                                ✏️ Edit Substation
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
@@ -229,27 +306,24 @@ const TopologyValidation = () => {
                                 <div className="connection-info">
                                     <div className="info-row">
                                         <span className="label">From:</span>
-                                        <span className="value">
-                                            {bay.substation.substation_id} ({bay.substation.name})
-                                        </span>
+                                        <span className="value">{bay.substation.name} ({bay.substation.substation_id})</span>
                                     </div>
                                     <div className="info-row">
                                         <span className="label">To:</span>
                                         <span className="value">
-                                            {bay.connected_to_substation ? (
-                                                `${bay.connected_to_substation.substation_id} (${bay.connected_to_substation.name})`
-                                            ) : (
-                                                <span className="unknown">Unknown</span>
-                                            )}
+                                            {bay.connected_to_substation
+                                                ? `${bay.connected_to_substation.name} (${bay.connected_to_substation.substation_id})`
+                                                : <span className="unknown">Unknown</span>
+                                            }
                                         </span>
                                     </div>
                                     <div className="info-row">
                                         <span className="label">Type:</span>
-                                        <span className="value type-badge">{bay.connection_type}</span>
+                                        <span className="type-badge">{bay.connection_type}</span>
                                     </div>
-                                    {bay.tee_off_connections.length > 0 && (
+                                    {bay.tee_off_connections && bay.tee_off_connections.length > 0 && (
                                         <div className="info-row">
-                                            <span className="label">Tee-offs:</span>
+                                            <span className="label">Tee-Offs:</span>
                                             <span className="value">
                                                 {bay.tee_off_connections.map(s => s.substation_id).join(', ')}
                                             </span>
@@ -257,38 +331,10 @@ const TopologyValidation = () => {
                                     )}
                                 </div>
 
-                                <div className="detection-note">
-                                    <strong>Detection Note:</strong>
-                                    <p>{bay.detection_note}</p>
-                                </div>
-
-                                {modifyingBay === bay.bay_id ? (
-                                    <ModifyForm
-                                        bay={bay}
-                                        onSubmit={(data) => handleValidate(bay.bay_id, 'modify', data)}
-                                        onCancel={() => setModifyingBay(null)}
-                                    />
-                                ) : (
-                                    <div className="actions">
-                                        <button
-                                            className="btn-approve"
-                                            onClick={() => handleValidate(bay.bay_id, 'approve')}
-                                            disabled={!bay.connected_to_substation}
-                                        >
-                                            ✓ Approve
-                                        </button>
-                                        <button
-                                            className="btn-modify"
-                                            onClick={() => setModifyingBay(bay.bay_id)}
-                                        >
-                                            ✏️ Modify
-                                        </button>
-                                        <button
-                                            className="btn-reject"
-                                            onClick={() => handleValidate(bay.bay_id, 'reject')}
-                                        >
-                                            ✗ Reject
-                                        </button>
+                                {bay.detection_note && (
+                                    <div className="detection-note">
+                                        <strong>Detection Note:</strong>
+                                        <p>{bay.detection_note}</p>
                                     </div>
                                 )}
                             </div>
@@ -297,63 +343,6 @@ const TopologyValidation = () => {
                 )}
             </div>
         </div>
-    );
-};
-
-const ModifyForm = ({ bay, onSubmit, onCancel }) => {
-    const [connectedTo, setConnectedTo] = useState(
-        bay.connected_to_substation?.substation_id || ''
-    );
-    const [connectionType, setConnectionType] = useState(bay.connection_type);
-    const [note, setNote] = useState('');
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        onSubmit({
-            connected_to_substation_id: connectedTo,
-            connection_type: connectionType,
-            note
-        });
-    };
-
-    return (
-        <form className="modify-form" onSubmit={handleSubmit}>
-            <div className="form-group">
-                <label>Connected To Substation ID:</label>
-                <input
-                    type="text"
-                    value={connectedTo}
-                    onChange={(e) => setConnectedTo(e.target.value)}
-                    placeholder="e.g., SRDN132"
-                    required
-                />
-            </div>
-            <div className="form-group">
-                <label>Connection Type:</label>
-                <select
-                    value={connectionType}
-                    onChange={(e) => setConnectionType(e.target.value)}
-                >
-                    <option value="STANDARD">Standard</option>
-                    <option value="TEE_OFF">Tee-Off</option>
-                    <option value="AUTOTRANSFORMER">Autotransformer</option>
-                    <option value="EQUIPMENT">Equipment</option>
-                </select>
-            </div>
-            <div className="form-group">
-                <label>Note (optional):</label>
-                <textarea
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="Reason for modification..."
-                    rows="2"
-                />
-            </div>
-            <div className="form-actions">
-                <button type="submit" className="btn-save">Save</button>
-                <button type="button" className="btn-cancel" onClick={onCancel}>Cancel</button>
-            </div>
-        </form>
     );
 };
 

@@ -22,8 +22,14 @@ class NetworkTopologyService:
     # Autotransformer patterns (internal connections)
     AUTOTRANSFORMER_PATTERNS = ['SGT', 'XGT', 'YGT', 'AGT']
     
-    # Equipment names that are not connections
-    EXCLUDED_NAMES = ['Capbank', 'Reactor', 'SVC', 'STATCOM', 'Shunt']
+    # Station Transformer patterns (internal connections)
+    STATION_TRANSFORMER_PATTERNS = ['ST']
+    
+    # Generator Transformer patterns (internal connections)
+    GENERATOR_TRANSFORMER_PATTERNS = ['GT']
+    
+    # Equipment base names (will match with numbers: Capbank1, Capbank2, etc.)
+    EQUIPMENT_PATTERNS = ['Capbank', 'Reactor', 'SVC', 'STATCOM', 'Shunt']
     
     # Confidence thresholds
     CONFIDENCE_AUTO_VALIDATE = 0.95  # Auto-apply without user review
@@ -48,8 +54,8 @@ class NetworkTopologyService:
         """
         bay_name = incoming_bay.bay_name
         
-        # Rule 1: Check exclusions (equipment, not connections)
-        if bay_name in cls.EXCLUDED_NAMES:
+        # Rule 1: Check equipment exclusions (pattern-based)
+        if cls.is_equipment(bay_name):
             return {
                 'type': 'EQUIPMENT',
                 'primary': None,
@@ -58,7 +64,27 @@ class NetworkTopologyService:
                 'note': f"'{bay_name}' is equipment, not a connection"
             }
         
-        # Rule 2: Autotransformer (internal connection)
+        # Rule 2: Station Transformer (internal connection)
+        if cls.is_station_transformer(bay_name):
+            return {
+                'type': 'EQUIPMENT',
+                'primary': None,
+                'tee_offs': [],
+                'confidence': 1.0,
+                'note': 'Station Transformer - internal equipment'
+            }
+        
+        # Rule 3: Generator Transformer (internal connection)
+        if cls.is_generator_transformer(bay_name):
+            return {
+                'type': 'EQUIPMENT',
+                'primary': None,
+                'tee_offs': [],
+                'confidence': 1.0,
+                'note': 'Generator Transformer - internal equipment'
+            }
+        
+        # Rule 4: Autotransformer (internal connection)
         if cls.is_autotransformer(bay_name):
             return {
                 'type': 'AUTOTRANSFORMER',
@@ -68,11 +94,11 @@ class NetworkTopologyService:
                 'note': 'Autotransformer - internal connection'
             }
         
-        # Rule 3: Tee-off connection (slash notation)
+        # Rule 5: Tee-off connection (slash notation)
         if '/' in bay_name:
             return cls.detect_tee_off(bay_name, incoming_bay)
         
-        # Rule 4: Standard connection
+        # Rule 6: Standard connection
         return cls.detect_standard(bay_name, incoming_bay)
     
     @classmethod
@@ -114,15 +140,41 @@ class NetworkTopologyService:
             }
         
         else:
-            # Multiple matches - ambiguous
-            matches = ', '.join([s.substation_id for s in substations[:5]])
-            return {
-                'type': 'UNKNOWN',
-                'primary': None,
-                'tee_offs': [],
-                'confidence': 0.3,
-                'note': f"Ambiguous: {count} substations match '{mnemonic}': {matches}..."
-            }
+            # Multiple matches - try voltage-level matching
+            source_voltage = incoming_bay.substation.voltage
+            voltage_matched = substations.filter(voltage=source_voltage)
+            
+            if voltage_matched.count() == 1:
+                # Voltage-level match resolves ambiguity - HIGH CONFIDENCE
+                substation = voltage_matched.first()
+                all_matches = ', '.join([s.substation_id for s in substations[:5]])
+                return {
+                    'type': 'STANDARD',
+                    'primary': substation,
+                    'tee_offs': [],
+                    'confidence': 0.95,
+                    'note': f"Voltage-level match: {mnemonic} @ {source_voltage}kV → {substation.substation_id} (resolved from: {all_matches})"
+                }
+            elif voltage_matched.count() > 1:
+                # Still ambiguous even with voltage matching
+                matches = ', '.join([s.substation_id for s in voltage_matched[:5]])
+                return {
+                    'type': 'UNKNOWN',
+                    'primary': None,
+                    'tee_offs': [],
+                    'confidence': 0.3,
+                    'note': f"Ambiguous: {voltage_matched.count()} substations match '{mnemonic}' @ {source_voltage}kV: {matches}..."
+                }
+            else:
+                # No voltage match - show all matches
+                matches = ', '.join([s.substation_id for s in substations[:5]])
+                return {
+                    'type': 'UNKNOWN',
+                    'primary': None,
+                    'tee_offs': [],
+                    'confidence': 0.3,
+                    'note': f"Ambiguous: {count} substations match '{mnemonic}': {matches}... (no {source_voltage}kV match found)"
+                }
     
     @classmethod
     def detect_tee_off(cls, bay_name, incoming_bay):
@@ -156,8 +208,17 @@ class NetworkTopologyService:
                 connected_substations.append(substation)
                 resolution_details.append(f"{mnemonic} → {substation.substation_id}")
             elif count > 1:
-                unresolved_parts.append(f"{mnemonic} (ambiguous: {count} matches)")
-                resolution_details.append(f"{mnemonic} → AMBIGUOUS")
+                # Try voltage-level matching
+                source_voltage = incoming_bay.substation.voltage
+                voltage_matched = substations.filter(voltage=source_voltage)
+                
+                if voltage_matched.count() == 1:
+                    substation = voltage_matched.first()
+                    connected_substations.append(substation)
+                    resolution_details.append(f"{mnemonic} → {substation.substation_id} (voltage matched)")
+                else:
+                    unresolved_parts.append(f"{mnemonic} (ambiguous: {count} matches)")
+                    resolution_details.append(f"{mnemonic} → AMBIGUOUS")
             else:
                 unresolved_parts.append(f"{mnemonic} (not found)")
                 resolution_details.append(f"{mnemonic} → NOT FOUND")
@@ -222,6 +283,41 @@ class NetworkTopologyService:
         return any(bay_name.startswith(pattern) for pattern in cls.AUTOTRANSFORMER_PATTERNS)
     
     @classmethod
+    def is_equipment(cls, bay_name):
+        """
+        Check if bay name matches equipment patterns (with optional numbers)
+        Examples: Capbank, Capbank1, Capbank2, SVC, SVC1, Reactor3
+        """
+        for pattern in cls.EQUIPMENT_PATTERNS:
+            # Match exact name or name with trailing numbers
+            if bay_name == pattern or re.match(f'^{re.escape(pattern)}\\d+$', bay_name):
+                return True
+        return False
+    
+    @classmethod
+    def is_station_transformer(cls, bay_name):
+        """
+        Check if bay name matches station transformer patterns
+        Examples: ST1, ST2, ST10
+        """
+        for pattern in cls.STATION_TRANSFORMER_PATTERNS:
+            if re.match(f'^{re.escape(pattern)}\\d+$', bay_name):
+                return True
+        return False
+    
+    @classmethod
+    def is_generator_transformer(cls, bay_name):
+        """
+        Check if bay name matches generator transformer patterns
+        Examples: GT1, GT2, GT10
+        Note: Must have numbers to avoid conflict with autotransformer patterns
+        """
+        for pattern in cls.GENERATOR_TRANSFORMER_PATTERNS:
+            if re.match(f'^{re.escape(pattern)}\\d+$', bay_name):
+                return True
+        return False
+    
+    @classmethod
     def apply_detection_result(cls, bay, detection, user=None):
         """
         Apply detection result to IncomingBay instance
@@ -279,7 +375,9 @@ class NetworkTopologyService:
         
         # Get bays that need detection
         bays = IncomingBay.objects.filter(
-            Q(validation_status='PENDING') | Q(topology_changed=True)
+            Q(validation_status='PENDING') | 
+            Q(validation_status='REJECTED') | 
+            Q(topology_changed=True)
         )
         
         results = {

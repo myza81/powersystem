@@ -7,7 +7,7 @@ API endpoints for network topology validation workflow
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny
 from django.utils import timezone
 from django.db.models import Q
 
@@ -24,7 +24,7 @@ class NetworkTopologyViewSet(viewsets.ViewSet):
     """
     ViewSet for network topology detection and validation
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     @action(detail=False, methods=['get'])
     def pending_validations(self, request):
@@ -44,11 +44,17 @@ class NetworkTopologyViewSet(viewsets.ViewSet):
         confidence_min = request.query_params.get('confidence_min')
         confidence_max = request.query_params.get('confidence_max')
         connection_type = request.query_params.get('connection_type')
+        include_all = request.query_params.get('include_all', 'false').lower() == 'true'
         
-        # Base query - bays needing validation
-        queryset = IncomingBay.objects.filter(
-            Q(validation_status='PENDING') | Q(validation_status='REJECTED') | Q(topology_changed=True)
-        ).select_related('substation', 'connected_to_substation').prefetch_related('tee_off_connections')
+        # Base query
+        if include_all:
+             queryset = IncomingBay.objects.all()
+        else:
+            queryset = IncomingBay.objects.filter(
+                Q(validation_status='PENDING') | Q(validation_status='REJECTED') | Q(topology_changed=True)
+            )
+            
+        queryset = queryset.select_related('substation', 'connected_to_substation').prefetch_related('tee_off_connections')
         
         # Apply filters
         if confidence_min:

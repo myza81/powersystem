@@ -177,8 +177,8 @@ class Transformer(models.Model):
     hv_voltage = models.IntegerField(null=True, blank=True)
     lv_voltage = models.IntegerField(null=True, blank=True)
     capacity_mva = models.FloatField(null=True, blank=True)
-    hv_breaker_number = models.CharField(max_length=10, null=True, blank=True)
-    lv_breaker_number = models.CharField(max_length=10, null=True, blank=True)
+    hv_breaker_number = models.CharField(max_length=50, null=True, blank=True)
+    lv_breaker_number = models.CharField(max_length=50, null=True, blank=True)
     commission_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
@@ -201,7 +201,7 @@ class IncomingBay(models.Model):
     bay_name = models.CharField(max_length=100) # e.g. SRDN1 - User Input
     bay_id = models.CharField(max_length=50, unique=True, blank=True) # e.g. ADAM132_SRDN1 - Auto-generated
     voltage = models.IntegerField(null=True, blank=True)
-    breaker_number = models.CharField(max_length=10, null=True, blank=True)
+    breaker_number = models.CharField(max_length=50, null=True, blank=True)
     sequence_number = models.IntegerField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     

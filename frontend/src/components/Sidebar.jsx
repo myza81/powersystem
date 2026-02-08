@@ -33,6 +33,7 @@ const Sidebar = ({ currentView, onViewChange }) => {
     const assetItems = [
         { id: 'list', label: 'Substation', icon: List },
         { id: 'create', label: 'New Subs Entry', icon: PlusCircle },
+        { id: 'topology', label: 'Network Topology', icon: Network },
     ];
 
     const handleNavigate = (view) => {
@@ -157,16 +158,6 @@ const Sidebar = ({ currentView, onViewChange }) => {
                             </motion.div>
                         )}
                     </AnimatePresence>
-                </div>
-
-                {/* Network Topology */}
-                <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-                    <NavItem
-                        item={{ id: 'topology', label: 'Network Topology', icon: Network }}
-                        isActive={currentView === 'topology'}
-                        collapsed={collapsed}
-                        onClick={() => handleNavigate('topology')}
-                    />
                 </div>
 
                 {/* DevSync */}

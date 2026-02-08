@@ -143,15 +143,17 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# CORS and CSRF Configuration
+# CORS Configuration
 CORS_ALLOWED_ORIGINS = _env_list(
     "CORS_ALLOWED_ORIGINS",
-    ["http://localhost:5173"],
+    default=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
 )
+CORS_ALLOW_CREDENTIALS = True
 
+# CSRF Configuration
 CSRF_TRUSTED_ORIGINS = _env_list(
     "CSRF_TRUSTED_ORIGINS",
-    ["http://localhost:5173"],
+    default=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
 )
 
 REST_FRAMEWORK = {

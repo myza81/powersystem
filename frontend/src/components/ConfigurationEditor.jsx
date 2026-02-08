@@ -89,7 +89,22 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
     return (
         <div className="glass-card" style={{ padding: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem', alignItems: 'center' }}>
-                <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Edit Substation Configuration</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Edit Substation Configuration</h3>
+                    <span style={{
+                        background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.2), rgba(0, 184, 212, 0.2))',
+                        border: '1px solid rgba(0, 229, 255, 0.4)',
+                        color: 'var(--accent-cyan)',
+                        padding: '0.4rem 1rem',
+                        borderRadius: '8px',
+                        fontSize: '0.95rem',
+                        fontWeight: '700',
+                        letterSpacing: '0.5px',
+                        boxShadow: '0 2px 8px rgba(0, 229, 255, 0.15)'
+                    }}>
+                        {substation.substation_id}
+                    </span>
+                </div>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     {substation.sld_file && (
                         <>

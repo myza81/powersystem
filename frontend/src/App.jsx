@@ -207,14 +207,37 @@ const App = () => {
                 {view === 'list' && (
                     <>
                         <section className="glass-card" style={{ marginBottom: '2rem' }}>
-                            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', position: 'relative' }}>
                                 <Search size={20} color="var(--text-secondary)" />
                                 <input
                                     className="input-field"
                                     placeholder="Search substations by name, mnemonic, or ID..."
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
+                                    style={{ paddingRight: '2.5rem' }}
                                 />
+                                {search && (
+                                    <button
+                                        onClick={() => setSearch('')}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '10px',
+                                            background: 'transparent',
+                                            border: 'none',
+                                            color: 'var(--text-secondary)',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: '4px',
+                                            borderRadius: '50%',
+                                        }}
+                                        title="Clear search"
+                                        aria-label="Clear search"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                )}
                             </div>
                         </section>
 
@@ -286,7 +309,15 @@ const App = () => {
                 )}
 
                 {view === 'topology' && (
-                    <TopologyValidation />
+                    <TopologyValidation
+                        onEditSubstation={(substationId) => {
+                            const sub = substations.find(s => s.substation_id === substationId);
+                            if (sub) {
+                                setSelectedSub(sub);
+                                setView('config');
+                            }
+                        }}
+                    />
                 )}
 
                 {view === 'dev-tools' && (
