@@ -10,6 +10,7 @@ import LoadProfileUpload from './components/LoadProfileUpload';
 import LoadDashboard from './components/LoadDashboard';
 import DevTools from './components/DevTools';
 import MainLayout from './components/MainLayout';
+import TopologyValidation from './components/TopologyValidation';
 
 
 // API Service
@@ -196,6 +197,7 @@ const App = () => {
                             {view === 'create' && 'New Substation Entry'}
                             {view === 'edit' && 'Edit Substation'}
                             {view === 'config' && 'Configuration Editor'}
+                            {view === 'topology' && 'Network Topology Validation'}
                             {view === 'dev-tools' && 'Developer Tools'}
                         </h2>
                     </div>
@@ -281,6 +283,10 @@ const App = () => {
                         onCancel={() => setView('dashboard')}
                         onResolveIssue={handleResolveIssue}
                     />
+                )}
+
+                {view === 'topology' && (
+                    <TopologyValidation />
                 )}
 
                 {view === 'dev-tools' && (

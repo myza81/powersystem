@@ -196,6 +196,7 @@ class Transformer(models.Model):
             logger.error(f"Failed to rematch loads after Transformer save: {e}")
 
 class IncomingBay(models.Model):
+    # Basic fields
     substation = models.ForeignKey(Substation, related_name='incoming_bays', on_delete=models.CASCADE)
     bay_name = models.CharField(max_length=100) # e.g. SRDN1 - User Input
     bay_id = models.CharField(max_length=50, unique=True, blank=True) # e.g. ADAM132_SRDN1 - Auto-generated
@@ -203,11 +204,128 @@ class IncomingBay(models.Model):
     breaker_number = models.CharField(max_length=10, null=True, blank=True)
     sequence_number = models.IntegerField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    
+    # Network Topology fields
+    connection_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('STANDARD', 'Standard Connection'),
+            ('TEE_OFF', 'Tee-Off Connection'),
+            ('AUTOTRANSFORMER', 'Autotransformer'),
+            ('EQUIPMENT', 'Equipment (Not a connection)'),
+            ('UNKNOWN', 'Unknown/Unvalidated'),
+        ],
+        default='UNKNOWN',
+        help_text="Type of connection detected"
+    )
+    
+    connected_to_substation = models.ForeignKey(
+        Substation,
+        related_name='connected_from_bays',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Primary connected substation"
+    )
+    
+    tee_off_connections = models.ManyToManyField(
+        Substation,
+        related_name='tee_off_bays',
+        blank=True,
+        help_text="Additional substations for tee-off connections"
+    )
+    
+    # Validation state
+    validation_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('PENDING', 'Pending Validation'),
+            ('VALIDATED', 'User Validated'),
+            ('AUTO_VALIDATED', 'Auto-Validated (High Confidence)'),
+            ('REJECTED', 'Rejected/Needs Review'),
+        ],
+        default='PENDING',
+        help_text="Validation status of the connection"
+    )
+    
+    auto_detected = models.BooleanField(
+        default=False,
+        help_text="True if connection was auto-detected"
+    )
+    
+    detection_confidence = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Confidence score 0.0-1.0 for auto-detection"
+    )
+    
+    detection_note = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Explanation of detection logic or issues"
+    )
+    
+    # User validation tracking
+    validated_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='validated_topology_connections',
+        help_text="User who validated this connection"
+    )
+    
+    validated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the connection was validated"
+    )
+    
+    # Change tracking
+    topology_last_checked = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last time topology was checked"
+    )
+    
+    topology_changed = models.BooleanField(
+        default=False,
+        help_text="True if bay name changed since last validation"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['validation_status']),
+            models.Index(fields=['connection_type']),
+            models.Index(fields=['detection_confidence']),
+            models.Index(fields=['substation', 'validation_status']),
+        ]
+        verbose_name = "Incoming Bay"
+        verbose_name_plural = "Incoming Bays"
+    
     def save(self, *args, **kwargs):
         # Auto-generate Global ID from Name
         if self.bay_name and self.substation:
-            self.bay_id = f"{self.substation.substation_id}_{self.bay_name}"
+            new_bay_id = f"{self.substation.substation_id}_{self.bay_name}"
+            
+            # Detect if bay_name changed (topology change)
+            if self.pk:
+                try:
+                    old = IncomingBay.objects.get(pk=self.pk)
+                    if old.bay_name != self.bay_name:
+                        # Bay name changed - flag for re-validation
+                        self.topology_changed = True
+                        self.validation_status = 'PENDING'
+                        self.detection_note = f"Bay name changed from '{old.bay_name}' to '{self.bay_name}'. Re-validation required."
+                        logger.info(f"Topology change detected for {old.bay_id}: {old.bay_name} -> {self.bay_name}")
+                except IncomingBay.DoesNotExist:
+                    pass
+            
+            self.bay_id = new_bay_id
+        
         super().save(*args, **kwargs)
         
         # Trigger rematch of potential unmatched loads
@@ -216,6 +334,41 @@ class IncomingBay(models.Model):
             LoadProfileService.rematch_unmatched_loads()
         except Exception as e:
             logger.error(f"Failed to rematch loads after IncomingBay save: {e}")
+    
+    @property
+    def requires_validation(self):
+        """Check if this bay needs user validation"""
+        return self.validation_status in ['PENDING', 'REJECTED'] or self.topology_changed
+    
+    @property
+    def all_connected_substations(self):
+        """Get all connected substations (primary + tee-offs)"""
+        substations = []
+        if self.connected_to_substation:
+            substations.append(self.connected_to_substation)
+        substations.extend(self.tee_off_connections.all())
+        return substations
+    
+    @property
+    def connection_summary(self):
+        """Human-readable connection summary"""
+        if self.connection_type == 'EQUIPMENT':
+            return f"Equipment: {self.bay_name}"
+        elif self.connection_type == 'AUTOTRANSFORMER':
+            return f"Autotransformer (internal)"
+        elif self.connection_type == 'UNKNOWN':
+            return "Unknown - needs validation"
+        elif self.connected_to_substation:
+            if self.connection_type == 'TEE_OFF':
+                tee_offs = self.tee_off_connections.all()
+                if tee_offs:
+                    names = [ss.substation_id for ss in tee_offs]
+                    return f"Tee-off: {' + '.join(names)}"
+            return f"→ {self.connected_to_substation.substation_id}"
+        return "No connection"
+    
+    def __str__(self):
+        return f"{self.bay_id} ({self.connection_summary})"
 
 class BayLoad(models.Model):
     """

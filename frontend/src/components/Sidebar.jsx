@@ -13,7 +13,8 @@ import {
     Menu,
     List,
     PlusCircle,
-    Upload
+    Upload,
+    Network
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -156,6 +157,16 @@ const Sidebar = ({ currentView, onViewChange }) => {
                             </motion.div>
                         )}
                     </AnimatePresence>
+                </div>
+
+                {/* Network Topology */}
+                <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
+                    <NavItem
+                        item={{ id: 'topology', label: 'Network Topology', icon: Network }}
+                        isActive={currentView === 'topology'}
+                        collapsed={collapsed}
+                        onClick={() => handleNavigate('topology')}
+                    />
                 </div>
 
                 {/* DevSync */}
