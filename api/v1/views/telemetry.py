@@ -51,7 +51,8 @@ class TelemetryViewSet(viewsets.ViewSet):
                     "id": substation_id,
                     "mw": data["mw"],
                     "mvar": data["mvar"],
-                    "ts": data["ts"]
+                    "ts": data["ts"],
+                    "bays": data.get("bays")
                 }
                 for substation_id, data in loads_dict.items()
             ]
@@ -101,7 +102,8 @@ class TelemetryViewSet(viewsets.ViewSet):
                 "id": pk,
                 "mw": data["mw"],
                 "mvar": data["mvar"],
-                "ts": data["ts"]
+                "ts": data["ts"],
+                "bays": data.get("bays")
             }, status=status.HTTP_200_OK)
         
         except Exception as e:

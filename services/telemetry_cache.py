@@ -40,7 +40,7 @@ class TelemetryCache:
             logger.error(f"TelemetryCache: Failed to connect to Redis: {e}")
             self.redis_client = None
     
-    def update_substation_load(self, substation_id, pload_mw, qload_mvar):
+    def update_substation_load(self, substation_id, pload_mw, qload_mvar, bays=None):
         """
         Update load data for a specific substation.
         
@@ -48,6 +48,7 @@ class TelemetryCache:
             substation_id (str): Substation identifier (e.g., "ABBA132")
             pload_mw (float): Active power load in MW
             qload_mvar (float): Reactive power load in Mvar
+            bays (list): Optional list of bay data [{"id": "T1", "mw": 10.5}, ...]
         """
         if not self.redis_client:
             logger.warning("TelemetryCache: Redis not available, skipping update")
@@ -55,11 +56,16 @@ class TelemetryCache:
         
         try:
             key = f"telemetry:load:{substation_id}"
-            value = json.dumps({
+            payload = {
                 "mw": round(pload_mw, 2),
                 "mvar": round(qload_mvar, 2),
                 "ts": datetime.utcnow().isoformat()
-            })
+            }
+            
+            if bays:
+                payload["bays"] = bays
+
+            value = json.dumps(payload)
             
             # Set with 60-second TTL (auto-expire stale data)
             self.redis_client.setex(key, 60, value)

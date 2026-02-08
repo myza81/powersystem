@@ -1,9 +1,14 @@
 from rest_framework import serializers
 from core.models import Substation, Transformer, IncomingBay
 
+class LoadDataSerializer(serializers.Serializer):
+    pload_mw = serializers.FloatField()
+    qload_mvar = serializers.FloatField()
+
 class TransformerSerializer(serializers.ModelSerializer):
     substation = serializers.PrimaryKeyRelatedField(read_only=True)
     bay_id = serializers.CharField(read_only=True) # Auto-generated
+    load_data = LoadDataSerializer(read_only=True)
     
     class Meta:
         model = Transformer
@@ -12,6 +17,7 @@ class TransformerSerializer(serializers.ModelSerializer):
 class IncomingBaySerializer(serializers.ModelSerializer):
     substation = serializers.PrimaryKeyRelatedField(read_only=True)
     bay_id = serializers.CharField(read_only=True) # Auto-generated
+    load_data = LoadDataSerializer(read_only=True)
 
     class Meta:
         model = IncomingBay

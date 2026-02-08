@@ -13,10 +13,10 @@ import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api/v1' });
 
-export const useRealtimeTelemetry = ({ 
-    enabled = false, 
+export const useRealtimeTelemetry = ({
+    enabled = false,
     interval = 5000,
-    includeAggregates = false 
+    includeAggregates = false
 } = {}) => {
     const [loads, setLoads] = useState({});
     const [aggregates, setAggregates] = useState(null);
@@ -40,10 +40,11 @@ export const useRealtimeTelemetry = ({
                 const loadsRes = await api.get('/telemetry/loads/');
                 const loadMap = {};
                 loadsRes.data.forEach(item => {
-                    loadMap[item.id] = { 
-                        mw: item.mw, 
+                    loadMap[item.id] = {
+                        mw: item.mw,
                         mvar: item.mvar,
-                        ts: item.ts 
+                        ts: item.ts,
+                        bays: item.bays
                     };
                 });
                 setLoads(loadMap);

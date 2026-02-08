@@ -33,7 +33,8 @@ const LoadDashboard = ({ substations = [] }) => {
                 // Prefer live telemetry data if available, otherwise use static data
                 load_mw: (realtimeEnabled && liveLoads[s.substation_id])
                     ? liveLoads[s.substation_id].mw
-                    : (s.total_pload_mw || s.current_load_mw || (s.load_mw || 0))
+                    : (s.total_pload_mw || s.current_load_mw || (s.load_mw || 0)),
+                bays: (realtimeEnabled && liveLoads[s.substation_id]) ? liveLoads[s.substation_id].bays : null
             }));
             setMapData(mappedData);
         }

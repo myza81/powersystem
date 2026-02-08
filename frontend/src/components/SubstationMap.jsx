@@ -54,6 +54,67 @@ const DEFAULT_THRESHOLDS = [
     { max: Infinity, color: '#ef4444', label: '> 100 MW (Red)' },
 ];
 
+const BayBreakdown = ({ bays, transformers, incoming_bays, color = '#333' }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const hasRealtime = bays && bays.length > 0;
+    const hasStatic = (transformers && transformers.length > 0) || (incoming_bays && incoming_bays.length > 0);
+
+    if (!hasRealtime && !hasStatic) return null;
+
+    return (
+        <div style={{ marginTop: '4px', borderTop: '1px solid #eee', paddingTop: '4px' }}>
+            <div
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setIsExpanded(!isExpanded);
+                }}
+                style={{
+                    cursor: 'pointer',
+                    color: '#00e5ff',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}
+            >
+                <span>Bay Breakdown</span>
+                <span>{isExpanded ? '▼' : '▶'}</span>
+            </div>
+
+            {isExpanded && (
+                <div style={{ maxHeight: '150px', overflowY: 'auto', textAlign: 'left', marginTop: '4px' }}>
+                    {/* Real-time Bays */}
+                    {hasRealtime ? (
+                        bays.map((bay, idx) => (
+                            <div key={idx} style={{ fontSize: '0.7rem', display: 'flex', justifyContent: 'space-between', color: '#ccc', padding: '2px 0' }}>
+                                <span>{bay.name}:</span>
+                                <strong>{bay.mw.toFixed(1)} MW</strong>
+                            </div>
+                        ))
+                    ) : (
+                        /* Static Transformers & Bays */
+                        <>
+                            {transformers && transformers.map((t, idx) => (
+                                <div key={`t-${idx}`} style={{ fontSize: '0.7rem', display: 'flex', justifyContent: 'space-between', color: '#ccc', padding: '2px 0' }}>
+                                    <span>{t.bay_name || t.bay_id || 'Tx'}:</span>
+                                    <strong>{t.load_data ? t.load_data.pload_mw.toFixed(1) : '0.0'} MW</strong>
+                                </div>
+                            ))}
+                            {incoming_bays && incoming_bays.map((b, idx) => (
+                                <div key={`b-${idx}`} style={{ fontSize: '0.7rem', display: 'flex', justifyContent: 'space-between', color: '#ccc', padding: '2px 0' }}>
+                                    <span>{b.bay_name || b.bay_id || 'Bay'}:</span>
+                                    <strong>{b.load_data ? b.load_data.pload_mw.toFixed(1) : '0.0'} MW</strong>
+                                </div>
+                            ))}
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const SubstationMap = ({ data }) => {
     const defaultCenter = [4.2105, 101.9758];
     const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
@@ -121,11 +182,11 @@ const SubstationMap = ({ data }) => {
     const handleSelectResult = (result) => {
         setSelectedResult(result);
         setSearchResults([]);
-        setSearchQuery('');
+        // Search query is maintained
 
         if (result.latitude && result.longitude) {
             setMapCenter([result.latitude, result.longitude]);
-            setMapZoom(13); // Zoom level for selected location
+            setMapZoom(15); // Zoom level for selected location
         }
     };
 
@@ -162,7 +223,8 @@ const SubstationMap = ({ data }) => {
                 top: '10px',
                 left: '50px',
                 zIndex: 1000,
-                maxWidth: '400px'
+                width: '450px',
+                maxWidth: 'calc(100% - 60px)'
             }}>
                 <div style={{ position: 'relative' }}>
                     <Search
@@ -221,6 +283,7 @@ const SubstationMap = ({ data }) => {
                             onClick={() => {
                                 setSearchQuery('');
                                 setSearchResults([]);
+                                setSelectedResult(null);
                             }}
                         />
                     )}
@@ -436,17 +499,25 @@ const SubstationMap = ({ data }) => {
                                 fillOpacity: 0.8
                             }}
                         >
-                            <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
-                                <div style={{ textAlign: 'center', minWidth: '120px' }}>
+                            <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent interactive={true}>
+                                <div style={{ textAlign: 'center', minWidth: '150px' }}>
                                     <h4 style={{ margin: '0 0 4px 0', color: '#00e5ff' }}>
                                         {selectedResult.name || selectedResult.substation_id}
                                     </h4>
                                     {selectedResult.type === 'substation' && (
                                         <>
-                                            <div style={{ fontSize: '0.85rem' }}>
-                                                Load: <strong>{selectedResult.load_mw ? selectedResult.load_mw.toFixed(2) : 'N/A'} MW</strong>
+                                            <div style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
+                                                Total: <strong>{selectedResult.total_pload_mw ? selectedResult.total_pload_mw.toFixed(2) : (selectedResult.load_mw ? selectedResult.load_mw.toFixed(2) : '0.00')} MW</strong>
                                             </div>
-                                            <div style={{ fontSize: '0.75rem', color: '#666' }}>
+
+                                            <BayBreakdown
+                                                bays={selectedResult.bays}
+                                                transformers={selectedResult.transformers}
+                                                incoming_bays={selectedResult.incoming_bays}
+                                                color="#00e5ff"
+                                            />
+
+                                            <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '4px' }}>
                                                 {selectedResult.state}
                                             </div>
                                         </>
@@ -502,13 +573,21 @@ const SubstationMap = ({ data }) => {
                                     fillOpacity: 0.9
                                 }}
                             >
-                                <Tooltip direction="top" offset={[0, -10]} opacity={1}>
-                                    <div style={{ textAlign: 'center', minWidth: '120px' }}>
+                                <Tooltip direction="top" offset={[0, -10]} opacity={1} interactive={true}>
+                                    <div style={{ textAlign: 'center', minWidth: '150px' }}>
                                         <h4 style={{ margin: '0 0 4px 0', color: color }}>{d.name || d.substation_id}</h4>
-                                        <div style={{ fontSize: '0.85rem' }}>
-                                            Load: <strong>{d.load_mw ? d.load_mw.toFixed(2) : '0.00'} MW</strong>
+                                        <div style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
+                                            Total: <strong>{d.load_mw ? d.load_mw.toFixed(2) : '0.00'} MW</strong>
                                         </div>
-                                        <div style={{ fontSize: '0.75rem', color: '#666' }}>
+
+                                        <BayBreakdown
+                                            bays={d.bays}
+                                            transformers={d.transformers}
+                                            incoming_bays={d.incoming_bays}
+                                            color={color}
+                                        />
+
+                                        <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '4px' }}>
                                             {d.state}
                                         </div>
                                     </div>

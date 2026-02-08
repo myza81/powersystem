@@ -87,42 +87,71 @@ class MockTelemetryGenerator:
         grid_mvar = 0
         
         for sub in self.substations:
-            # Generate fluctuating loads
-            base = self.base_loads[sub.substation_id]
-            new_mw = self.generate_fluctuation(base['mw'])
-            new_mvar = self.generate_fluctuation(base['mvar'])
+            sub_mw = 0
+            sub_mvar = 0
+            bays_data = []
+
+            # Process Transformers
+            for transformer in sub.transformers.all():
+                bay_id = transformer.bay_name or transformer.bay_id 
+                # Use a simplified base load model for bays if not persisted
+                base_mw = self.base_loads[sub.substation_id]['mw'] / max(1, sub.transformers.count())
+                base_mvar = self.base_loads[sub.substation_id]['mvar'] / max(1, sub.transformers.count())
+                
+                mw = self.generate_fluctuation(base_mw)
+                mvar = self.generate_fluctuation(base_mvar)
+                
+                sub_mw += mw
+                sub_mvar += mvar
+                
+                bays_data.append({
+                    "name": bay_id,
+                    "type": "transformer",
+                    "mw": round(mw, 2),
+                    "mvar": round(mvar, 2)
+                })
+
+            # Process Incoming Bays (if any, just add to total for now or treat as sources)
+            # For simplicity in this mock, we'll focus on transformers as load points
+            # If we wanted to treat incoming bays as load, we'd do similar loop.
             
-            # Update base (slow drift)
-            self.base_loads[sub.substation_id]['mw'] = new_mw * 0.9 + base['mw'] * 0.1
-            self.base_loads[sub.substation_id]['mvar'] = new_mvar * 0.9 + base['mvar'] * 0.1
+            # If no transformers, fallback to substation level simulation
+            if not bays_data:
+                base = self.base_loads[sub.substation_id]
+                sub_mw = self.generate_fluctuation(base['mw'])
+                sub_mvar = self.generate_fluctuation(base['mvar'])
+                
+                # Update base (slow drift)
+                self.base_loads[sub.substation_id]['mw'] = sub_mw * 0.9 + base['mw'] * 0.1
+                self.base_loads[sub.substation_id]['mvar'] = sub_mvar * 0.9 + base['mvar'] * 0.1
             
-            # Update substation-level cache
-            self.cache.update_substation_load(sub.substation_id, new_mw, new_mvar)
+            # Update substation-level cache with bay breakdown
+            self.cache.update_substation_load(sub.substation_id, sub_mw, sub_mvar, bays=bays_data)
             
             # Accumulate for aggregations
-            grid_mw += new_mw
-            grid_mvar += new_mvar
+            grid_mw += sub_mw
+            grid_mvar += sub_mvar
             
             # Region aggregation
             if sub.region:
                 if sub.region not in region_totals:
                     region_totals[sub.region] = {"mw": 0, "mvar": 0}
-                region_totals[sub.region]["mw"] += new_mw
-                region_totals[sub.region]["mvar"] += new_mvar
+                region_totals[sub.region]["mw"] += sub_mw
+                region_totals[sub.region]["mvar"] += sub_mvar
             
             # State aggregation
             if sub.state:
                 if sub.state not in state_totals:
                     state_totals[sub.state] = {"mw": 0, "mvar": 0}
-                state_totals[sub.state]["mw"] += new_mw
-                state_totals[sub.state]["mvar"] += new_mvar
+                state_totals[sub.state]["mw"] += sub_mw
+                state_totals[sub.state]["mvar"] += sub_mvar
             
             # Ownership aggregation
             if sub.ownership:
                 if sub.ownership not in ownership_totals:
                     ownership_totals[sub.ownership] = {"mw": 0, "mvar": 0}
-                ownership_totals[sub.ownership]["mw"] += new_mw
-                ownership_totals[sub.ownership]["mvar"] += new_mvar
+                ownership_totals[sub.ownership]["mw"] += sub_mw
+                ownership_totals[sub.ownership]["mvar"] += sub_mvar
         
         # Update aggregated metrics in cache
         self.cache.update_aggregated_metrics(
