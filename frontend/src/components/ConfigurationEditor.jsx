@@ -172,15 +172,15 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
-                                style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', display: 'grid', gridTemplateColumns: '80px 80px 80px 80px 100px 110px auto', gap: '10px', alignItems: 'end' }}
+                                style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', display: 'grid', gridTemplateColumns: 'minmax(100px, 1fr) 80px 80px 80px 100px 100px 100px 110px auto', gap: '10px', alignItems: 'end' }}
                             >
                                 <div>
-                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Name</label>
-                                    <input className="input-field" value={t.bay_name} onChange={(e) => updateTransformer(i, 'bay_name', e.target.value)} placeholder="T1" style={{ width: '100%' }} />
+                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Tx Name</label>
+                                    <input className="input-field" value={t.bay_name} onChange={(e) => updateTransformer(i, 'bay_name', e.target.value)} placeholder="Tx 1" style={{ width: '100%' }} />
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>MVA</label>
-                                    <input className="input-field" type="number" value={t.capacity_mva} onChange={(e) => updateTransformer(i, 'capacity_mva', e.target.value)} placeholder="30.0" style={{ width: '100%' }} />
+                                    <input className="input-field" type="number" value={t.capacity_mva} onChange={(e) => updateTransformer(i, 'capacity_mva', e.target.value)} placeholder="30" style={{ width: '100%' }} />
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>HV (kV)</label>
@@ -189,6 +189,14 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>LV (kV)</label>
                                     <input className="input-field" type="number" value={t.lv_voltage} onChange={(e) => updateTransformer(i, 'lv_voltage', e.target.value)} placeholder="11" style={{ width: '100%', borderColor: (t.lv_voltage && ![11, 22, 33].includes(Number(t.lv_voltage))) ? '#f59e0b' : '' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>HV Breaker</label>
+                                    <input className="input-field" value={t.hv_breaker_number || ''} onChange={(e) => updateTransformer(i, 'hv_breaker_number', e.target.value)} placeholder="120" style={{ width: '100%' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>LV Breaker</label>
+                                    <input className="input-field" value={t.lv_breaker_number || ''} onChange={(e) => updateTransformer(i, 'lv_breaker_number', e.target.value)} placeholder="310" style={{ width: '100%' }} />
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Type (Auto)</label>

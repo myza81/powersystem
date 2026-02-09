@@ -142,13 +142,6 @@ const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProce
                             onClick={() => onViewSld(substation)}
                             color="var(--accent-cyan)"
                         />
-                        <ActionButton
-                            icon={<Cpu size={16} />}
-                            label="Process"
-                            onClick={() => onProcess(substation.substation_id)}
-                            color={processing ? 'orange' : 'white'}
-                            className={processing ? 'animate-spin' : ''}
-                        />
                     </>
                 ) : (
                     <div>
