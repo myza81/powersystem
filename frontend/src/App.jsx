@@ -95,7 +95,19 @@ const App = () => {
         } catch (err) {
             console.error("Save error:", err);
             console.error("Error response:", err.response?.data);
-            setStatus({ type: 'error', msg: err.response?.data?.error || 'Operation failed' });
+
+            let errMsg = 'Operation failed';
+            if (err.response?.data) {
+                if (err.response.data.error) {
+                    errMsg = err.response.data.error;
+                } else {
+                    // Flatten field errors
+                    errMsg = Object.entries(err.response.data)
+                        .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`)
+                        .join(' | ');
+                }
+            }
+            setStatus({ type: 'error', msg: errMsg });
         }
         setLoading(false);
     };
