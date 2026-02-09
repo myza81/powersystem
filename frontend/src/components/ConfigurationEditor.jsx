@@ -188,7 +188,7 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>LV (kV)</label>
-                                    <input className="input-field" type="number" value={t.lv_voltage} onChange={(e) => updateTransformer(i, 'lv_voltage', e.target.value)} placeholder="11" style={{ width: '100%', borderColor: (t.lv_voltage && ![11, 22, 33].includes(Number(t.lv_voltage))) ? '#f59e0b' : '' }} />
+                                    <input className="input-field" type="number" value={t.lv_voltage} onChange={(e) => updateTransformer(i, 'lv_voltage', e.target.value)} placeholder="11" style={{ width: '100%', borderColor: (!t.lv_voltage || ![11, 22, 33].includes(Number(t.lv_voltage))) ? '#f59e0b' : '' }} />
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>HV Breaker</label>

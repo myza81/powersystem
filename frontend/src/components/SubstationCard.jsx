@@ -17,7 +17,8 @@ const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProce
     // Check for LV configuration issues (Red Alert)
     const hasConfigIssue = substation.transformers?.some(t => {
         const v = Number(t.lv_voltage);
-        return v && ![11, 22, 33].includes(v);
+        // Issue if: 0, NaN, or not in standard set
+        return !v || ![11, 22, 33].includes(v);
     });
 
     return (
