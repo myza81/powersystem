@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { CheckCircle, AlertCircle, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -18,9 +18,19 @@ import SubstationFilter from './components/SubstationFilter';
 // API Service
 const api = axios.create({ baseURL: '/api/v1' });
 
+const DEFAULT_FILTERS = {
+    region: 'All',
+    grid: 'All',
+    state: 'All',
+    voltage: 'All',
+    search: ''
+};
+
 const App = () => {
     const [substations, setSubstations] = useState([]);
     const [filteredSubstations, setFilteredSubstations] = useState([]);
+    const [filterCriteria, setFilterCriteria] = useState(DEFAULT_FILTERS);
+
     const [view, setView] = useState('list'); // list, create, edit
     const [selectedSub, setSelectedSub] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -33,7 +43,7 @@ const App = () => {
         try {
             const res = await api.get('/substations/');
             setSubstations(res.data);
-            setFilteredSubstations(res.data); // Initial sync
+            // Trigger initial filter application
         } catch (err) {
             console.error("Failed to fetch", err);
         }
@@ -43,6 +53,28 @@ const App = () => {
     useEffect(() => {
         fetchSubstations();
     }, []);
+
+    // Apply Filters whenever criteria or substations change
+    useEffect(() => {
+        let result = substations;
+        const { region, grid, state, voltage, search } = filterCriteria;
+
+        if (region !== 'All') result = result.filter(s => s.region === region);
+        if (grid !== 'All') result = result.filter(s => s.grid === grid);
+        if (state !== 'All') result = result.filter(s => s.state === state);
+        if (voltage !== 'All') result = result.filter(s => s.voltage === parseInt(voltage));
+
+        if (search) {
+            const lowSearch = search.toLowerCase();
+            result = result.filter(s =>
+                (s.name || '').toLowerCase().includes(lowSearch) ||
+                (s.mnemonic || '').toLowerCase().includes(lowSearch) ||
+                (s.substation_id || '').toLowerCase().includes(lowSearch)
+            );
+        }
+
+        setFilteredSubstations(result);
+    }, [substations, filterCriteria]);
 
     const handleSave = async (data) => {
         console.log("App handleSave received data:", JSON.stringify(data, null, 2));
@@ -201,7 +233,8 @@ const App = () => {
                     <>
                         <SubstationFilter
                             substations={substations}
-                            onFilterChange={setFilteredSubstations}
+                            currentFilters={filterCriteria}
+                            onUpdateFilters={setFilterCriteria}
                         />
 
                         <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>

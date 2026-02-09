@@ -1,14 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Filter, RotateCcw, Search, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 
-const SubstationFilter = ({ substations, onFilterChange }) => {
-    // Filter States
-    const [region, setRegion] = useState('All');
-    const [grid, setGrid] = useState('All');
-    const [state, setState] = useState('All');
-    const [voltage, setVoltage] = useState('All');
-    const [search, setSearch] = useState('');
+const SubstationFilter = ({ substations, currentFilters, onUpdateFilters }) => {
+    // Destructure current filters
+    const { region, grid, state, voltage, search } = currentFilters;
 
     // Extract unique values based on current selection hierarchy
     const uniqueValues = useMemo(() => {
@@ -38,33 +33,18 @@ const SubstationFilter = ({ substations, onFilterChange }) => {
         return { regions, grids, states, voltages };
     }, [substations, region, grid, state]);
 
-    // Apply Filters
-    useEffect(() => {
-        let result = substations;
-
-        if (region !== 'All') result = result.filter(s => s.region === region);
-        if (grid !== 'All') result = result.filter(s => s.grid === grid);
-        if (state !== 'All') result = result.filter(s => s.state === state);
-        if (voltage !== 'All') result = result.filter(s => s.voltage === parseInt(voltage));
-
-        if (search) {
-            const lowSearch = search.toLowerCase();
-            result = result.filter(s =>
-                (s.name || '').toLowerCase().includes(lowSearch) ||
-                (s.mnemonic || '').toLowerCase().includes(lowSearch) ||
-                (s.substation_id || '').toLowerCase().includes(lowSearch)
-            );
-        }
-
-        onFilterChange(result);
-    }, [substations, region, grid, state, voltage, search, onFilterChange]);
+    const updateFilter = (key, value) => {
+        onUpdateFilters({ ...currentFilters, [key]: value });
+    };
 
     const resetFilters = () => {
-        setRegion('All');
-        setGrid('All');
-        setState('All');
-        setVoltage('All');
-        setSearch('');
+        onUpdateFilters({
+            region: 'All',
+            grid: 'All',
+            state: 'All',
+            voltage: 'All',
+            search: ''
+        });
     };
 
     const hasActiveFilters = region !== 'All' || grid !== 'All' || state !== 'All' || voltage !== 'All' || search !== '';
@@ -86,14 +66,14 @@ const SubstationFilter = ({ substations, onFilterChange }) => {
                             className="input-field"
                             placeholder="Search name, ID, mnemonic..."
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            onChange={(e) => updateFilter('search', e.target.value)}
                             style={{ paddingLeft: '2.2rem', paddingRight: '2rem', width: '100%', height: '36px' }}
                         />
                         {search && (
                             <X
                                 size={14}
                                 style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: 'var(--text-secondary)' }}
-                                onClick={() => setSearch('')}
+                                onClick={() => updateFilter('search', '')}
                             />
                         )}
                     </div>
@@ -116,10 +96,10 @@ const SubstationFilter = ({ substations, onFilterChange }) => {
 
             {/* Filter Dropdowns Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-                <FilterDropdown label="Region" value={region} options={uniqueValues.regions} onChange={setRegion} />
-                <FilterDropdown label="Grid" value={grid} options={uniqueValues.grids} onChange={setGrid} disabled={region === 'All' && uniqueValues.grids.length <= 2} />
-                <FilterDropdown label="State" value={state} options={uniqueValues.states} onChange={setState} disabled={grid === 'All' && uniqueValues.states.length <= 2} />
-                <FilterDropdown label="Voltage Level" value={voltage} options={uniqueValues.voltages} onChange={setVoltage} suffix=" kV" />
+                <FilterDropdown label="Region" value={region} options={uniqueValues.regions} onChange={(v) => updateFilter('region', v)} />
+                <FilterDropdown label="Grid" value={grid} options={uniqueValues.grids} onChange={(v) => updateFilter('grid', v)} disabled={region === 'All' && uniqueValues.grids.length <= 2} />
+                <FilterDropdown label="State" value={state} options={uniqueValues.states} onChange={(v) => updateFilter('state', v)} disabled={grid === 'All' && uniqueValues.states.length <= 2} />
+                <FilterDropdown label="Voltage Level" value={voltage} options={uniqueValues.voltages} onChange={(v) => updateFilter('voltage', v)} suffix=" kV" />
             </div>
         </div>
     );
@@ -137,7 +117,7 @@ const FilterDropdown = ({ label, value, options, onChange, disabled, suffix = ''
         >
             {options.map(opt => (
                 <option key={opt} value={opt}>
-                    {opt === 'All' ? `All ${label}s` : `${opt}${suffix}`}
+                    {opt === 'All' ? `All ${label} s` : `${opt}${suffix} `}
                 </option>
             ))}
         </select>
