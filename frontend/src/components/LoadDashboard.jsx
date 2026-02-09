@@ -743,55 +743,76 @@ const ProgressBarChart = ({ data, labelKey = 'label', valueKey = 'value', unit =
 };
 
 // Substation Search Card
-const SubstationSearchCard = ({ substation, onClick, url, onViewSld, isSelected }) => (
-    <motion.div
-        whileHover={{ scale: 1.02 }}
-        onClick={onClick}
-        style={{
-            padding: '1rem',
-            background: isSelected ? 'rgba(0,229,255,0.1)' : 'rgba(0,0,0,0.2)',
-            border: isSelected ? '1px solid #00e5ff' : '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            transition: 'all 0.3s'
-        }}
-    >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ flex: 1 }}>
-                <div style={{ color: '#fff', fontWeight: 600, marginBottom: '0.25rem' }}>
-                    {substation.name}
-                </div>
-                <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
-                    {substation.substation_id} • {substation.state || 'N/A'}
-                </div>
-            </div>
+const SubstationSearchCard = ({ substation, onClick, url, onViewSld, isSelected }) => {
+    // Check for LV configuration issues
+    const hasConfigIssue = substation.transformers?.some(t => {
+        const v = Number(t.lv_voltage);
+        // If lv_voltage is set (not 0/null) and not in standard values
+        return v && ![11, 22, 33].includes(v);
+    });
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onViewSld(substation);
-                    }}
-                    title="View Single Line Diagram"
-                    style={{
-                        background: 'rgba(255,255,255,0.1)',
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '6px',
-                        color: '#00e5ff',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                    }}
-                >
-                    <FileText size={16} />
-                </button>
-                <Building2 size={20} color={isSelected ? '#00e5ff' : 'rgba(255,255,255,0.3)'} />
+    return (
+        <motion.div
+            whileHover={{ scale: 1.02 }}
+            onClick={onClick}
+            style={{
+                padding: '1rem',
+                background: isSelected ? 'rgba(0,229,255,0.1)' : 'rgba(0,0,0,0.2)',
+                border: isSelected ? '1px solid #00e5ff' : (hasConfigIssue ? '1px solid #ef4444' : '1px solid rgba(255,255,255,0.1)'),
+                borderRadius: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                position: 'relative'
+            }}
+        >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ flex: 1 }}>
+                    <div style={{ color: '#fff', fontWeight: 600, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {substation.name}
+                        {hasConfigIssue && (
+                            <div title="Non-standard LV Voltage detected" style={{
+                                background: 'rgba(239, 68, 68, 0.2)',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                display: 'flex',
+                                alignItems: 'center'
+                            }}>
+                                <AlertTriangle size={14} color="#ef4444" />
+                            </div>
+                        )}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
+                        {substation.substation_id} • {substation.state || 'N/A'}
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onViewSld(substation);
+                        }}
+                        title="View Single Line Diagram"
+                        style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '6px',
+                            color: '#00e5ff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        <FileText size={16} />
+                    </button>
+                    <Building2 size={20} color={isSelected ? '#00e5ff' : 'rgba(255,255,255,0.3)'} />
+                </div>
             </div>
-        </div>
-    </motion.div>
-);
+        </motion.div>
+    );
+};
 
 // Substation Details Panel
 const SubstationDetailsPanel = ({ substation, details, onClose, onViewSld, onEditBayIds }) => (

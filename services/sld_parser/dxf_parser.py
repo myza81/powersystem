@@ -113,7 +113,8 @@ class DXFParser:
                 3: 132,  # Green -> 132kV
                 4: 132,  # Cyan -> 132kV (Common variant)
                 5: 275,  # Blue -> 275kV
-                6: 500,  # Magenta -> 500kV
+                6: 22,   # Magenta/Purple -> 22kV (User Requirement)
+                7: 500,  # Black/White -> 500kV (User Requirement)
             }
 
             # Cache layer metadata for faster voltage inference
@@ -129,6 +130,8 @@ class DXFParser:
                     layer_voltage_hint[lname] = 132
                 elif '33' in lname:
                     layer_voltage_hint[lname] = 33
+                elif '22' in lname:
+                    layer_voltage_hint[lname] = 22
                 elif '11' in lname:
                     layer_voltage_hint[lname] = 11
                 layer_color_hint[lname] = {
@@ -143,6 +146,8 @@ class DXFParser:
                 g = (true_color >> 8) & 0xFF
                 b = true_color & 0xFF
                 # Rough mapping to known SLD colors
+                if r < 50 and g < 50 and b < 50: # Black -> 500kV
+                    return 500
                 if r > 200 and g < 80 and b < 80:
                     return 33
                 if r > 180 and g > 120 and b < 60:
@@ -151,8 +156,10 @@ class DXFParser:
                     return 132
                 if b > 120 and r < 120 and g < 160:
                     return 275
-                if r > 160 and b > 160:
-                    return 500
+                if r > 100 and b > 100 and g < 100: # Purple/Magenta -> 22kV
+                    return 22
+                if r > 160 and b > 160: # Legacy Magenta
+                    return 22
                 return None
 
             def get_voltage_hint(e):

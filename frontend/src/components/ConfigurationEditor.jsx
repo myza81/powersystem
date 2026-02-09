@@ -172,27 +172,33 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
-                                style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto', gap: '10px', alignItems: 'end' }}
+                                style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', display: 'grid', gridTemplateColumns: '80px 80px 80px 80px 100px 110px auto', gap: '10px', alignItems: 'end' }}
                             >
                                 <div>
-                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Transformer Name</label>
-                                    <input className="input-field" value={t.bay_name} onChange={(e) => updateTransformer(i, 'bay_name', e.target.value)} placeholder="T1" />
+                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Name</label>
+                                    <input className="input-field" value={t.bay_name} onChange={(e) => updateTransformer(i, 'bay_name', e.target.value)} placeholder="T1" style={{ width: '100%' }} />
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>MVA</label>
-                                    <input className="input-field" type="number" value={t.capacity_mva} onChange={(e) => updateTransformer(i, 'capacity_mva', e.target.value)} placeholder="30.0" />
+                                    <input className="input-field" type="number" value={t.capacity_mva} onChange={(e) => updateTransformer(i, 'capacity_mva', e.target.value)} placeholder="30.0" style={{ width: '100%' }} />
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>HV Breaker</label>
-                                    <input className="input-field" value={t.hv_breaker_number} onChange={(e) => updateTransformer(i, 'hv_breaker_number', e.target.value)} placeholder="110" />
+                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>HV (kV)</label>
+                                    <input className="input-field" type="number" value={t.hv_voltage} onChange={(e) => updateTransformer(i, 'hv_voltage', e.target.value)} placeholder="132" style={{ width: '100%' }} />
                                 </div>
                                 <div>
-                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>LV Breaker</label>
-                                    <input className="input-field" value={t.lv_breaker_number} onChange={(e) => updateTransformer(i, 'lv_breaker_number', e.target.value)} placeholder="30" />
+                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>LV (kV)</label>
+                                    <input className="input-field" type="number" value={t.lv_voltage} onChange={(e) => updateTransformer(i, 'lv_voltage', e.target.value)} placeholder="11" style={{ width: '100%', borderColor: (t.lv_voltage && ![11, 22, 33].includes(Number(t.lv_voltage))) ? '#f59e0b' : '' }} />
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Type (Auto)</label>
+                                    <div style={{ padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', fontSize: '0.85rem', color: '#fff', height: '36px', display: 'flex', alignItems: 'center' }}>
+                                        {t.hv_voltage && t.lv_voltage ? `${t.hv_voltage}/${t.lv_voltage}kV` : '-'}
+                                    </div>
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Comm. Date</label>
-                                    <input className="input-field" type="date" value={t.commission_date} onChange={(e) => updateTransformer(i, 'commission_date', e.target.value)} />
+                                    <input className="input-field" type="date" value={t.commission_date} onChange={(e) => updateTransformer(i, 'commission_date', e.target.value)} style={{ width: '100%' }} />
                                 </div>
                                 <button onClick={() => removeTransformer(i)} style={{ color: '#f56565', background: 'none', border: 'none', padding: '8px', cursor: 'pointer' }}>
                                     <Trash2 size={18} />

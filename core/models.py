@@ -175,7 +175,7 @@ class Transformer(models.Model):
     transformer_type = models.CharField(max_length=50, null=True, blank=True) # e.g. 132/11kV
     sequence_number = models.IntegerField(null=True, blank=True)
     hv_voltage = models.IntegerField(null=True, blank=True)
-    lv_voltage = models.IntegerField(null=True, blank=True)
+    lv_voltage = models.IntegerField(default=0)
     capacity_mva = models.FloatField(null=True, blank=True)
     hv_breaker_number = models.CharField(max_length=50, null=True, blank=True)
     lv_breaker_number = models.CharField(max_length=50, null=True, blank=True)
@@ -186,6 +186,15 @@ class Transformer(models.Model):
         # Auto-generate Global ID from Name
         if self.bay_name and self.substation:
             self.bay_id = f"{self.substation.substation_id}_{self.bay_name}"
+        
+        # Auto-populate Transformer Type
+        if self.hv_voltage is not None and self.lv_voltage is not None:
+            # Format: "{hv}/{lv}kV" e.g. 132/11kV
+            # Only update if not manually set or if we want to enforce it? 
+            # User said: "it is auto populated using hv voltage and lv voltage informations"
+            # So we enforce it.
+            self.transformer_type = f"{self.hv_voltage}/{self.lv_voltage}kV"
+
         super().save(*args, **kwargs)
         
         # Trigger rematch of potential unmatched loads

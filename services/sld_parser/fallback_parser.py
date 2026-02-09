@@ -160,6 +160,19 @@ def _extract_transformers_conservative(texts: List[Dict], visuals: List[Dict]) -
                     t_data["lv_voltage"] = int(lv)
                     t_data["transformer_type"] = f"{hv}/{lv}kV"
             
+            # 2b. Visual Fallback: Infer voltage from colored elements if text missed it
+            if not t_data["hv_voltage"]:
+                # Try to find HV specifically (prioritize high voltage colors like 132, 275, 500)
+                hv_hint = _infer_voltage_from_visuals(bbox, visuals, prioritize_high_voltage=True)
+                if hv_hint and hv_hint >= 66:
+                    t_data["hv_voltage"] = hv_hint
+            
+            if not t_data["lv_voltage"]:
+                # Try to find LV (standard voting)
+                v_hint = _infer_voltage_from_visuals(bbox, visuals)
+                if v_hint and v_hint < 66:
+                     t_data["lv_voltage"] = v_hint
+            
             # 3. Try to find HV breaker (Instruction No.12: [seq]**0)
             if not t_data["hv_breaker_number"]:
                 breaker_pattern = f"^{seq}[0-9]0$"
