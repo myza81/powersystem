@@ -179,7 +179,7 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
-                                style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', display: 'grid', gridTemplateColumns: 'minmax(100px, 1fr) 80px 80px 80px 100px 100px 100px 110px auto', gap: '10px', alignItems: 'end' }}
+                                style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', display: 'grid', gridTemplateColumns: 'minmax(100px, 1fr) 80px 80px 80px 100px 100px 110px 130px auto', gap: '10px', alignItems: 'end' }}
                             >
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Tx Name</label>
