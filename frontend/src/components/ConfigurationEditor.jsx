@@ -63,20 +63,25 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
 
     const handleSave = () => {
         // Sanitize data before saving (convert empty strings to null for numbers)
+        // Only include writable fields (exclude id, substation, bay_id, load_data, transformer_type)
         const cleanTransformers = transformers.map(t => ({
-            ...t,
+            bay_name: t.bay_name,
+            sequence_number: t.sequence_number || null,
             capacity_mva: t.capacity_mva === '' ? null : t.capacity_mva,
             hv_voltage: t.hv_voltage === '' ? null : t.hv_voltage,
             lv_voltage: t.lv_voltage === '' ? null : t.lv_voltage,
             hv_breaker_number: t.hv_breaker_number === '' ? null : t.hv_breaker_number,
             lv_breaker_number: t.lv_breaker_number === '' ? null : t.lv_breaker_number,
             commission_date: t.commission_date === '' ? null : t.commission_date,
+            is_active: t.is_active !== undefined ? t.is_active : true,
         }));
 
         const cleanBays = bays.map(b => ({
-            ...b,
+            bay_name: b.bay_name,
             voltage: b.voltage === '' ? null : b.voltage,
             breaker_number: b.breaker_number === '' ? null : b.breaker_number,
+            sequence_number: b.sequence_number || null,
+            is_active: b.is_active !== undefined ? b.is_active : true,
         }));
 
         const payload = {
