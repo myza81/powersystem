@@ -78,6 +78,11 @@ const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProce
                         {substation.state}
                     </span>
                 )}
+                {substation.ownership && (
+                    <span style={{ fontSize: '0.65rem', background: 'rgba(255, 159, 67, 0.1)', color: '#ff9f43', padding: '2px 6px', borderRadius: '4px' }}>
+                        {substation.ownership}
+                    </span>
+                )}
             </div>
 
             {/* Footer Row: Metadata Icons */}

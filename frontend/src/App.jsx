@@ -57,12 +57,13 @@ const App = () => {
     // Apply Filters whenever criteria or substations change
     useEffect(() => {
         let result = substations;
-        const { region, grid, state, voltage, search } = filterCriteria;
+        const { region, grid, state, voltage, ownership, search } = filterCriteria;
 
         if (region !== 'All') result = result.filter(s => s.region === region);
         if (grid !== 'All') result = result.filter(s => s.grid === grid);
         if (state !== 'All') result = result.filter(s => s.state === state);
         if (voltage !== 'All') result = result.filter(s => s.voltage === parseInt(voltage));
+        if (ownership && ownership !== 'All') result = result.filter(s => s.ownership === ownership);
 
         if (search) {
             const lowSearch = search.toLowerCase();

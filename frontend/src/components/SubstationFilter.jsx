@@ -3,7 +3,7 @@ import { Filter, RotateCcw, Search, X } from 'lucide-react';
 
 const SubstationFilter = ({ substations, currentFilters, onUpdateFilters }) => {
     // Destructure current filters
-    const { region, grid, state, voltage, search } = currentFilters;
+    const { region, grid, state, voltage, ownership, search } = currentFilters;
 
     // Extract unique values based on current selection hierarchy
     const uniqueValues = useMemo(() => {
@@ -30,8 +30,14 @@ const SubstationFilter = ({ substations, currentFilters, onUpdateFilters }) => {
         }
         const voltages = ['All', ...new Set(filtered.map(s => s.voltage).filter(Boolean))].sort((a, b) => b - a);
 
-        return { regions, grids, states, voltages };
-    }, [substations, region, grid, state]);
+        // 5. Available Ownerships (depend on Region + Grid + State + Voltage)
+        if (voltage !== 'All') {
+            filtered = filtered.filter(s => s.voltage === parseInt(voltage));
+        }
+        const ownerships = ['All', ...new Set(filtered.map(s => s.ownership).filter(Boolean))].sort();
+
+        return { regions, grids, states, voltages, ownerships };
+    }, [substations, region, grid, state, voltage]);
 
     const updateFilter = (key, value) => {
         onUpdateFilters({ ...currentFilters, [key]: value });
@@ -43,11 +49,12 @@ const SubstationFilter = ({ substations, currentFilters, onUpdateFilters }) => {
             grid: 'All',
             state: 'All',
             voltage: 'All',
+            ownership: 'All',
             search: ''
         });
     };
 
-    const hasActiveFilters = region !== 'All' || grid !== 'All' || state !== 'All' || voltage !== 'All' || search !== '';
+    const hasActiveFilters = region !== 'All' || grid !== 'All' || state !== 'All' || voltage !== 'All' || ownership !== 'All' || search !== '';
 
     return (
         <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
@@ -95,11 +102,12 @@ const SubstationFilter = ({ substations, currentFilters, onUpdateFilters }) => {
             </div>
 
             {/* Filter Dropdowns Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
                 <FilterDropdown label="Region" value={region} options={uniqueValues.regions} onChange={(v) => updateFilter('region', v)} />
                 <FilterDropdown label="Grid" value={grid} options={uniqueValues.grids} onChange={(v) => updateFilter('grid', v)} disabled={region === 'All' && uniqueValues.grids.length <= 2} />
                 <FilterDropdown label="State" value={state} options={uniqueValues.states} onChange={(v) => updateFilter('state', v)} disabled={grid === 'All' && uniqueValues.states.length <= 2} />
                 <FilterDropdown label="Voltage Level" value={voltage} options={uniqueValues.voltages} onChange={(v) => updateFilter('voltage', v)} suffix=" kV" />
+                <FilterDropdown label="Ownership" value={ownership} options={uniqueValues.ownerships} onChange={(v) => updateFilter('ownership', v)} />
             </div>
         </div>
     );
