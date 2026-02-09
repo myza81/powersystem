@@ -169,16 +169,32 @@ class Substation(models.Model):
         return transformer_load + bay_load
 
 class Transformer(models.Model):
+    CONNECTION_TYPES = [
+        ('STANDARD', 'Standard Connection'),
+        ('TEE_OFF', 'Tee-Off Connection'),
+        ('AUTOTRANSFORMER', 'Autotransformer'),
+        ('EQUIPMENT', 'Equipment (Not a connection)'),
+        ('UNKNOWN', 'Unknown/Unvalidated'),
+    ]
+
     substation = models.ForeignKey(Substation, related_name='transformers', on_delete=models.CASCADE)
     bay_name = models.CharField(max_length=50) # e.g. T1 - User Input
     bay_id = models.CharField(max_length=50, unique=True, blank=True) # e.g. ADAM132_T1 - Auto-generated
     transformer_type = models.CharField(max_length=50, null=True, blank=True) # e.g. 132/11kV
+    
+    # Electrical Parameters
     sequence_number = models.IntegerField(null=True, blank=True)
-    hv_voltage = models.IntegerField(null=True, blank=True)
-    lv_voltage = models.IntegerField(default=0)
-    capacity_mva = models.FloatField(null=True, blank=True)
-    hv_breaker_number = models.CharField(max_length=50, null=True, blank=True)
-    lv_breaker_number = models.CharField(max_length=50, null=True, blank=True)
+    capacity_mva = models.FloatField(null=True, blank=True, help_text="Transformer capacity in MVA")
+    hv_voltage = models.FloatField(null=True, blank=True, help_text="High voltage side kV")
+    lv_voltage = models.FloatField(null=True, blank=True, help_text="Low voltage side kV")
+    
+    # Breaker Information
+    hv_breaker_number = models.CharField(max_length=50, null=True, blank=True, help_text="HV Breaker ID")
+    lv_breaker_number = models.CharField(max_length=50, null=True, blank=True, help_text="LV Breaker ID")
+
+    # Connection Logic
+    connection_type = models.CharField(max_length=20, choices=CONNECTION_TYPES, default='UNKNOWN')
+    # For TEE_OFF and EQUIPMENT connections.CharField(max_length=50, null=True, blank=True)
     commission_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 

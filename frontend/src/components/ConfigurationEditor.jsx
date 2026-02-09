@@ -62,24 +62,26 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
     };
 
     const handleSave = () => {
-        const sanitize = (list) => list.map(item => {
-            const clean = { ...item };
-            // Sanitize numeric fields
-            ['capacity_mva', 'hv_voltage', 'lv_voltage', 'sequence_number', 'voltage'].forEach(field => {
-                if (field in clean) {
-                    if (clean[field] === '' || clean[field] === null) clean[field] = null;
-                    else clean[field] = Number(clean[field]);
-                }
-            });
-            // Sanitize date fields
-            if (clean.commission_date === '') clean.commission_date = null;
+        // Sanitize data before saving (convert empty strings to null for numbers)
+        const cleanTransformers = transformers.map(t => ({
+            ...t,
+            capacity_mva: t.capacity_mva === '' ? null : t.capacity_mva,
+            hv_voltage: t.hv_voltage === '' ? null : t.hv_voltage,
+            lv_voltage: t.lv_voltage === '' ? null : t.lv_voltage,
+            hv_breaker_number: t.hv_breaker_number === '' ? null : t.hv_breaker_number,
+            lv_breaker_number: t.lv_breaker_number === '' ? null : t.lv_breaker_number,
+            commission_date: t.commission_date === '' ? null : t.commission_date,
+        }));
 
-            return clean;
-        });
+        const cleanBays = bays.map(b => ({
+            ...b,
+            voltage: b.voltage === '' ? null : b.voltage,
+            breaker_number: b.breaker_number === '' ? null : b.breaker_number,
+        }));
 
         const payload = {
-            transformers: sanitize(transformers),
-            incoming_bays: sanitize(bays)
+            transformers: cleanTransformers,
+            incoming_bays: cleanBays
         };
 
         console.log("ConfigurationEditor payload:", JSON.stringify(payload, null, 2));
@@ -104,7 +106,7 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                     }}>
                         {substation.substation_id}
                     </span>
-                </div>
+                </div >
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     {substation.sld_file && (
                         <>
@@ -152,10 +154,10 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                         <X size={24} />
                     </button>
                 </div>
-            </div>
+            </div >
 
             {/* Transformers Section */}
-            <section style={{ marginBottom: '2rem' }}>
+            < section style={{ marginBottom: '2rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                     <h4 style={{ color: 'var(--accent-cyan)', display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <Zap size={18} /> TRANSFORMERS
@@ -215,10 +217,10 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                         ))}
                     </AnimatePresence>
                 </div>
-            </section>
+            </section >
 
             {/* Bays Section */}
-            <section style={{ marginBottom: '2rem' }}>
+            < section style={{ marginBottom: '2rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                     <h4 style={{ color: 'var(--accent-blue)', display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <Activity size={18} /> INCOMING BAYS
@@ -261,7 +263,7 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                         ))}
                     </AnimatePresence>
                 </div>
-            </section>
+            </section >
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
                 <button className="btn-secondary" onClick={onCancel}>Cancel</button>
@@ -269,7 +271,7 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                     <Save size={18} style={{ marginRight: '8px' }} /> Save Configuration
                 </button>
             </div>
-        </div>
+        </div >
     );
 };
 
