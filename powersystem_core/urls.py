@@ -20,18 +20,20 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from api.v1.views.substation import SubstationViewSet
-from api.v1.views.load_profile import LoadProfileViewSet
-from api.v1.views.telemetry import TelemetryViewSet
-from api.v1.views.network_topology import NetworkTopologyViewSet
-from api.v1.views.island_detection import IslandDetectionViewSet
+# V1 ViewSets disabled for V2:
+# from api.v1.views.load_profile import LoadProfileViewSet
+# from api.v1.views.telemetry import TelemetryViewSet
+# from api.v1.views.network_topology import NetworkTopologyViewSet
+# from api.v1.views.island_detection import IslandDetectionViewSet
 from core.views_dev import DatabaseSyncStatusView, DatabaseExportView, DatabaseImportView
 
 router = DefaultRouter()
 router.register(r'substations', SubstationViewSet)
-router.register(r'load-profiles', LoadProfileViewSet, basename='load-profile')
-router.register(r'telemetry', TelemetryViewSet, basename='telemetry')
-router.register(r'network-topology', NetworkTopologyViewSet, basename='network-topology')
-router.register(r'island-detection', IslandDetectionViewSet, basename='island-detection')
+# V1 routes disabled for V2:
+# router.register(r'load-profiles', LoadProfileViewSet, basename='load-profile')
+# router.register(r'telemetry', TelemetryViewSet, basename='telemetry')
+# router.register(r'network-topology', NetworkTopologyViewSet, basename='network-topology')
+# router.register(r'island-detection', IslandDetectionViewSet, basename='island-detection')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

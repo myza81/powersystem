@@ -7,6 +7,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# ==========================================
+# 1. UTILITIES & STORAGE (Preserved)
+# ==========================================
+
 class OverwriteStorage(FileSystemStorage):
     """
     Custom storage to overwrite existing files with the same name.
@@ -21,7 +25,15 @@ def substation_sld_path(instance, filename):
     ext = filename.split('.')[-1]
     return f"slds/{instance.substation_id}.{ext}"
 
+# ==========================================
+# 2. MASTER DATA (Business Context)
+# ==========================================
+
 class Substation(models.Model):
+    """
+    Master Data entity representing a physical substation site.
+    Serves as the 'Anchor' for grouping snapshot comparison.
+    """
     OWNERSHIP_CHOICES = [
         ('TNB', 'Tenaga Nasional Berhad (TNB)'),
         ('DC', 'Data Centre (DC)'),
@@ -44,19 +56,19 @@ class Substation(models.Model):
     ]
 
     substation_id = models.CharField(max_length=20, primary_key=True)
-    mnemonic = models.CharField(max_length=10)
+    mnemonic = models.CharField(max_length=10, help_text="Unique identifier for matching (e.g. SDAO)")
     name = models.CharField(max_length=100)
     ownership = models.CharField(max_length=50, choices=OWNERSHIP_CHOICES, default='TNB')
     voltage = models.IntegerField(choices=VOLTAGE_CHOICES)
     
-    # New Columns
+    # Metadata
     grid = models.CharField(max_length=10, choices=GRID_CHOICES, null=True, blank=True)
     state = models.CharField(max_length=50, null=True, blank=True)
     region = models.CharField(max_length=20, null=True, blank=True)
     sync_log = models.TextField(null=True, blank=True)
     commission_date = models.DateField(null=True, blank=True)
 
-    # SLD handling
+    # Documents
     sld = models.CharField(max_length=255, help_text="Generated as {substation_id}.pdf")
     sld_file = models.FileField(
         upload_to=substation_sld_path, 
@@ -65,7 +77,7 @@ class Substation(models.Model):
         help_text="Upload PDF or Image SLD"
     )
     
-    # Coordinates
+    # Geospatial
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     
@@ -73,40 +85,7 @@ class Substation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        from services.geocoding import GeocodingService
-        
-        # Detect if we are updating and if coordinates changed
-        coords_changed = False
-        if self.pk:
-            try:
-                old_instance = Substation.objects.get(pk=self.pk)
-                if old_instance.latitude != self.latitude or old_instance.longitude != self.longitude:
-                    coords_changed = True
-            except Substation.DoesNotExist:
-                pass
-
-        # 1. Full Geocoding if coordinates are missing
-        if self.latitude is None or self.longitude is None:
-            try:
-                lat, lng, state_val = GeocodingService.get_coordinates(self.name, self.mnemonic)
-                if lat and lng:
-                    self.latitude, self.longitude = lat, lng
-                    if state_val:
-                        self.state = state_val
-            except Exception as e:
-                logger.warning(f"Auto-geocoding failed for {self.name}: {str(e)}")
-                self.sync_log = f"Geocoding Warning: {str(e)}"
-        
-        # 2. Reverse Geocoding if coordinates changed or state is missing but coords exist
-        elif coords_changed or (self.state is None and self.latitude and self.longitude):
-            try:
-                state_val = GeocodingService.reverse_geocode(self.latitude, self.longitude)
-                if state_val:
-                    self.state = state_val
-            except Exception as e:
-                logger.warning(f"Reverse geocoding failed for {self.name}: {str(e)}")
-
-        # 3. Automated Region derivation
+        # 1. Automated Region derivation
         region_map = {
             'North': ['KEDP', 'PPNG', 'PERK'],
             'Central': ['SELG', 'KLUM'],
@@ -119,326 +98,250 @@ class Substation(models.Model):
                     self.region = region_name
                     break
         
-        # 4. Ensure sld filename consistency
+        # 2. Ensure sld filename consistency
         if self.sld_file:
-            # Use uploaded file's extension
             ext = self.sld_file.name.split('.')[-1]
             self.sld = f"{self.substation_id}.{ext}"
         elif not self.sld:
             self.sld = f"{self.substation_id}.pdf"
         
         super().save(*args, **kwargs)
-        
-        # Trigger rematch of potential unmatched loads
-        try:
-            from services.load_profile_service import LoadProfileService
-            LoadProfileService.rematch_unmatched_loads()
-        except Exception as e:
-            logger.error(f"Failed to rematch loads after Substation save: {e}")
 
     class Meta:
-        verbose_name = "Substation"
-        verbose_name_plural = "Substations"
+        verbose_name = "Substation (Master)"
+        verbose_name_plural = "Substations (Master)"
         ordering = ['substation_id']
 
     def __str__(self):
         return f"{self.name} ({self.substation_id})"
-    
-    @property
-    def total_pload_mw(self):
-        """Aggregate active power load from all transformers and incoming bays."""
-        from django.db.models import Sum
-        transformer_load = self.transformers.aggregate(
-            total=Sum('load_data__pload_mw')
-        )['total'] or 0
-        bay_load = self.incoming_bays.aggregate(
-            total=Sum('load_data__pload_mw')
-        )['total'] or 0
-        return transformer_load + bay_load
-    
-    @property
-    def total_qload_mvar(self):
-        """Aggregate reactive power load from all transformers and incoming bays."""
-        from django.db.models import Sum
-        transformer_load = self.transformers.aggregate(
-            total=Sum('load_data__qload_mvar')
-        )['total'] or 0
-        bay_load = self.incoming_bays.aggregate(
-            total=Sum('load_data__qload_mvar')
-        )['total'] or 0
-        return transformer_load + bay_load
 
-class Transformer(models.Model):
-    CONNECTION_TYPES = [
-        ('STANDARD', 'Standard Connection'),
-        ('TEE_OFF', 'Tee-Off Connection'),
-        ('AUTOTRANSFORMER', 'Autotransformer'),
-        ('EQUIPMENT', 'Equipment (Not a connection)'),
-        ('UNKNOWN', 'Unknown/Unvalidated'),
-    ]
+# ==========================================
+# 3. SNAPSHOT MANAGEMENT
+# ==========================================
 
-    substation = models.ForeignKey(Substation, related_name='transformers', on_delete=models.CASCADE)
-    bay_name = models.CharField(max_length=50) # e.g. T1 - User Input
-    bay_id = models.CharField(max_length=50, unique=True, blank=True) # e.g. ADAM132_T1 - Auto-generated
-    transformer_type = models.CharField(max_length=50, null=True, blank=True) # e.g. 132/11kV
+class NetworkSnapshot(models.Model):
+    """
+    Container for a complete network state (PSS/E Case).
+    All electrical data is cascaded from this model.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, help_text="e.g. 'Feb 2026 Forecast'")
+    description = models.TextField(blank=True, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
     
-    # Electrical Parameters
-    sequence_number = models.IntegerField(null=True, blank=True)
-    capacity_mva = models.FloatField(null=True, blank=True, help_text="Transformer capacity in MVA")
-    hv_voltage = models.FloatField(null=True, blank=True, help_text="High voltage side kV")
-    lv_voltage = models.FloatField(null=True, blank=True, help_text="Low voltage side kV")
+    # System parameters from Case Identification
+    base_mva = models.FloatField(default=100.0)
+    frequency = models.FloatField(default=50.0)
     
-    # Breaker Information
-    hv_breaker_number = models.CharField(max_length=50, null=True, blank=True, help_text="HV Breaker ID")
-    lv_breaker_number = models.CharField(max_length=50, null=True, blank=True, help_text="LV Breaker ID")
-
-    # Connection Logic
-    connection_type = models.CharField(max_length=20, choices=CONNECTION_TYPES, default='UNKNOWN')
-    # For TEE_OFF and EQUIPMENT connections.CharField(max_length=50, null=True, blank=True)
-    commission_date = models.DateField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-
-    def save(self, *args, **kwargs):
-        # Auto-generate Global ID from Name
-        if self.bay_name and self.substation:
-            self.bay_id = f"{self.substation.substation_id}_{self.bay_name}"
-        
-        # Auto-populate Transformer Type
-        if self.hv_voltage is not None and self.lv_voltage is not None:
-            # Format: "{hv}/{lv}kV" e.g. 132/11kV
-            # Only update if not manually set or if we want to enforce it? 
-            # User said: "it is auto populated using hv voltage and lv voltage informations"
-            # So we enforce it.
-            self.transformer_type = f"{self.hv_voltage}/{self.lv_voltage}kV"
-
-        super().save(*args, **kwargs)
-        
-        # Trigger rematch of potential unmatched loads
-        try:
-            from services.load_profile_service import LoadProfileService
-            LoadProfileService.rematch_unmatched_loads()
-        except Exception as e:
-            logger.error(f"Failed to rematch loads after Transformer save: {e}")
-
-class IncomingBay(models.Model):
-    # Basic fields
-    substation = models.ForeignKey(Substation, related_name='incoming_bays', on_delete=models.CASCADE)
-    bay_name = models.CharField(max_length=100) # e.g. SRDN1 - User Input
-    bay_id = models.CharField(max_length=50, unique=True, blank=True) # e.g. ADAM132_SRDN1 - Auto-generated
-    voltage = models.IntegerField(null=True, blank=True)
-    breaker_number = models.CharField(max_length=50, null=True, blank=True)
-    sequence_number = models.IntegerField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
+    # File tracking
+    source_file = models.FileField(upload_to='snapshots/', null=True, blank=True)
     
-    # Network Topology fields
-    connection_type = models.CharField(
-        max_length=20,
-        choices=[
-            ('STANDARD', 'Standard Connection'),
-            ('TEE_OFF', 'Tee-Off Connection'),
-            ('AUTOTRANSFORMER', 'Autotransformer'),
-            ('EQUIPMENT', 'Equipment (Not a connection)'),
-            ('UNKNOWN', 'Unknown/Unvalidated'),
-        ],
-        default='UNKNOWN',
-        help_text="Type of connection detected"
-    )
-    
-    connected_to_substation = models.ForeignKey(
-        Substation,
-        related_name='connected_from_bays',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        help_text="Primary connected substation"
-    )
-    
-    tee_off_connections = models.ManyToManyField(
-        Substation,
-        related_name='tee_off_bays',
-        blank=True,
-        help_text="Additional substations for tee-off connections"
-    )
-    
-    # Validation state
-    validation_status = models.CharField(
-        max_length=20,
-        choices=[
-            ('PENDING', 'Pending Validation'),
-            ('VALIDATED', 'User Validated'),
-            ('AUTO_VALIDATED', 'Auto-Validated (High Confidence)'),
-            ('REJECTED', 'Rejected/Needs Review'),
-        ],
-        default='PENDING',
-        help_text="Validation status of the connection"
-    )
-    
-    auto_detected = models.BooleanField(
-        default=False,
-        help_text="True if connection was auto-detected"
-    )
-    
-    detection_confidence = models.FloatField(
-        null=True,
-        blank=True,
-        help_text="Confidence score 0.0-1.0 for auto-detection"
-    )
-    
-    detection_note = models.TextField(
-        null=True,
-        blank=True,
-        help_text="Explanation of detection logic or issues"
-    )
-    
-    # User validation tracking
-    validated_by = models.ForeignKey(
-        'auth.User',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='validated_topology_connections',
-        help_text="User who validated this connection"
-    )
-    
-    validated_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When the connection was validated"
-    )
-    
-    # Change tracking
-    topology_last_checked = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Last time topology was checked"
-    )
-    
-    topology_changed = models.BooleanField(
-        default=False,
-        help_text="True if bay name changed since last validation"
-    )
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
     class Meta:
-        indexes = [
-            models.Index(fields=['validation_status']),
-            models.Index(fields=['connection_type']),
-            models.Index(fields=['detection_confidence']),
-            models.Index(fields=['substation', 'validation_status']),
-        ]
-        verbose_name = "Incoming Bay"
-        verbose_name_plural = "Incoming Bays"
-    
-    def save(self, *args, **kwargs):
-        # Auto-generate Global ID from Name
-        if self.bay_name and self.substation:
-            new_bay_id = f"{self.substation.substation_id}_{self.bay_name}"
-            
-            # Detect if bay_name changed (topology change)
-            if self.pk:
-                try:
-                    old = IncomingBay.objects.get(pk=self.pk)
-                    if old.bay_name != self.bay_name:
-                        # Bay name changed - flag for re-validation
-                        self.topology_changed = True
-                        self.validation_status = 'PENDING'
-                        self.detection_note = f"Bay name changed from '{old.bay_name}' to '{self.bay_name}'. Re-validation required."
-                        logger.info(f"Topology change detected for {old.bay_id}: {old.bay_name} -> {self.bay_name}")
-                except IncomingBay.DoesNotExist:
-                    pass
-            
-            self.bay_id = new_bay_id
-        
-        super().save(*args, **kwargs)
-        
-        # Trigger rematch of potential unmatched loads
-        try:
-            from services.load_profile_service import LoadProfileService
-            LoadProfileService.rematch_unmatched_loads()
-        except Exception as e:
-            logger.error(f"Failed to rematch loads after IncomingBay save: {e}")
-    
-    @property
-    def requires_validation(self):
-        """Check if this bay needs user validation"""
-        return self.validation_status in ['PENDING', 'REJECTED'] or self.topology_changed
-    
-    @property
-    def all_connected_substations(self):
-        """Get all connected substations (primary + tee-offs)"""
-        substations = []
-        if self.connected_to_substation:
-            substations.append(self.connected_to_substation)
-        substations.extend(self.tee_off_connections.all())
-        return substations
-    
-    @property
-    def connection_summary(self):
-        """Human-readable connection summary"""
-        if self.connection_type == 'EQUIPMENT':
-            return f"Equipment: {self.bay_name}"
-        elif self.connection_type == 'AUTOTRANSFORMER':
-            return f"Autotransformer (internal)"
-        elif self.connection_type == 'UNKNOWN':
-            return "Unknown - needs validation"
-        elif self.connected_to_substation:
-            if self.connection_type == 'TEE_OFF':
-                tee_offs = self.tee_off_connections.all()
-                if tee_offs:
-                    names = [ss.substation_id for ss in tee_offs]
-                    return f"Tee-off: {' + '.join(names)}"
-            return f"→ {self.connected_to_substation.substation_id}"
-        return "No connection"
-    
-    def __str__(self):
-        return f"{self.bay_id} ({self.connection_summary})"
+        ordering = ['-timestamp']
+        verbose_name = "Network Snapshot"
 
-class BayLoad(models.Model):
+    def __str__(self):
+        return f"{self.name} ({self.timestamp.strftime('%Y-%m-%d %H:%M')})"
+
+# ==========================================
+# 4. PSS/E REFERENCE ENTITIES (Snapshot-Scoped)
+# ==========================================
+
+class NetworkArea(models.Model):
+    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='areas')
+    number = models.IntegerField()
+    name = models.CharField(max_length=50, blank=True)
+    
+    class Meta:
+        unique_together = ('snapshot', 'number')
+
+class NetworkZone(models.Model):
+    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='zones')
+    number = models.IntegerField()
+    name = models.CharField(max_length=50, blank=True)
+    
+    class Meta:
+        unique_together = ('snapshot', 'number')
+
+class NetworkOwner(models.Model):
+    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='owners')
+    number = models.IntegerField()
+    name = models.CharField(max_length=50, blank=True)
+    
+    class Meta:
+        unique_together = ('snapshot', 'number')
+
+# ==========================================
+# 5. NODAL TOPOLOGY (The Backbone)
+# ==========================================
+
+class NetworkBus(models.Model):
     """
-    Stores load profile data (MW/Mvar) linked to transformer or incoming bay.
-    Data is replaced on each new upload.
+    Fundamental node in the network.
+    The primary key is the PSS/E Bus Number + Snapshot.
     """
-    # Foreign keys (nullable to support unmatched data logging)
-    transformer = models.OneToOneField(
-        Transformer, 
+    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='buses')
+    
+    # The Link: Connection to Master Data (Business Context)
+    substation = models.ForeignKey(
+        Substation, 
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True, 
-        related_name='load_data'
-    )
-    incoming_bay = models.OneToOneField(
-        IncomingBay, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        related_name='load_data'
+        related_name='snapshot_buses',
+        help_text="Linked Master Substation"
     )
     
-    # Load data from Excel
-    pload_mw = models.FloatField(help_text="Active power load in MW")
-    qload_mvar = models.FloatField(help_text="Reactive power load in Mvar")
+    # Electrical Identity
+    bus_number = models.IntegerField(db_index=True)
+    bus_name = models.CharField(max_length=20)
+    base_kv = models.FloatField(db_index=True)
     
-    # Metadata from Excel (for traceability)
-    bus_name = models.CharField(max_length=100)
-    mnemonic = models.CharField(max_length=10)
-    bay_identifier = models.CharField(max_length=20, help_text="T1, T2, F1, etc.")
+    # Metadata (PSS/E Source)
+    psse_area = models.ForeignKey(NetworkArea, on_delete=models.SET_NULL, null=True, blank=True)
+    psse_zone = models.ForeignKey(NetworkZone, on_delete=models.SET_NULL, null=True, blank=True)
+    psse_owner = models.ForeignKey(NetworkOwner, on_delete=models.SET_NULL, null=True, blank=True)
     
-    # Upload tracking
-    upload_timestamp = models.DateTimeField(auto_now_add=True)
-    upload_batch_id = models.UUIDField(default=uuid.uuid4, help_text="Groups rows from same upload")
-    matched = models.BooleanField(default=False, help_text="Successfully matched to bay_id")
+    # State (Solution)
+    voltage_mag = models.FloatField(help_text="Voltage Magnitude (pu)")
+    voltage_angle = models.FloatField(help_text="Voltage Angle (degrees)")
     
+    # Limits (Optional/Future)
+    nv_hi = models.FloatField(null=True, blank=True)
+    nv_lo = models.FloatField(null=True, blank=True)
+
     class Meta:
+        unique_together = ('snapshot', 'bus_number')
         indexes = [
-            models.Index(fields=['upload_batch_id']),
-            models.Index(fields=['matched']),
+            models.Index(fields=['snapshot', 'bus_number']), # Composite Index for fast lookup
+            models.Index(fields=['snapshot', 'substation']),
         ]
-    
+
     def __str__(self):
-        if self.transformer:
-            return f"Load: {self.transformer.bay_id} ({self.pload_mw} MW)"
-        elif self.incoming_bay:
-            return f"Load: {self.incoming_bay.bay_id} ({self.pload_mw} MW)"
-        return f"Unmatched Load: {self.mnemonic}-{self.bay_identifier}"
+        return f"{self.bus_number} {self.bus_name}"
+
+# ==========================================
+# 6. CONNECTED EQUIPMENT (Branches & Shunts)
+# ==========================================
+
+class NetworkBranch(models.Model):
+    """
+    AC Transmission Line or Cable.
+    """
+    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='branches')
+    from_bus = models.ForeignKey(NetworkBus, on_delete=models.CASCADE, related_name='branches_from')
+    to_bus = models.ForeignKey(NetworkBus, on_delete=models.CASCADE, related_name='branches_to')
+    ckt_id = models.CharField(max_length=2, default='1')
+    
+    # Parameters
+    r = models.FloatField(help_text="Resistance (pu)")
+    x = models.FloatField(help_text="Reactance (pu)")
+    b = models.FloatField(help_text="Charging (pu)")
+    
+    # Ratings (MVA)
+    rate_a = models.FloatField(default=0.0)
+    rate_b = models.FloatField(default=0.0)
+    rate_c = models.FloatField(default=0.0)
+    
+    is_active = models.BooleanField(default=True) # Status
+
+    class Meta:
+        indexes = [models.Index(fields=['snapshot', 'from_bus', 'to_bus'])]
+
+class NetworkTransformer(models.Model):
+    """
+    2-Winding or 3-Winding Transformer.
+    Note: 3-winding transformers in PSS/E are often 3x 2-winding records or star point buses.
+    This model handles the 2-winding record format primarily.
+    """
+    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='transformers')
+    from_bus = models.ForeignKey(NetworkBus, on_delete=models.CASCADE, related_name='transformers_from')
+    to_bus = models.ForeignKey(NetworkBus, on_delete=models.CASCADE, related_name='transformers_to')
+    ckt_id = models.CharField(max_length=2, default='1')
+    
+    # Parameters
+    r = models.FloatField(default=0.0)
+    x = models.FloatField()
+    primary_winding = models.IntegerField(default=1) # 1=from, 2=to
+    
+    # Ratings
+    rate_a = models.FloatField(default=0.0)
+    
+    is_active = models.BooleanField(default=True)
+
+class NetworkLoad(models.Model):
+    """
+    Power consumption at a bus.
+    """
+    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='loads')
+    bus = models.ForeignKey(NetworkBus, on_delete=models.CASCADE, related_name='loads')
+    load_id = models.CharField(max_length=2)
+    
+    # Values
+    p_mw = models.FloatField()
+    q_mvar = models.FloatField()
+    
+    in_service = models.BooleanField(default=True)
+
+class NetworkGenerator(models.Model):
+    """
+    Power generation unit.
+    """
+    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='generators')
+    bus = models.ForeignKey(NetworkBus, on_delete=models.CASCADE, related_name='generators')
+    gen_id = models.CharField(max_length=2)
+    
+    # Output
+    p_gen = models.FloatField()
+    q_gen = models.FloatField()
+    
+    # Limits
+    p_max = models.FloatField()
+    p_min = models.FloatField()
+    q_max = models.FloatField()
+    q_min = models.FloatField()
+    
+    in_service = models.BooleanField(default=True)
+
+class NetworkShunt(models.Model):
+    """
+    Fixed Shunt (Capacitor/Reactor).
+    """
+    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='shunts')
+    bus = models.ForeignKey(NetworkBus, on_delete=models.CASCADE, related_name='shunts')
+    shunt_id = models.CharField(max_length=2)
+    
+    g_mw = models.FloatField(help_text="Shunt Conductance")
+    b_mvar = models.FloatField(help_text="Shunt Susceptance")
+    
+    in_service = models.BooleanField(default=True)
+
+class NetworkSwitchedShunt(models.Model):
+    """
+    Switched Shunt (SVC, Capacitor Bank with steps).
+    """
+    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='switched_shunts')
+    bus = models.ForeignKey(NetworkBus, on_delete=models.CASCADE, related_name='switched_shunts')
+    
+    control_mode = models.IntegerField()
+    b_init = models.FloatField()
+    
+    # Storing steps as JSON or simplified string for now
+    step_info = models.TextField(blank=True, null=True)
+
+class NetworkDCLink(models.Model):
+    """
+    Two-Terminal HVDC Line.
+    """
+    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='dc_links')
+    name = models.CharField(max_length=50)
+    
+    # Simplified connectivity
+    # PSS/E DC lines connect via rectifier/inverter "converter" buses or direct bus index
+    # We will store the descriptive name and main parameters
+    
+    rectifier_bus_number = models.IntegerField()
+    inverter_bus_number = models.IntegerField()
+    
+    setpoint_mw = models.FloatField()
+    
