@@ -2,24 +2,13 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Zap, Cpu, Edit2, MapPin, FileText, Upload, Activity, AlertTriangle, Plus } from 'lucide-react';
 
-const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProcess, processing, onViewSld }) => {
+const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing, onViewSld }) => {
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (file) onSLDUpload(substation.substation_id, file);
     };
 
-    const hasConfig = (substation.transformers?.length > 0 || substation.incoming_bays?.length > 0);
 
-    // Config Summary
-    const txCount = substation.transformers?.length || 0;
-    const bayCount = substation.incoming_bays?.length || 0;
-
-    // Check for LV configuration issues (Red Alert)
-    const hasConfigIssue = substation.transformers?.some(t => {
-        const v = Number(t.lv_voltage);
-        // Issue if: 0, NaN, or not in standard set
-        return !v || ![11, 22, 33].includes(v);
-    });
 
     return (
         <motion.div
@@ -88,12 +77,6 @@ const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProce
 
             {/* Footer Row: Metadata Icons */}
             <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem' }}>
-                {/* Config Status */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: hasConfig ? 'var(--text-primary)' : 'var(--text-secondary)' }} title="Transformers / Bays">
-                    <Activity size={14} color={hasConfig ? 'var(--accent-cyan)' : 'gray'} />
-                    <span>{hasConfig ? `${txCount} Tx • ${bayCount} Bays` : 'No Config'}</span>
-                </div>
-
                 {/* SLD Status */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem' }}>
                     <FileText size={14} color={substation.sld_file ? 'var(--accent-cyan)' : 'gray'} />
@@ -101,13 +84,6 @@ const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProce
                         {substation.sld_file ? 'SLD Ready' : 'No SLD'}
                     </span>
                 </div>
-
-                {/* Alert Icon */}
-                {hasConfigIssue && (
-                    <div title="Non-standard LV Voltage detected" style={{ marginLeft: 'auto' }}>
-                        <AlertTriangle size={16} color="#ef4444" className="animate-pulse" />
-                    </div>
-                )}
             </div>
 
             {/* Hover Actions Overlay */}
@@ -127,12 +103,6 @@ const SubstationCard = ({ substation, onEdit, onConfigEdit, onSLDUpload, onProce
                 }}
             >
                 <ActionButton icon={<Edit2 size={16} />} label="Edit" onClick={onEdit} color="white" />
-                <ActionButton
-                    icon={<Activity size={16} />}
-                    label="Config"
-                    onClick={onConfigEdit}
-                    color={hasConfig ? 'var(--accent-cyan)' : 'white'}
-                />
 
                 {/* SLD Actions */}
                 {substation.sld_file ? (

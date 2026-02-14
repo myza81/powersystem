@@ -26,14 +26,21 @@ class DatabaseExportView(APIView):
             return Response({"error": "Dev tools only available in DEBUG mode"}, status=status.HTTP_403_FORBIDDEN)
 
         try:
+            # Get models parameter, default to Substation only
+            models = request.data.get('models', ['core.Substation'])
+            
             # Ensure directory exists
             os.makedirs(os.path.dirname(FIXTURE_PATH), exist_ok=True)
             
             with open(FIXTURE_PATH, 'w') as f:
-                call_command('dumpdata', 'core', indent=2, stdout=f)
-            
-            logger.info("Database exported successfully.")
-            return Response({"message": "Database exported successfully.", "path": FIXTURE_PATH})
+                # Export specified models
+                call_command('dumpdata', *models, indent=2, stdout=f)
+                logger.info(f"Database exported successfully (models: {', '.join(models)}).")
+                return Response({
+                    "message": f"Database exported successfully ({', '.join(models)}).", 
+                    "path": FIXTURE_PATH,
+                    "models": models
+                })
         except Exception as e:
             logger.error(f"Export failed: {str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

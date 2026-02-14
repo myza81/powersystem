@@ -256,7 +256,6 @@ const App = () => {
                                         key={sub.substation_id}
                                         substation={sub}
                                         onEdit={() => { setSelectedSub(sub); setView('edit'); }}
-                                        onConfigEdit={() => { setSelectedSub(sub); setView('config'); }}
                                         onSLDUpload={handleSLDUpload}
                                         onProcess={handleProcessSLD}
                                         processing={loading}

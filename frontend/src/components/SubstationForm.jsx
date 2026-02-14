@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Save, MapPin, AlertTriangle, Edit2, Upload } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const SubstationForm = ({ substation, onSave, onCancel, onConfigEdit, onSLDUpload }) => {
+const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload }) => {
     const [formData, setFormData] = useState(substation || {
         mnemonic: '',
         name: '',
@@ -98,75 +98,48 @@ const SubstationForm = ({ substation, onSave, onCancel, onConfigEdit, onSLDUploa
                 </div>
 
                 {substation && substation.substation_id && (
-                    <div style={{ gridColumn: 'span 2', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem', marginTop: '1rem' }}>
-                        <h4 style={{ color: 'var(--accent-blue)', marginBottom: '1rem', fontSize: '0.9rem' }}>Advanced Implementation</h4>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button
-                                type="button"
-                                onClick={onConfigEdit}
-                                style={{
-                                    flex: 1,
-                                    padding: '0.75rem',
-                                    background: 'rgba(0,229,255,0.1)',
-                                    border: '1px solid rgba(0,229,255,0.3)',
-                                    borderRadius: '8px',
-                                    color: 'var(--accent-cyan)',
-                                    cursor: 'pointer',
-                                    fontWeight: 600,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '8px'
-                                }}
-                            >
-                                <Edit2 size={16} /> Edit Configuration
-                            </button>
-
-                            {/* SLD Upload Section */}
-                            <div style={{ flex: 1 }}>
-                                <input
-                                    type="file"
-                                    id="sld-upload-input"
-                                    hidden
-                                    accept=".pdf,.dxf,.svg,image/*"
-                                    onChange={(e) => {
-                                        if (e.target.files[0] && onSLDUpload) {
-                                            onSLDUpload(substation.substation_id, e.target.files[0]);
-                                        }
-                                    }}
-                                />
-                                <label
-                                    htmlFor="sld-upload-input"
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        padding: '0.75rem',
-                                        background: 'rgba(255,255,255,0.05)',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '8px',
-                                        color: substation.sld_file ? 'var(--accent-cyan)' : 'white',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '8px',
-                                        transition: 'all 0.2s',
-                                        fontWeight: 600,
-                                        fontSize: '0.9rem' // Matched button font size
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.target.style.background = 'rgba(255,255,255,0.1)';
-                                        e.target.style.borderColor = 'rgba(255,255,255,0.3)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.target.style.background = 'rgba(255,255,255,0.05)';
-                                        e.target.style.borderColor = 'rgba(255,255,255,0.1)';
-                                    }}
-                                >
-                                    <Upload size={16} /> {substation.sld_file ? 'Update SLD File' : 'Upload SLD'}
-                                </label>
-                            </div>
-                        </div>
+                    <div style={{ gridColumn: 'span 2', marginTop: '0.5rem' }}>
+                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>SLD File (Optional)</label>
+                        <input
+                            type="file"
+                            id="sld-upload-input"
+                            hidden
+                            accept=".pdf,.dxf,.svg,image/*"
+                            onChange={(e) => {
+                                if (e.target.files[0] && onSLDUpload) {
+                                    onSLDUpload(substation.substation_id, e.target.files[0]);
+                                }
+                            }}
+                        />
+                        <label
+                            htmlFor="sld-upload-input"
+                            style={{
+                                width: '100%',
+                                padding: '0.75rem',
+                                background: 'rgba(255,255,255,0.05)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '8px',
+                                color: substation.sld_file ? 'var(--accent-cyan)' : 'white',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                transition: 'all 0.2s',
+                                fontWeight: 600,
+                                fontSize: '0.9rem'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.target.style.background = 'rgba(255,255,255,0.1)';
+                                e.target.style.borderColor = 'rgba(255,255,255,0.3)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.background = 'rgba(255,255,255,0.05)';
+                                e.target.style.borderColor = 'rgba(255,255,255,0.1)';
+                            }}
+                        >
+                            <Upload size={16} /> {substation.sld_file ? 'Update SLD File' : 'Upload SLD'}
+                        </label>
                     </div>
                 )}
 

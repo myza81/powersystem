@@ -16,9 +16,10 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         """
         GET /api/v1/load-analytics/aggregate/
         
+        Substation-centric aggregation using NetworkLoad → NetworkBus → Substation chain.
+        
         Query params:
         - snapshot_id: UUID of snapshot (optional, uses latest if not provided)
-        - level: 'grid' | 'region' | 'state' | 'ownership' (currently returns all)
         
         Returns:
         {
@@ -28,16 +29,17 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
             "total_pload_mw": 28208.17,
             "total_qload_mvar": 5682.47,
             "load_count": 1971,
+            "substation_count": 156,
             "regional_breakdown": [...],
             "state_breakdown": [...],
             "ownership_breakdown": [...],
-            "coverage": {
-                "total_loads": 1971,
-                "loads_with_substations": 1546,
-                "coverage_percent": 78.4
-            }
+            "unlinked_loads": {...},
+            "coverage": {...}
         }
         """
+        from django.db.models import Sum, Count, Q
+        from core.models import Substation
+        
         snapshot_id = request.query_params.get('snapshot_id')
         
         # Get snapshot
@@ -52,98 +54,172 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         if not snapshot:
             return Response({'error': 'No snapshots found'}, status=404)
         
-        # Get loads for this snapshot
-        loads = snapshot.loads.select_related(
-            'bus__substation',
-            'bus__psse_area',
-            'bus__psse_zone',
-            'bus__psse_owner'
-        )
+        # Get all loads and linked loads
+        all_loads = snapshot.loads.all()
+        linked_loads = snapshot.loads.filter(bus__substation__isnull=False)
+        unlinked_loads = snapshot.loads.filter(bus__substation__isnull=True)
         
-        # Calculate grid totals
-        grid_totals = loads.aggregate(
+        # Calculate overall grid totals (including unlinked)
+        overall_totals = all_loads.aggregate(
             total_pload_mw=Sum('p_mw'),
             total_qload_mvar=Sum('q_mvar'),
             load_count=Count('id')
         )
         
-        # Regional breakdown (using substation.region)
-        loads_with_subs = loads.filter(bus__substation__isnull=False)
-        regional_breakdown = []
+        # Count unique substations with loads
+        substation_count = (
+            Substation.objects
+            .filter(snapshot_buses__snapshot=snapshot, snapshot_buses__loads__isnull=False)
+            .distinct()
+            .count()
+        )
         
-        for region in ['North', 'Central', 'South', 'East']:
-            region_loads = loads_with_subs.filter(bus__substation__region=region)
-            region_data = region_loads.aggregate(
+        # Regional breakdown - aggregate loads by substation region
+        regional_breakdown = []
+        regional_data = (
+            linked_loads
+            .values('bus__substation__region')
+            .annotate(
                 total_pload_mw=Sum('p_mw'),
                 total_qload_mvar=Sum('q_mvar'),
                 load_count=Count('id')
             )
-            if region_data['total_pload_mw']:
+            .order_by('bus__substation__region')
+        )
+        
+        for item in regional_data:
+            region = item['bus__substation__region']
+            if region and item['total_pload_mw']:
+                # Count substations in this region
+                region_substation_count = (
+                    Substation.objects
+                    .filter(
+                        snapshot_buses__snapshot=snapshot,
+                        snapshot_buses__loads__isnull=False,
+                        region=region
+                    )
+                    .distinct()
+                    .count()
+                )
+                
                 regional_breakdown.append({
                     'region': region,
-                    'total_pload_mw': round(region_data['total_pload_mw'], 2),
-                    'total_qload_mvar': round(region_data['total_qload_mvar'], 2),
-                    'load_count': region_data['load_count']
+                    'total_pload_mw': round(item['total_pload_mw'], 2),
+                    'total_qload_mvar': round(item['total_qload_mvar'], 2),
+                    'substation_count': region_substation_count,
+                    'load_count': item['load_count']
                 })
         
-        # State breakdown (using substation.state)
+        # State breakdown - aggregate loads by substation state
         state_breakdown = []
-        states = loads_with_subs.values_list('bus__substation__state', flat=True).distinct()
-        
-        for state in states:
-            if not state or not state.strip():
-                continue
-            state_loads = loads_with_subs.filter(bus__substation__state=state)
-            state_data = state_loads.aggregate(
+        state_data = (
+            linked_loads
+            .values('bus__substation__state')
+            .annotate(
                 total_pload_mw=Sum('p_mw'),
                 total_qload_mvar=Sum('q_mvar'),
                 load_count=Count('id')
             )
-            if state_data['total_pload_mw']:
+            .order_by('bus__substation__state')
+        )
+        
+        for item in state_data:
+            state = item['bus__substation__state']
+            if state and state.strip() and item['total_pload_mw']:
+                # Count substations in this state
+                state_substation_count = (
+                    Substation.objects
+                    .filter(
+                        snapshot_buses__snapshot=snapshot,
+                        snapshot_buses__loads__isnull=False,
+                        state=state
+                    )
+                    .distinct()
+                    .count()
+                )
+                
                 state_breakdown.append({
                     'state': state.strip(),
-                    'total_pload_mw': round(state_data['total_pload_mw'], 2),
-                    'total_qload_mvar': round(state_data['total_qload_mvar'], 2),
-                    'load_count': state_data['load_count']
+                    'total_pload_mw': round(item['total_pload_mw'], 2),
+                    'total_qload_mvar': round(item['total_qload_mvar'], 2),
+                    'substation_count': state_substation_count,
+                    'load_count': item['load_count']
                 })
         
-        # Ownership breakdown (using substation.ownership)
+        # Ownership breakdown - aggregate loads by substation ownership
         ownership_breakdown = []
-        ownerships = loads_with_subs.values_list('bus__substation__ownership', flat=True).distinct()
-        
-        for ownership in ownerships:
-            if not ownership or not ownership.strip():
-                continue
-            ownership_loads = loads_with_subs.filter(bus__substation__ownership=ownership)
-            ownership_data = ownership_loads.aggregate(
+        ownership_data = (
+            linked_loads
+            .values('bus__substation__ownership')
+            .annotate(
                 total_pload_mw=Sum('p_mw'),
                 total_qload_mvar=Sum('q_mvar'),
                 load_count=Count('id')
             )
-            if ownership_data['total_pload_mw']:
+            .order_by('bus__substation__ownership')
+        )
+        
+        for item in ownership_data:
+            ownership = item['bus__substation__ownership']
+            if ownership and ownership.strip() and item['total_pload_mw']:
+                # Count substations with this ownership
+                ownership_substation_count = (
+                    Substation.objects
+                    .filter(
+                        snapshot_buses__snapshot=snapshot,
+                        snapshot_buses__loads__isnull=False,
+                        ownership=ownership
+                    )
+                    .distinct()
+                    .count()
+                )
+                
                 ownership_breakdown.append({
                     'ownership': ownership.strip(),
-                    'total_pload_mw': round(ownership_data['total_pload_mw'], 2),
-                    'total_qload_mvar': round(ownership_data['total_qload_mvar'], 2),
-                    'load_count': ownership_data['load_count']
+                    'total_pload_mw': round(item['total_pload_mw'], 2),
+                    'total_qload_mvar': round(item['total_qload_mvar'], 2),
+                    'substation_count': ownership_substation_count,
+                    'load_count': item['load_count']
                 })
+        
+        # Calculate unlinked loads totals
+        unlinked_totals = unlinked_loads.aggregate(
+            total_pload_mw=Sum('p_mw'),
+            total_qload_mvar=Sum('q_mvar'),
+            load_count=Count('id')
+        )
         
         return Response({
             'snapshot_id': str(snapshot.id),
             'snapshot_name': snapshot.name,
             'timestamp': snapshot.timestamp,
-            'total_pload_mw': round(grid_totals['total_pload_mw'] or 0, 2),
-            'total_qload_mvar': round(grid_totals['total_qload_mvar'] or 0, 2),
-            'load_count': grid_totals['load_count'],
+            
+            # Overall grid totals (including unlinked loads)
+            'total_pload_mw': round(overall_totals['total_pload_mw'] or 0, 2),
+            'total_qload_mvar': round(overall_totals['total_qload_mvar'] or 0, 2),
+            'load_count': overall_totals['load_count'],
+            'substation_count': substation_count,
+            
+            # Breakdowns (substation-linked loads only)
             'regional_breakdown': regional_breakdown,
             'state_breakdown': state_breakdown,
             'ownership_breakdown': ownership_breakdown,
+            
+            # Unlinked loads (explicitly shown)
+            'unlinked_loads': {
+                'total_pload_mw': round(unlinked_totals['total_pload_mw'] or 0, 2),
+                'total_qload_mvar': round(unlinked_totals['total_qload_mvar'] or 0, 2),
+                'load_count': unlinked_totals['load_count'] or 0
+            },
+            
+            # Coverage metrics
             'coverage': {
-                'total_loads': loads.count(),
-                'loads_with_substations': loads_with_subs.count(),
-                'coverage_percent': round(loads_with_subs.count() / loads.count() * 100, 1) if loads.count() > 0 else 0
+                'total_loads': all_loads.count(),
+                'loads_with_substations': linked_loads.count(),
+                'coverage_percent': round(linked_loads.count() / all_loads.count() * 100, 1) if all_loads.count() > 0 else 0
             }
         })
+
     
     @action(detail=False, methods=['get'])
     def missing_substations(self, request):

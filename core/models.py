@@ -85,7 +85,7 @@ class Substation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        # 1. Automated Region derivation
+        # 1. Automated Region derivation from grid
         region_map = {
             'North': ['KEDP', 'PPNG', 'PERK'],
             'Central': ['SELG', 'KLUM'],
@@ -98,7 +98,14 @@ class Substation(models.Model):
                     self.region = region_name
                     break
         
-        # 2. Ensure sld filename consistency
+        # 2. Automated State detection from coordinates
+        if self.latitude and self.longitude:
+            from core.utils.geo import get_state_from_coordinates
+            detected_state = get_state_from_coordinates(self.latitude, self.longitude)
+            if detected_state:
+                self.state = detected_state
+        
+        # 3. Ensure sld filename consistency
         if self.sld_file:
             ext = self.sld_file.name.split('.')[-1]
             self.sld = f"{self.substation_id}.{ext}"

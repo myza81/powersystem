@@ -247,9 +247,9 @@ const LoadDashboard = ({ substations = [] }) => {
                                     <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                                         <SpiralChart
                                             data={gridData.ownership_breakdown || []}
-                                            labelKey="type"
+                                            labelKey="ownership"
                                             valueKey="total_pload_mw"
-                                            colorFunction={(item) => item.type === 'TNB' ? '#ef4444' : item.type === 'LPC' ? '#f59e0b' : '#3b82f6'}
+                                            colorFunction={(item) => item.ownership === 'TNB' ? '#ef4444' : item.ownership === 'LPC' ? '#f59e0b' : '#3b82f6'}
                                         />
                                     </div>
                                 </div>
@@ -279,7 +279,7 @@ const LoadDashboard = ({ substations = [] }) => {
                                     justifyContent: 'space-around'
                                 }}>
                                     <SpiralChart
-                                        data={gridData.breakdown || []}
+                                        data={gridData.regional_breakdown || []}
                                         labelKey="region"
                                         valueKey="total_pload_mw"
                                     />
