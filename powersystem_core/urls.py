@@ -20,6 +20,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.routers import DefaultRouter
 from api.v1.views.substation import SubstationViewSet
+from api.v1.views.load_analytics import LoadAnalyticsViewSet
 # V1 ViewSets disabled for V2:
 # from api.v1.views.load_profile import LoadProfileViewSet
 # from api.v1.views.telemetry import TelemetryViewSet
@@ -29,6 +30,7 @@ from core.views_dev import DatabaseSyncStatusView, DatabaseExportView, DatabaseI
 
 router = DefaultRouter()
 router.register(r'substations', SubstationViewSet)
+router.register(r'load-analytics', LoadAnalyticsViewSet, basename='load-analytics')
 # V1 routes disabled for V2:
 # router.register(r'load-profiles', LoadProfileViewSet, basename='load-profile')
 # router.register(r'telemetry', TelemetryViewSet, basename='telemetry')

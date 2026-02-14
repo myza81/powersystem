@@ -136,6 +136,9 @@ class NetworkSnapshot(models.Model):
     # File tracking
     source_file = models.FileField(upload_to='snapshots/', null=True, blank=True)
     
+    # Metadata for import warnings, alerts, etc.
+    metadata = models.JSONField(default=dict, blank=True, help_text="Import metadata including unmatched mnemonics")
+    
     class Meta:
         ordering = ['-timestamp']
         verbose_name = "Network Snapshot"
@@ -154,6 +157,11 @@ class NetworkArea(models.Model):
     
     class Meta:
         unique_together = ('snapshot', 'number')
+        verbose_name = 'Network Area'
+        verbose_name_plural = 'Network Areas'
+    
+    def __str__(self):
+        return f"Area {self.number}: {self.name}"
 
 class NetworkZone(models.Model):
     snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='zones')
@@ -162,6 +170,11 @@ class NetworkZone(models.Model):
     
     class Meta:
         unique_together = ('snapshot', 'number')
+        verbose_name = 'Network Zone'
+        verbose_name_plural = 'Network Zones'
+    
+    def __str__(self):
+        return f"Zone {self.number}: {self.name}"
 
 class NetworkOwner(models.Model):
     snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='owners')
@@ -170,6 +183,11 @@ class NetworkOwner(models.Model):
     
     class Meta:
         unique_together = ('snapshot', 'number')
+        verbose_name = 'Network Owner'
+        verbose_name_plural = 'Network Owners'
+    
+    def __str__(self):
+        return f"Owner {self.number}: {self.name}"
 
 # ==========================================
 # 5. NODAL TOPOLOGY (The Backbone)

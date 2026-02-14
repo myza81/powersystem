@@ -6,7 +6,6 @@ import SubstationForm from './components/SubstationForm';
 import SldViewer from './components/SldViewer';
 
 import ConfigurationEditor from './components/ConfigurationEditor';
-import LoadProfileUpload from './components/LoadProfileUpload';
 import LoadDashboard from './components/LoadDashboard';
 import DevTools from './components/DevTools';
 import MainLayout from './components/MainLayout';
@@ -296,17 +295,6 @@ const App = () => {
 
                 {view === 'dashboard' && (
                     <LoadDashboard substations={substations} />
-                )}
-
-                {view === 'load-profile' && (
-                    <LoadProfileUpload
-                        onUploadComplete={(results) => {
-                            setStatus({ type: 'success', msg: `Load data uploaded: ${results.matched} matched, ${results.unmatched} unmatched` });
-                            fetchSubstations(); // Refresh substations with load data
-                        }}
-                        onCancel={() => setView('dashboard')}
-                        onResolveIssue={handleResolveIssue}
-                    />
                 )}
 
                 {view === 'topology' && (

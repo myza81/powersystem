@@ -1,0 +1,153 @@
+Voltage (kV),Bus Number,Bus Name,Area,Zone,Voltage (pu),Mnemonic,Category,Action
+275.0,163213,ATWRFIC,TNB,PERAK,1.0188,ATWRFIC,Fictitious/Temporary,No action - correctly unlinked
+275.0,197227,BPHEFIC1,TNB,JOHOR,1.0312,BPHEFIC,Fictitious/Temporary,No action - correctly unlinked
+275.0,297227,BPHEFIC2,TNB,JOHOR,1.0312,BPHEFIC,Fictitious/Temporary,No action - correctly unlinked
+275.0,161214,HVDC,EGAT,EGAT,1.0344,HVDC,Potentially Linkable,Review - check if substation exists
+275.0,552027,OLPTLHS,TNB,SELANGOR,1.0208,OLPTLHS,Potentially Linkable,Review - check if substation exists
+275.0,52027,OLPTRHS,TNB,SELANGOR,1.0236,OLPTRHS,Potentially Linkable,Review - check if substation exists
+275.0,3184,PGLAGTB1,TNB,MELAKA,1.0312,PGLAGTB,Generator Terminal,No action - correctly unlinked
+275.0,3185,PGLAGTB2,TNB,MELAKA,1.0312,PGLAGTB,Generator Terminal,No action - correctly unlinked
+275.0,3186,PGLASTB3,TNB,MELAKA,1.0312,PGLASTB,Potentially Linkable,Review - check if substation exists
+275.0,388208,SRYAFIC1,TNB,WPKL,1.0339,SRYAFIC,Fictitious/Temporary,No action - correctly unlinked
+275.0,488208,SRYAFIC2,TNB,WPKL,1.0339,SRYAFIC,Fictitious/Temporary,No action - correctly unlinked
+275.0,2595,TJGSM1A,TNB,NS,1.0261,TJGSM,Potentially Linkable,Review - check if substation exists
+275.0,2597,TJGSM1B,TNB,NS,1.0261,TJGSM,Potentially Linkable,Review - check if substation exists
+275.0,75209,YPKA275,TNB,TGANU,1.0000,YPKA,Potentially Linkable,Review - check if substation exists
+132.0,12112,,SPPG,SPPG,1.0032,,Empty Name,No action - correctly unlinked
+132.0,97160,ASTM132,TNB,JOHOR,1.0289,ASTM,Potentially Linkable,Review - check if substation exists
+132.0,174125,GNTG132_T1,TNB,WPKL,1.0322,GNTG,Generator Terminal,No action - correctly unlinked
+132.0,61138,GRNPV132,TNB,P PINANG,1.0251,GRNPV,Potentially Linkable,Review - check if substation exists
+132.0,96167,JSNPV132R,TNB,MELAKA,1.0161,JSNPV,Potentially Linkable,Review - check if substation exists
+132.0,1962,KHTE132,TNB,P PINANG,1.0000,KHTE,Potentially Linkable,Review - check if substation exists
+132.0,163131,LMTMFIC,TNB,PERAK,1.0199,LMTMFIC,Fictitious/Temporary,No action - correctly unlinked
+132.0,62146,MWTA132,TNB,P PINANG,1.0124,MWTA,Potentially Linkable,Review - check if substation exists
+132.0,562146,MWTA132R,TNB,P PINANG,1.0127,MWTA,Potentially Linkable,Review - check if substation exists
+132.0,1960,NURG132,TNB,KEDAH,1.0247,NURG,Generator Terminal,No action - correctly unlinked
+132.0,74165,RLCC,TNB,PAHANG,1.0344,RLCC,Potentially Linkable,Review - check if substation exists
+132.0,106,SDAOFIC,TNB,PERLIS,1.0229,SDAOFIC,Fictitious/Temporary,No action - correctly unlinked
+132.0,151044,SGL-T1,TNB,SELANGOR,1.0326,SGL,Generator Terminal,No action - correctly unlinked
+132.0,251044,SGL-T2,TNB,SELANGOR,1.0326,SGL,Generator Terminal,No action - correctly unlinked
+132.0,74157,TAGP132,TNB,PAHANG,1.0285,TAGP,Potentially Linkable,Review - check if substation exists
+132.0,174157,TAGP132T,TNB,PAHANG,1.0285,TAGP,Potentially Linkable,Review - check if substation exists
+33.0,561954,CGPP_KKTL,TNB,KEDAH,1.0282,CGPP,Potentially Linkable,Review - check if substation exists
+33.0,62910,GRNPV33,TNB,P PINANG,1.0284,GRNPV,Potentially Linkable,Review - check if substation exists
+33.0,61915,GRNPV33B,TNB,P PINANG,1.0290,GRNPV,Potentially Linkable,Review - check if substation exists
+33.0,61913,GRNPV33R,TNB,P PINANG,1.0290,GRNPV,Potentially Linkable,Review - check if substation exists
+33.0,96396,JSNPV33,TNB,MELAKA,1.0168,JSNPV,Potentially Linkable,Review - check if substation exists
+33.0,96867,JSNPV33R,TNB,MELAKA,1.0168,JSNPV,Potentially Linkable,Review - check if substation exists
+22.0,2011,,SPPG,SPPG,1.0258,,Empty Name,No action - correctly unlinked
+22.0,2013,,SPPG,SPPG,1.0257,,Empty Name,No action - correctly unlinked
+22.0,2014,,SPPG,SPPG,1.0256,,Empty Name,No action - correctly unlinked
+22.0,2025,,SPPG,SPPG,1.0035,,Empty Name,No action - correctly unlinked
+22.0,2033,,SPPG,SPPG,0.9974,,Empty Name,No action - correctly unlinked
+22.0,2041,,SPPG,SPPG,0.9836,,Empty Name,No action - correctly unlinked
+22.0,2042,,SPPG,SPPG,1.0000,,Empty Name,No action - correctly unlinked
+22.0,2051,,SPPG,SPPG,1.0368,,Empty Name,No action - correctly unlinked
+22.0,2052,,SPPG,SPPG,1.0376,,Empty Name,No action - correctly unlinked
+22.0,2053,,SPPG,SPPG,1.0375,,Empty Name,No action - correctly unlinked
+22.0,2054,,SPPG,SPPG,1.0378,,Empty Name,No action - correctly unlinked
+22.0,2061,,SPPG,SPPG,1.0125,,Empty Name,No action - correctly unlinked
+22.0,2062,,SPPG,SPPG,1.0125,,Empty Name,No action - correctly unlinked
+22.0,2063,,SPPG,SPPG,1.0132,,Empty Name,No action - correctly unlinked
+22.0,2064,,SPPG,SPPG,1.0131,,Empty Name,No action - correctly unlinked
+22.0,2071,,SPPG,SPPG,1.0037,,Empty Name,No action - correctly unlinked
+22.0,2072,,SPPG,SPPG,1.0449,,Empty Name,No action - correctly unlinked
+22.0,2073,,SPPG,SPPG,1.0450,,Empty Name,No action - correctly unlinked
+22.0,2074,,SPPG,SPPG,1.0025,,Empty Name,No action - correctly unlinked
+22.0,2078,,SPPG,SPPG,1.0000,,Empty Name,No action - correctly unlinked
+22.0,2081,,SPPG,SPPG,0.9966,,Empty Name,No action - correctly unlinked
+22.0,2082,,SPPG,SPPG,0.9966,,Empty Name,No action - correctly unlinked
+22.0,2083,,SPPG,SPPG,0.9966,,Empty Name,No action - correctly unlinked
+22.0,2084,,SPPG,SPPG,0.9967,,Empty Name,No action - correctly unlinked
+22.0,2085,,SPPG,SPPG,0.9967,,Empty Name,No action - correctly unlinked
+22.0,2101,,SPPG,SPPG,0.9953,,Empty Name,No action - correctly unlinked
+22.0,2102,,SPPG,SPPG,0.9953,,Empty Name,No action - correctly unlinked
+22.0,2103,,SPPG,SPPG,0.9967,,Empty Name,No action - correctly unlinked
+22.0,2104,,SPPG,SPPG,1.0129,,Empty Name,No action - correctly unlinked
+22.0,2105,,SPPG,SPPG,0.9953,,Empty Name,No action - correctly unlinked
+22.0,2111,,SPPG,SPPG,1.0092,,Empty Name,No action - correctly unlinked
+22.0,2112,,SPPG,SPPG,1.0092,,Empty Name,No action - correctly unlinked
+22.0,2113,,SPPG,SPPG,1.0092,,Empty Name,No action - correctly unlinked
+22.0,2114,,SPPG,SPPG,1.0092,,Empty Name,No action - correctly unlinked
+22.0,2121,,SPPG,SPPG,1.0305,,Empty Name,No action - correctly unlinked
+22.0,2122,,SPPG,SPPG,1.0307,,Empty Name,No action - correctly unlinked
+22.0,2123,,SPPG,SPPG,1.0309,,Empty Name,No action - correctly unlinked
+22.0,2124,,SPPG,SPPG,1.0000,,Empty Name,No action - correctly unlinked
+22.0,2141,,SPPG,SPPG,1.0051,,Empty Name,No action - correctly unlinked
+22.0,2142,,SPPG,SPPG,1.0051,,Empty Name,No action - correctly unlinked
+22.0,2143,,SPPG,SPPG,1.0051,,Empty Name,No action - correctly unlinked
+22.0,2144,,SPPG,SPPG,1.0051,,Empty Name,No action - correctly unlinked
+22.0,2145,,SPPG,SPPG,1.0049,,Empty Name,No action - correctly unlinked
+22.0,2146,,SPPG,SPPG,1.0778,,Empty Name,No action - correctly unlinked
+22.0,2161,,SPPG,SPPG,0.9908,,Empty Name,No action - correctly unlinked
+22.0,2162,,SPPG,SPPG,0.9908,,Empty Name,No action - correctly unlinked
+22.0,2163,,SPPG,SPPG,0.9908,,Empty Name,No action - correctly unlinked
+22.0,2164,,SPPG,SPPG,0.9895,,Empty Name,No action - correctly unlinked
+22.0,2171,,SPPG,SPPG,1.0096,,Empty Name,No action - correctly unlinked
+22.0,2172,,SPPG,SPPG,1.0096,,Empty Name,No action - correctly unlinked
+22.0,2173,,SPPG,SPPG,1.0096,,Empty Name,No action - correctly unlinked
+22.0,2174,,SPPG,SPPG,1.0598,,Empty Name,No action - correctly unlinked
+22.0,2181,,SPPG,SPPG,0.9980,,Empty Name,No action - correctly unlinked
+22.0,2182,,SPPG,SPPG,1.0226,,Empty Name,No action - correctly unlinked
+22.0,2183,,SPPG,SPPG,0.9980,,Empty Name,No action - correctly unlinked
+22.0,2184,,SPPG,SPPG,0.9980,,Empty Name,No action - correctly unlinked
+22.0,2201,,SPPG,SPPG,1.0230,,Empty Name,No action - correctly unlinked
+22.0,2202,,SPPG,SPPG,1.0230,,Empty Name,No action - correctly unlinked
+22.0,2203,,SPPG,SPPG,1.0230,,Empty Name,No action - correctly unlinked
+22.0,2211,,SPPG,SPPG,1.0024,,Empty Name,No action - correctly unlinked
+22.0,2212,,SPPG,SPPG,1.0024,,Empty Name,No action - correctly unlinked
+22.0,2213,,SPPG,SPPG,1.0024,,Empty Name,No action - correctly unlinked
+22.0,2214,,SPPG,SPPG,1.0432,,Empty Name,No action - correctly unlinked
+22.0,2221,,SPPG,SPPG,1.0580,,Empty Name,No action - correctly unlinked
+22.0,2222,,SPPG,SPPG,1.0580,,Empty Name,No action - correctly unlinked
+22.0,2223,,SPPG,SPPG,1.0580,,Empty Name,No action - correctly unlinked
+22.0,2224,,SPPG,SPPG,1.0596,,Empty Name,No action - correctly unlinked
+22.0,2225,,SPPG,SPPG,1.0578,,Empty Name,No action - correctly unlinked
+22.0,2251,,SPPG,SPPG,0.9887,,Empty Name,No action - correctly unlinked
+22.0,2252,,SPPG,SPPG,0.9887,,Empty Name,No action - correctly unlinked
+22.0,2253,,SPPG,SPPG,0.9888,,Empty Name,No action - correctly unlinked
+22.0,2261,,SPPG,SPPG,1.0279,,Empty Name,No action - correctly unlinked
+22.0,2262,,SPPG,SPPG,1.0282,,Empty Name,No action - correctly unlinked
+22.0,2263,,SPPG,SPPG,1.0283,,Empty Name,No action - correctly unlinked
+22.0,2301,,SPPG,SPPG,1.0130,,Empty Name,No action - correctly unlinked
+22.0,2302,,SPPG,SPPG,1.0130,,Empty Name,No action - correctly unlinked
+22.0,2303,,SPPG,SPPG,1.0130,,Empty Name,No action - correctly unlinked
+22.0,3021,,SPPG,SPPG,1.0221,,Empty Name,No action - correctly unlinked
+22.0,3022,,SPPG,SPPG,1.0220,,Empty Name,No action - correctly unlinked
+22.0,3023,,SPPG,SPPG,1.0221,,Empty Name,No action - correctly unlinked
+22.0,3024,,SPPG,SPPG,1.0221,,Empty Name,No action - correctly unlinked
+22.0,3031,,SPPG,SPPG,1.0220,,Empty Name,No action - correctly unlinked
+22.0,3032,,SPPG,SPPG,1.0220,,Empty Name,No action - correctly unlinked
+22.0,3034,,SPPG,SPPG,1.0220,,Empty Name,No action - correctly unlinked
+22.0,3115,,SPPG,SPPG,1.0593,,Empty Name,No action - correctly unlinked
+22.0,3131,,SPPG,SPPG,1.0851,,Empty Name,No action - correctly unlinked
+22.0,3132,,SPPG,SPPG,0.9922,,Empty Name,No action - correctly unlinked
+22.0,3133,,SPPG,SPPG,1.0851,,Empty Name,No action - correctly unlinked
+22.0,3134,,SPPG,SPPG,1.0000,,Empty Name,No action - correctly unlinked
+22.0,3211,,SPPG,SPPG,0.9857,,Empty Name,No action - correctly unlinked
+22.0,3212,,SPPG,SPPG,0.9857,,Empty Name,No action - correctly unlinked
+22.0,3217,,SPPG,SPPG,0.9984,,Empty Name,No action - correctly unlinked
+22.0,3218,,SPPG,SPPG,0.9984,,Empty Name,No action - correctly unlinked
+22.0,6075,,SPPG,SPPG,0.9884,,Empty Name,No action - correctly unlinked
+22.0,7076,,SPPG,SPPG,1.0182,,Empty Name,No action - correctly unlinked
+22.0,7077,,SPPG,SPPG,1.0182,,Empty Name,No action - correctly unlinked
+22.0,11501,,SPPG,SPPG,0.9890,,Empty Name,No action - correctly unlinked
+22.0,11502,,SPPG,SPPG,0.9952,,Empty Name,No action - correctly unlinked
+22.0,19954,,SPPG,SPPG,0.9916,,Empty Name,No action - correctly unlinked
+22.0,19955,,SPPG,SPPG,0.9916,,Empty Name,No action - correctly unlinked
+22.0,97971,PCGPGT11,TNB,JOHOR,1.0116,PCGPGT,Generator Terminal,No action - correctly unlinked
+22.0,97972,PCGPGT12,TNB,JOHOR,1.0184,PCGPGT,Generator Terminal,No action - correctly unlinked
+22.0,97973,PCGPGT21,TNB,JOHOR,1.0188,PCGPGT,Generator Terminal,No action - correctly unlinked
+22.0,97974,PCGPGT22,TNB,JOHOR,1.0116,PCGPGT,Generator Terminal,No action - correctly unlinked
+11.0,12555,,SPPG,SPPG,1.0009,,Empty Name,No action - correctly unlinked
+11.0,19911,,SPPG,SPPG,0.9964,,Empty Name,No action - correctly unlinked
+11.0,19912,,SPPG,SPPG,0.9964,,Empty Name,No action - correctly unlinked
+11.0,19913,,SPPG,SPPG,1.0000,,Empty Name,No action - correctly unlinked
+11.0,19914,,SPPG,SPPG,0.9952,,Empty Name,No action - correctly unlinked
+11.0,62906,GLGRST1,TNB,P PINANG,1.0360,GLGRST,Generator Terminal,No action - correctly unlinked
+11.0,9300,NURGT1A,TNB,KEDAH,1.0247,NURGT,Generator Terminal,No action - correctly unlinked
+11.0,9301,NURGT1B,TNB,KEDAH,1.0247,NURGT,Generator Terminal,No action - correctly unlinked
+11.0,9303,NURGT2A,TNB,KEDAH,1.0247,NURGT,Generator Terminal,No action - correctly unlinked
+11.0,9304,NURGT2B,TNB,KEDAH,1.0247,NURGT,Generator Terminal,No action - correctly unlinked
+11.0,9302,NURST1C,TNB,KEDAH,1.0247,NURST,Generator Terminal,No action - correctly unlinked
+11.0,9305,NURST2C,TNB,KEDAH,1.0247,NURST,Generator Terminal,No action - correctly unlinked

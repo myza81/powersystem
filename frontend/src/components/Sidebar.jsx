@@ -26,7 +26,6 @@ const Sidebar = ({ currentView, onViewChange }) => {
     const toggleCollapse = () => setCollapsed(!collapsed);
 
     const loadProfileItems = [
-        { id: 'load-profile', label: 'Load Profile Uploader', icon: Upload },
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     ];
 

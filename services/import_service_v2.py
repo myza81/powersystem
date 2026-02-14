@@ -223,6 +223,9 @@ class ImportServiceV2:
         owners = {o.number: o for o in NetworkOwner.objects.filter(snapshot=snapshot)}
         substations = {s.mnemonic: s for s in Substation.objects.all()}
         
+        # Track unmatched mnemonics for missing substation alerts
+        unmatched_mnemonics = {}  # {mnemonic: [(bus_number, bus_name, voltage), ...]}
+        
         buses = []
         for line in lines:
             if not line.strip():
@@ -243,7 +246,15 @@ class ImportServiceV2:
             
             # Link to substation via mnemonic matching
             mnemonic = cls._extract_mnemonic(bus_name)
-            substation = substations.get(mnemonic)
+            substation = substations.get(mnemonic) if mnemonic else None
+            
+            # Track unmatched mnemonics (only for transmission-level buses: 500, 275, 132 kV)
+            # Exclude distribution-level buses (33, 22, 11 kV) and already matched buses
+            if mnemonic and not substation and bus_name.strip():
+                if base_kv in [500.0, 275.0, 132.0]:  # Only transmission-level
+                    if mnemonic not in unmatched_mnemonics:
+                        unmatched_mnemonics[mnemonic] = []
+                    unmatched_mnemonics[mnemonic].append((bus_number, bus_name, base_kv))
             
             buses.append(NetworkBus(
                 snapshot=snapshot,
@@ -260,16 +271,37 @@ class ImportServiceV2:
         
         NetworkBus.objects.bulk_create(buses, batch_size=1000)
         linked_count = sum(1 for b in buses if b.substation)
+        
+        # Log results
         logger.info(f"Imported {len(buses)} buses ({linked_count} linked to substations)")
+        if unmatched_mnemonics:
+            logger.warning(f"Found {len(unmatched_mnemonics)} unmatched mnemonics: {sorted(unmatched_mnemonics.keys())}")
+            # Store unmatched mnemonics in snapshot metadata for frontend alerts
+            snapshot.metadata = snapshot.metadata or {}
+            snapshot.metadata['unmatched_mnemonics'] = {
+                mnem: [{'bus_number': b[0], 'bus_name': b[1], 'voltage': b[2]} for b in buses_list]
+                for mnem, buses_list in unmatched_mnemonics.items()
+            }
+            snapshot.save()
     
     @classmethod
     def _extract_mnemonic(cls, bus_name: str) -> Optional[str]:
         """
         Extract substation mnemonic from bus name.
+        Returns None for fictitious/temporary buses.
+        
         Example: "SDAO132" -> "SDAO", "PME275" -> "PME"
+        Filters: "SDAOFIC" -> None (fictitious)
         """
-        # Remove voltage suffix (132, 275, 500)
-        match = re.match(r'([A-Z]+)', bus_name)
+        if not bus_name or not bus_name.strip():
+            return None
+        
+        # Filter out fictitious/temporary buses
+        if re.search(r'(FIC|TEMP|TMP|FICT)', bus_name, re.IGNORECASE):
+            return None
+        
+        # Extract mnemonic (uppercase letters before numbers/symbols)
+        match = re.match(r'([A-Z]+)', bus_name.strip())
         return match.group(1) if match else None
     
     @classmethod

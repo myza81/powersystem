@@ -61,10 +61,42 @@ class NetworkGeneratorAdmin(admin.ModelAdmin):
     list_filter = ('snapshot',)
     raw_id_fields = ('snapshot', 'bus')
 
-# Register Reference Data
-admin.site.register(NetworkArea)
-admin.site.register(NetworkZone)
-admin.site.register(NetworkOwner)
-admin.site.register(NetworkShunt)
-admin.site.register(NetworkSwitchedShunt)
-admin.site.register(NetworkDCLink)
+# Register Reference Data with proper admin displays
+@admin.register(NetworkArea)
+class NetworkAreaAdmin(admin.ModelAdmin):
+    list_display = ('number', 'name', 'snapshot')
+    list_filter = ('snapshot',)
+    search_fields = ('number', 'name')
+    ordering = ('snapshot', 'number')
+
+@admin.register(NetworkZone)
+class NetworkZoneAdmin(admin.ModelAdmin):
+    list_display = ('number', 'name', 'snapshot')
+    list_filter = ('snapshot',)
+    search_fields = ('number', 'name')
+    ordering = ('snapshot', 'number')
+
+@admin.register(NetworkOwner)
+class NetworkOwnerAdmin(admin.ModelAdmin):
+    list_display = ('number', 'name', 'snapshot')
+    list_filter = ('snapshot',)
+    search_fields = ('number', 'name')
+    ordering = ('snapshot', 'number')
+
+@admin.register(NetworkShunt)
+class NetworkShuntAdmin(admin.ModelAdmin):
+    list_display = ('bus', 'shunt_id', 'g_mw', 'b_mvar', 'in_service', 'snapshot')
+    list_filter = ('snapshot', 'in_service')
+    raw_id_fields = ('snapshot', 'bus')
+
+@admin.register(NetworkSwitchedShunt)
+class NetworkSwitchedShuntAdmin(admin.ModelAdmin):
+    list_display = ('bus', 'control_mode', 'b_init', 'snapshot')
+    list_filter = ('snapshot', 'control_mode')
+    raw_id_fields = ('snapshot', 'bus')
+
+@admin.register(NetworkDCLink)
+class NetworkDCLinkAdmin(admin.ModelAdmin):
+    list_display = ('name', 'rectifier_bus_number', 'inverter_bus_number', 'setpoint_mw', 'snapshot')
+    list_filter = ('snapshot',)
+    search_fields = ('name',)
