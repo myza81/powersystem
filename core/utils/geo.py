@@ -2,13 +2,14 @@
 Utility functions for the core app
 """
 
-def get_state_from_coordinates(lat, lon):
+def get_state_from_coordinates(lat, lon, grid=None):
     """
     Determine Malaysian state from coordinates using bounding boxes.
     
     Args:
         lat (float): Latitude
         lon (float): Longitude
+        grid (str, optional): Grid mnemonic (e.g., 'SELG', 'KLUM') to assist detection
     
     Returns:
         str: State name or None if coordinates don't match any state
@@ -16,6 +17,24 @@ def get_state_from_coordinates(lat, lon):
     if lat is None or lon is None:
         return None
     
+    # 1. Grid-based Overrides (High Confidence)
+    # If grid is definitively one state, return it immediately if reasonable
+    if grid:
+        grid_map = {
+            'SELG': 'Selangor',
+            'JOH1': 'Johor', 'JOH2': 'Johor',
+            'MLKA': 'Melaka',
+            'NSEM': 'Negeri Sembilan',
+            'PHNG': 'Pahang',
+            'TERG': 'Terengganu',
+            'KELN': 'Kelantan',
+            'PERK': 'Perak',
+            'PPNG': 'Pulau Pinang',
+            # 'KLUM' is ambiguous (KL/Selangor), 'KEDP' (Kedah/Perlis)
+        }
+        if grid in grid_map:
+            return grid_map[grid]
+
     # Convert to float if Decimal
     lat = float(lat)
     lon = float(lon)
@@ -30,9 +49,9 @@ def get_state_from_coordinates(lat, lon):
         'Perak': {'lat': (3.9, 5.6), 'lon': (100.4, 101.5)},
         'Kelantan': {'lat': (4.5, 6.3), 'lon': (101.3, 102.6)},
         'Terengganu': {'lat': (4.0, 5.9), 'lon': (102.4, 103.6)},
-        'Pahang': {'lat': (2.8, 4.8), 'lon': (102.0, 103.6)},  # Adjusted western boundary to avoid Selangor overlap
+        'Pahang': {'lat': (2.8, 4.8), 'lon': (102.0, 103.6)},
         'Selangor': {'lat': (2.7, 3.8), 'lon': (100.9, 101.9)},
-        'Kuala Lumpur': {'lat': (3.0, 3.3), 'lon': (101.6, 101.8)},
+        'Kuala Lumpur': {'lat': (3.0, 3.25), 'lon': (101.615, 101.8)}, # Adjusted western boundary (was 101.6)
         'Negeri Sembilan': {'lat': (2.5, 3.0), 'lon': (101.7, 102.7)},
         'Melaka': {'lat': (2.0, 2.5), 'lon': (102.0, 102.7)},
         'Johor': {'lat': (1.2, 2.8), 'lon': (102.4, 104.6)},

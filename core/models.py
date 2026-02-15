@@ -101,7 +101,7 @@ class Substation(models.Model):
         # 2. Automated State detection from coordinates
         if self.latitude and self.longitude:
             from core.utils.geo import get_state_from_coordinates
-            detected_state = get_state_from_coordinates(self.latitude, self.longitude)
+            detected_state = get_state_from_coordinates(self.latitude, self.longitude, grid=self.grid)
             if detected_state:
                 self.state = detected_state
         
