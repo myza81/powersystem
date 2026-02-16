@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Cpu, Edit2, MapPin, FileText, Upload, Activity, AlertTriangle, Plus } from 'lucide-react';
+import { Edit2, MapPin, FileText, Upload } from 'lucide-react';
 
-const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing, onViewSld, onLocate }) => {
+const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate }) => {
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (file) onSLDUpload(substation.substation_id, file);
@@ -42,7 +42,7 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing
             {/* Body: Pills for Region/Grid */}
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {/* Voltage Badge */}
-                <span style={{
+                {/* <span style={{
                     fontSize: '0.65rem',
                     background: substation.voltage >= 500 ? 'rgba(255,255,255,0.1)' : (substation.voltage >= 275 ? 'rgba(0, 191, 255, 0.08)' : 'rgba(74, 222, 128, 0.1)'),
                     color: substation.voltage >= 500 ? '#ffffff' : (substation.voltage >= 275 ? '#15d5f6ff' : 'var(--accent-cyan)'),
@@ -51,7 +51,7 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing
                     fontWeight: 600
                 }}>
                     {substation.voltage} kV
-                </span>
+                </span> */}
                 {substation.region && (
                     <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: '4px' }}>
                         {substation.region}

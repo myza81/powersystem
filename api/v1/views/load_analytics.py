@@ -59,8 +59,8 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         linked_loads = snapshot.loads.filter(bus__substation__isnull=False)
         unlinked_loads = snapshot.loads.filter(bus__substation__isnull=True)
         
-        # Calculate overall grid totals (including unlinked)
-        overall_totals = all_loads.aggregate(
+        # Calculate internal grid totals (substation-linked loads only)
+        overall_totals = linked_loads.aggregate(
             total_pload_mw=Sum('p_mw'),
             total_qload_mvar=Sum('q_mvar'),
             load_count=Count('id')

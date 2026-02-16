@@ -200,18 +200,18 @@ const LoadDashboard = ({ substations = [] }) => {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
                             <MetricCard
                                 icon={<Zap size={24} />}
-                                label="Total System Demand"
+                                label="Total Internal Demand"
                                 value={`${gridData.total_pload_mw.toFixed(1)} MW`}
-                                subValue="Real-time Active Load"
+                                subValue="Internal Active Load"
                                 color="#00e5ff"
                             //progress={75} // Simulated usage
                             //trend="+2.3% vs yesterday"
                             />
                             <MetricCard
                                 icon={<TrendingUp size={24} />}
-                                label="Total Reactive Power"
+                                label="Total Internal Reactive"
                                 value={`${gridData.total_qload_mvar.toFixed(1)} MVAr`}
-                                subValue="System Reactive Load"
+                                subValue="Internal Reactive Load"
                                 color="#ff9500"
                             />
                             <MetricCard
