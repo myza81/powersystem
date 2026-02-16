@@ -149,37 +149,44 @@ class GeocodingService:
     def reverse_geocode(lat, lng):
         """
         Reverse Geocoding to get State name.
+        Priority:
+        1. OpenStreetMap (Nominatim)
+        2. Google Maps Platform (if key available)
+        
         Returns: state_name or None
         """
-        api_key = os.getenv("GOOGLE_MAPS_API_KEY")
+        # 1. OpenStreetMap (Primary)
+        try:
+            url = "https://nominatim.openstreetmap.org/reverse"
+            headers = {"User-Agent": "power-system-grid-defense/1.0"}
+            params = {"lat": lat, "lon": lng, "format": "json", "addressdetails": 1}
+            # Strict timeout to avoid blocking save() too long
+            response = requests.get(url, params=params, headers=headers, timeout=3)
+            if response.status_code == 200:
+                data = response.json()
+                address = data.get("address", {})
+                state = address.get("state") or address.get("state_district")
+                if state:
+                    logger.info(f"OSM Reverse Geocode success: {state}")
+                    return GeocodingService.normalize_state(state)
+        except Exception as e:
+            logger.warning(f"OSM Reverse Geocode failed: {e}")
 
-        # 1. Google Fallback
+        # 2. Google Fallback
+        api_key = os.getenv("GOOGLE_MAPS_API_KEY")
         if api_key:
             try:
                 params = {"latlng": f"{lat},{lng}", "key": api_key}
-                response = requests.get(GeocodingService.GOOGLE_GEOCODE_URL, params=params, timeout=10)
+                response = requests.get(GeocodingService.GOOGLE_GEOCODE_URL, params=params, timeout=3)
                 data = response.json()
                 if data.get("status") == "OK":
                     for result in data["results"]:
                         for component in result["address_components"]:
                             if "administrative_area_level_1" in component["types"]:
                                 state = component["long_name"]
+                                logger.info(f"Google Reverse Geocode success: {state}")
                                 return GeocodingService.normalize_state(state)
             except Exception as e:
                 logger.error(f"Google Reverse Geocode error: {e}")
-
-        # 2. OSM Fallback
-        try:
-            url = "https://nominatim.openstreetmap.org/reverse"
-            headers = {"User-Agent": "power-system-grid-defense/1.0"}
-            params = {"lat": lat, "lon": lng, "format": "json", "addressdetails": 1}
-            time.sleep(1) # Compliance
-            response = requests.get(url, params=params, headers=headers, timeout=10)
-            data = response.json()
-            address = data.get("address", {})
-            state = address.get("state") or address.get("state_district")
-            return GeocodingService.normalize_state(state)
-        except Exception as e:
-            logger.error(f"OSM Reverse Geocode error: {e}")
 
         return None

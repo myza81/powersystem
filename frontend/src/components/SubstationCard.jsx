@@ -8,8 +8,6 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing
         if (file) onSLDUpload(substation.substation_id, file);
     };
 
-
-
     return (
         <motion.div
             layout
@@ -28,9 +26,9 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing
                 minHeight: '160px'
             }}
         >
-            {/* Header: ID + Voltage Badge */}
+            {/* Header: ID + Voltage Badge + Edit Button */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                     <span className="mono" style={{ color: 'var(--accent-cyan)', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.5px' }}>
                         {substation.substation_id}
                     </span>
@@ -38,6 +36,8 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing
                         {substation.name.length > 25 ? `${substation.name.substring(0, 25)}...` : substation.name}
                     </h3>
                 </div>
+
+                {/* Voltage Badge */}
                 <div style={{
                     background: 'rgba(255,255,255,0.1)',
                     padding: '2px 8px',
@@ -75,76 +75,93 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing
                 )}
             </div>
 
-            {/* Footer Row: Metadata Icons */}
+            {/* Footer Row: SLD Status + Edit Button */}
             <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem' }}>
-                {/* SLD Status */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem' }}>
-                    <FileText size={14} color={substation.sld_file ? 'var(--accent-cyan)' : 'gray'} />
-                    <span style={{ color: substation.sld_file ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                        {substation.sld_file ? 'SLD Ready' : 'No SLD'}
-                    </span>
-                </div>
-            </div>
-
-            {/* Hover Actions Overlay */}
-            <motion.div
-                initial={{ opacity: 0 }}
-                whileHover={{ opacity: 1 }}
-                style={{
-                    position: 'absolute',
-                    bottom: 0, left: 0, right: 0,
-                    padding: '0.75rem',
-                    background: 'rgba(15, 23, 42, 0.95)',
-                    backdropFilter: 'blur(4px)',
-                    display: 'flex',
-                    justifyContent: 'space-around',
-                    alignItems: 'center',
-                    borderTop: '1px solid rgba(0,229,255,0.2)'
-                }}
-            >
-                <ActionButton icon={<Edit2 size={16} />} label="Edit" onClick={onEdit} color="white" />
-
-                {/* SLD Actions */}
                 {substation.sld_file ? (
-                    <>
-                        <ActionButton
-                            icon={<FileText size={16} />}
-                            label="View SLD"
-                            onClick={() => onViewSld(substation)}
-                            color="var(--accent-cyan)"
-                        />
-                    </>
+                    <div
+                        onClick={() => onViewSld(substation)}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '0.7rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.color = 'var(--accent-cyan)';
+                            e.currentTarget.style.transform = 'translateX(2px)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.color = 'var(--text-primary)';
+                            e.currentTarget.style.transform = 'translateX(0)';
+                        }}
+                    >
+                        <FileText size={14} color="var(--accent-cyan)" />
+                        <span style={{ color: 'var(--text-primary)', textDecoration: 'underline', textDecorationStyle: 'dotted' }}>
+                            SLD Ready
+                        </span>
+                    </div>
                 ) : (
                     <div>
-                        <input type="file" id={`sld-quick-${substation.substation_id}`} hidden onChange={handleFileChange} accept=".pdf,.dxf,.svg,image/*" />
-                        <label htmlFor={`sld-quick-${substation.substation_id}`} style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
-                            <Upload size={16} /> Upload
+                        <input type="file" id={`sld-upload-${substation.substation_id}`} hidden onChange={handleFileChange} accept=".pdf,.dxf,.svg,image/*" />
+                        <label
+                            htmlFor={`sld-upload-${substation.substation_id}`}
+                            style={{
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.7rem',
+                                color: 'var(--text-secondary)',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.color = 'var(--accent-cyan)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.color = 'var(--text-secondary)';
+                            }}
+                        >
+                            <Upload size={14} />
+                            Upload SLD
                         </label>
                     </div>
                 )}
-            </motion.div>
+
+                {/* Edit Button - Bottom Right */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                    style={{
+                        marginLeft: 'auto',
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        transition: 'all 0.2s',
+                        padding: '4px 8px',
+                        borderRadius: '4px'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.target.style.background = 'rgba(255,255,255,0.05)';
+                        e.target.style.color = 'var(--accent-cyan)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.target.style.background = 'transparent';
+                        e.target.style.color = 'var(--text-secondary)';
+                    }}
+                >
+                    <Edit2 size={14} />
+                    Edit
+                </button>
+            </div>
         </motion.div>
     );
 };
-
-const ActionButton = ({ icon, label, onClick, color, className }) => (
-    <button
-        onClick={(e) => { e.stopPropagation(); onClick(); }}
-        style={{
-            background: 'transparent',
-            border: 'none',
-            color: color,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '2px',
-            fontSize: '0.65rem',
-            cursor: 'pointer'
-        }}
-    >
-        <div className={className}>{icon}</div>
-        <span>{label}</span>
-    </button>
-);
 
 export default SubstationCard;

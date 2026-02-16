@@ -98,12 +98,37 @@ class Substation(models.Model):
                     self.region = region_name
                     break
         
-        # 2. Automated State detection from coordinates
+        # 2. Automated Tiered State Detection
+        # Only detect if coordinates exist and (record is new OR coords changed OR state is missing)
         if self.latitude and self.longitude:
-            from core.utils.geo import get_state_from_coordinates
-            detected_state = get_state_from_coordinates(self.latitude, self.longitude, grid=self.grid)
-            if detected_state:
-                self.state = detected_state
+            should_detect = False
+            if not self.pk:
+                should_detect = True
+            else:
+                try:
+                    old = Substation.objects.get(pk=self.pk)
+                    # Compare as strings to handle Decimal conversion safely
+                    if (str(old.latitude) != str(self.latitude) or 
+                        str(old.longitude) != str(self.longitude) or 
+                        not self.state):
+                        should_detect = True
+                except Substation.DoesNotExist:
+                    should_detect = True
+            
+            if should_detect:
+                from services.geocoding import GeocodingService
+                from core.utils.geo import get_state_from_coordinates
+                
+                # Tier 1 & 2: External APIs (OSM -> Google)
+                # Note: This is request-blocking but capped at 3s timeout per service
+                detected_state = GeocodingService.reverse_geocode(self.latitude, self.longitude)
+                
+                # Tier 3: Local Fallback (Grid Hints + Geometry)
+                if not detected_state:
+                    detected_state = get_state_from_coordinates(self.latitude, self.longitude, grid=self.grid)
+                
+                if detected_state:
+                    self.state = detected_state
         
         # 3. Ensure sld filename consistency
         if self.sld_file:
