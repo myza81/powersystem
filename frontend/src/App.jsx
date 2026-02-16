@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { CheckCircle, AlertCircle, X, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertCircle, X, Loader2, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SubstationForm from './components/SubstationForm';
@@ -12,6 +12,7 @@ import MainLayout from './components/MainLayout';
 import TopologyValidation from './components/TopologyValidation';
 import SubstationCard from './components/SubstationCard';
 import SubstationFilter from './components/SubstationFilter';
+import SubstationMap from './components/SubstationMap';
 
 
 // API Service
@@ -35,6 +36,7 @@ const App = () => {
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState(null);
     const [viewingSld, setViewingSld] = useState(null);
+    const [locatingSubstation, setLocatingSubstation] = useState(null);
 
     // Fetch Substations
     const fetchSubstations = async () => {
@@ -260,6 +262,7 @@ const App = () => {
                                         onProcess={handleProcessSLD}
                                         processing={loading}
                                         onViewSld={setViewingSld}
+                                        onLocate={setLocatingSubstation}
                                     />
                                 ))}
                             </AnimatePresence>
@@ -270,6 +273,95 @@ const App = () => {
                         </div>
                     </>
                 )}
+
+                {/* Substation Location Map Modal */}
+                <AnimatePresence>
+                    {locatingSubstation && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            style={{
+                                position: 'fixed',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: '100%',
+                                background: 'rgba(0,0,0,0.85)',
+                                backdropFilter: 'blur(10px)',
+                                zIndex: 2000,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '2rem'
+                            }}
+                            onClick={() => setLocatingSubstation(null)}
+                        >
+                            <motion.div
+                                initial={{ scale: 0.9, y: 20 }}
+                                animate={{ scale: 1, y: 0 }}
+                                exit={{ scale: 0.9, y: 20 }}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    width: '100%',
+                                    maxWidth: '1000px',
+                                    background: '#0f172a',
+                                    borderRadius: '16px',
+                                    border: '1px solid rgba(0, 229, 255, 0.3)',
+                                    overflow: 'hidden',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
+                                }}
+                            >
+                                <div style={{
+                                    padding: '1.5rem',
+                                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    background: 'rgba(0,0,0,0.2)'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div style={{ padding: '8px', background: 'rgba(0, 229, 255, 0.1)', borderRadius: '8px' }}>
+                                            <MapPin size={20} color="#00e5ff" />
+                                        </div>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>
+                                                {locatingSubstation.name}
+                                            </h3>
+                                            <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                                                {locatingSubstation.substation_id} • {locatingSubstation.state || 'Unknown State'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setLocatingSubstation(null)}
+                                        style={{
+                                            background: 'rgba(255,255,255,0.1)',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            padding: '8px',
+                                            color: '#fff',
+                                            cursor: 'pointer',
+                                            transition: 'background 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.2)'}
+                                        onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <div style={{ padding: '1rem', height: '600px' }}>
+                                    <SubstationMap
+                                        data={[locatingSubstation]}
+                                        focusLocation={locatingSubstation}
+                                    />
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {view === 'create' || view === 'edit' ? (
                     <SubstationForm

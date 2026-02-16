@@ -69,6 +69,11 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload }) => {
                     </select>
                 </div>
 
+                <div style={{ gridColumn: 'span 1' }}>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Commission Date</label>
+                    <input name="commission_date" type="date" className="input-field" value={formData.commission_date || ''} onChange={handleChange} style={{ fontFamily: 'monospace' }} />
+                </div>
+
                 <div style={{ gridColumn: 'span 2' }}>
                     <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Ownership</label>
                     <select name="ownership" className="input-field" value={formData.ownership} onChange={handleChange}>

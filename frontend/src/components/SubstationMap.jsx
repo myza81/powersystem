@@ -115,7 +115,7 @@ const BayBreakdown = ({ bays, transformers, incoming_bays, color = '#333' }) => 
     );
 };
 
-const SubstationMap = ({ data }) => {
+const SubstationMap = ({ data, focusLocation }) => {
     const defaultCenter = [4.2105, 101.9758];
     const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
     const [showSettings, setShowSettings] = useState(false);
@@ -127,6 +127,16 @@ const SubstationMap = ({ data }) => {
     const [selectedResult, setSelectedResult] = useState(null);
     const [mapCenter, setMapCenter] = useState(null);
     const [mapZoom, setMapZoom] = useState(null);
+
+    // Handle external focus requests
+    useEffect(() => {
+        if (focusLocation && focusLocation.latitude && focusLocation.longitude) {
+            setMapCenter([focusLocation.latitude, focusLocation.longitude]);
+            setMapZoom(15);
+            // Auto-select to show tooltip
+            setSelectedResult({ ...focusLocation, type: 'substation' });
+        }
+    }, [focusLocation]);
 
     // Geocoding fallback using Nominatim (OpenStreetMap)
     const geocodeLocation = async (query) => {
@@ -445,7 +455,7 @@ const SubstationMap = ({ data }) => {
                 center={defaultCenter}
                 zoom={7}
                 style={{ height: '100%', width: '100%' }}
-                scrollWheelZoom={false}
+                scrollWheelZoom={true}
             >
                 <LayersControl position="topright">
                     <LayersControl.BaseLayer checked name="OpenStreetMap (Light)">
@@ -500,10 +510,27 @@ const SubstationMap = ({ data }) => {
                             }}
                         >
                             <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent interactive={true}>
-                                <div style={{ textAlign: 'center', minWidth: '150px' }}>
-                                    <h4 style={{ margin: '0 0 4px 0', color: '#00e5ff' }}>
+                                <div style={{ textAlign: 'center', minWidth: '200px', position: 'relative' }}>
+                                    <h4 style={{ margin: '0 0 4px 0', color: '#00e5ff', paddingRight: '20px' }}>
                                         {selectedResult.name || selectedResult.substation_id}
                                     </h4>
+                                    <X
+                                        size={14}
+                                        style={{
+                                            position: 'absolute',
+                                            top: '-2px',
+                                            right: '-2px',
+                                            cursor: 'pointer',
+                                            color: '#666',
+                                            zIndex: 9999
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // Stop event bubbling to map
+                                            setSelectedResult(null);
+                                        }}
+                                        onMouseEnter={(e) => { e.target.style.color = '#fff'; }}
+                                        onMouseLeave={(e) => { e.target.style.color = '#666'; }}
+                                    />
                                     {selectedResult.type === 'substation' && (
                                         <>
                                             <div style={{ fontSize: '0.85rem', marginBottom: '4px' }}>

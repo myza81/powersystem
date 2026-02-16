@@ -18,6 +18,24 @@ class SubstationViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'mnemonic', 'substation_id']
     
+    def perform_create(self, serializer):
+        """
+        Auto-populate substation_id from mnemonic + voltage if not provided/read-only.
+        Example: Mnemonic 'MWTA', Voltage 132 -> ID 'MWTA132'
+        """
+        mnemonic = serializer.validated_data.get('mnemonic')
+        voltage = serializer.validated_data.get('voltage')
+        
+        if mnemonic and voltage:
+             # Construct ID: e.g. MWTA + 132 = MWTA132
+            substation_id = f"{mnemonic}{voltage}"
+            serializer.save(substation_id=substation_id)
+        elif mnemonic:
+            # Fallback if voltage somehow missing
+            serializer.save(substation_id=mnemonic)
+        else:
+            serializer.save()
+    
     @action(detail=True, methods=['get'], url_path='view_sld')
     def view_sld(self, request, pk=None):
         """Serve SLD file for viewing"""

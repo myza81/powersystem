@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Zap, Cpu, Edit2, MapPin, FileText, Upload, Activity, AlertTriangle, Plus } from 'lucide-react';
 
-const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing, onViewSld }) => {
+const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing, onViewSld, onLocate }) => {
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (file) onSLDUpload(substation.substation_id, file);
@@ -29,7 +29,7 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing
             {/* Header: ID + Voltage Badge + Edit Button */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <span className="mono" style={{ color: 'var(--accent-cyan)', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.5px' }}>
+                    <span className="mono" style={{ color: substation.voltage >= 500 ? '#ffffff' : (substation.voltage >= 275 ? '#15d5f6ff' : 'var(--accent-cyan)'), fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.5px' }}>
                         {substation.substation_id}
                     </span>
                     <h3 style={{ fontSize: '1rem', margin: '2px 0', lineHeight: '1.2', fontWeight: 600, color: '#fff' }} title={substation.name}>
@@ -37,24 +37,23 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing
                     </h3>
                 </div>
 
-                {/* Voltage Badge */}
-                <div style={{
-                    background: 'rgba(255,255,255,0.1)',
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    color: '#fff',
-                    whiteSpace: 'nowrap'
-                }}>
-                    {substation.voltage} kV
-                </div>
             </div>
 
             {/* Body: Pills for Region/Grid */}
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {/* Voltage Badge */}
+                <span style={{
+                    fontSize: '0.65rem',
+                    background: substation.voltage >= 500 ? 'rgba(255,255,255,0.1)' : (substation.voltage >= 275 ? 'rgba(0, 191, 255, 0.08)' : 'rgba(74, 222, 128, 0.1)'),
+                    color: substation.voltage >= 500 ? '#ffffff' : (substation.voltage >= 275 ? '#15d5f6ff' : 'var(--accent-cyan)'),
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontWeight: 600
+                }}>
+                    {substation.voltage} kV
+                </span>
                 {substation.region && (
-                    <span style={{ fontSize: '0.65rem', background: 'rgba(0, 229, 255, 0.1)', color: 'var(--accent-cyan)', padding: '2px 6px', borderRadius: '4px' }}>
+                    <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: '4px' }}>
                         {substation.region}
                     </span>
                 )}
@@ -63,9 +62,44 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onProcess, processing
                         {substation.grid}
                     </span>
                 )}
-                {substation.state && (
-                    <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: '4px' }}>
-                        {substation.state}
+                {/* Interactive Location Tag (State) */}
+                {(substation.state || (substation.latitude && substation.longitude)) && (
+                    <span
+                        onClick={(e) => {
+                            if (substation.latitude && substation.longitude && onLocate) {
+                                e.stopPropagation();
+                                onLocate(substation);
+                            }
+                        }}
+                        title={substation.latitude && substation.longitude ? "View on Map" : "No coordinates available"}
+                        style={{
+                            fontSize: '0.65rem',
+                            background: 'rgba(0, 229, 255, 0.1)',
+                            color: 'var(--accent-cyan)',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            cursor: (substation.latitude && substation.longitude) ? 'pointer' : 'default',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            border: (substation.latitude && substation.longitude) ? '1px solid transparent' : 'none',
+                            transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                            if (substation.latitude && substation.longitude) {
+                                e.currentTarget.style.background = 'rgba(0, 229, 255, 0.2)';
+                                e.currentTarget.style.boxShadow = '0 0 8px rgba(0, 229, 255, 0.4)';
+                            }
+                        }}
+                        onMouseLeave={(e) => {
+                            if (substation.latitude && substation.longitude) {
+                                e.currentTarget.style.background = 'rgba(0, 229, 255, 0.1)';
+                                e.currentTarget.style.boxShadow = 'none';
+                            }
+                        }}
+                    >
+                        {substation.latitude && substation.longitude && <MapPin size={10} />}
+                        {substation.state || 'Locate'}
                     </span>
                 )}
                 {substation.ownership && (
