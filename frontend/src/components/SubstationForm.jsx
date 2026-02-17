@@ -39,7 +39,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload }) => {
                 // Filter out read-only and nested fields
                 const {
                     substation_id, sld, sld_file, transformers, incoming_bays,
-                    created_at, updated_at, sync_log, state, region, ...editableData
+                    created_at, updated_at, state, region, ...editableData
                 } = formData;
                 onSave(editableData);
             }} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>

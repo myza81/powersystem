@@ -31,12 +31,37 @@ const App = () => {
     const [filteredSubstations, setFilteredSubstations] = useState([]);
     const [filterCriteria, setFilterCriteria] = useState(DEFAULT_FILTERS);
 
-    const [view, setView] = useState('list'); // list, create, edit
+    // Initialize view from URL or default to 'list'
+    const [view, setView] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('view') || 'list';
+    });
+
     const [selectedSub, setSelectedSub] = useState(null);
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState(null);
     const [viewingSld, setViewingSld] = useState(null);
     const [locatingSubstation, setLocatingSubstation] = useState(null);
+
+    // Sync URL with view state
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('view') !== view) {
+            const newUrl = `${window.location.pathname}?view=${view}`;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+        }
+    }, [view]);
+
+    // Handle browser back/forward buttons
+    useEffect(() => {
+        const handlePopState = () => {
+            const params = new URLSearchParams(window.location.search);
+            const newView = params.get('view') || 'list';
+            setView(newView);
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
 
     // Fetch Substations
     const fetchSubstations = async () => {

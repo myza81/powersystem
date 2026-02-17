@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap, LayersControl } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap, useMapEvents, LayersControl, LayerGroup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import 'leaflet.heat';
@@ -9,8 +9,18 @@ import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api/v1' });
 
+// Helper to handle map clicks
+const MapClickHandler = ({ onMapClick }) => {
+    useMapEvents({
+        click: () => {
+            onMapClick();
+        },
+    });
+    return null;
+};
+
 // Helper component to add the heatmap layer
-const HeatmapLayer = ({ points }) => {
+const HeatmapLayer = ({ points, gradient }) => {
     const map = useMap();
 
     useEffect(() => {
@@ -21,13 +31,13 @@ const HeatmapLayer = ({ points }) => {
             blur: 25,
             maxZoom: 17,
             max: 1.0,
-            gradient: { 0.4: 'blue', 0.65: 'lime', 1: 'red' }
+            gradient: gradient || { 0.4: 'blue', 0.65: 'lime', 1: 'red' }
         }).addTo(map);
 
         return () => {
             map.removeLayer(heat);
         };
-    }, [points, map]);
+    }, [points, map, gradient]);
 
     return null;
 };
@@ -47,7 +57,8 @@ const MapController = ({ center, zoom }) => {
 
 // Default thresholds configuration
 const DEFAULT_THRESHOLDS = [
-    { max: 30, color: '#3b82f6', label: '< 30 MW (Blue)' },
+    { max: 1, color: '#3bf7ea', label: '< 1 MW (Cyan)' },
+    { max: 30, color: '#3b82f6', label: '1-30 MW (Blue)' },
     { max: 50, color: '#22c55e', label: '30-50 MW (Green)' },
     { max: 80, color: '#eab308', label: '50-80 MW (Yellow)' },
     { max: 100, color: '#f97316', label: '80-100 MW (Orange)' },
@@ -119,6 +130,7 @@ const SubstationMap = ({ data, focusLocation }) => {
     const defaultCenter = [4.2105, 101.9758];
     const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
     const [showSettings, setShowSettings] = useState(false);
+
 
     // Search functionality state
     const [searchQuery, setSearchQuery] = useState('');
@@ -208,14 +220,17 @@ const SubstationMap = ({ data, focusLocation }) => {
         return thresholds[thresholds.length - 1].color;
     };
 
-    const maxLoad = Math.max(...data.map(d => d.load_mw || 0), 100);
+    const getLoad = (d) => parseFloat(d.total_pload_mw || d.load_mw) || 0;
+    const maxLoad = Math.max(...data.map(d => getLoad(d)), 100);
+
     const heatPoints = data
-        .filter(d => d.latitude && d.longitude)
-        .map(d => [
-            d.latitude,
-            d.longitude,
-            (d.load_mw || 0) / maxLoad
-        ]);
+        .map(d => {
+            const lat = parseFloat(d.latitude);
+            const lng = parseFloat(d.longitude);
+            if (isNaN(lat) || isNaN(lng)) return null;
+            return [lat, lng, getLoad(d) / maxLoad];
+        })
+        .filter(p => p !== null);
 
     return (
         <div style={{
@@ -336,9 +351,9 @@ const SubstationMap = ({ data, focusLocation }) => {
                                     <div style={{ color: '#fff', fontSize: '0.9rem', fontWeight: 500 }}>
                                         {result.type === 'substation' ? result.name : result.name}
                                     </div>
-                                    {result.type === 'substation' && result.mnemonic && (
+                                    {result.type === 'substation' && result.substation_id && (
                                         <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>
-                                            {result.mnemonic} • {result.state}
+                                            {result.substation_id} • {result.state}
                                         </div>
                                     )}
                                     {result.type === 'location' && (
@@ -395,6 +410,7 @@ const SubstationMap = ({ data, focusLocation }) => {
                         <X size={16} style={{ cursor: 'pointer', color: '#fff' }} onClick={() => setShowSettings(false)} />
                     </div>
 
+                    <h5 style={{ margin: '0 0 8px 0', color: '#00e5ff', fontSize: '0.8rem' }}>Marker Thresholds</h5>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {thresholds.map((t, idx) => (
                             <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#fff' }}>
@@ -476,19 +492,104 @@ const SubstationMap = ({ data, focusLocation }) => {
                             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                         />
                     </LayersControl.BaseLayer>
+
+                    {/* Overlays for Heatmap and Markers */}
+                    <LayersControl.Overlay checked name="Load Heatmap">
+                        <HeatmapLayer points={heatPoints} />
+                    </LayersControl.Overlay>
+
+                    <LayersControl.Overlay checked name="Substation Markers">
+                        <LayerGroup>
+                            {data.map(d => {
+                                if (!d.latitude || !d.longitude) return null;
+                                const rawLoad = d.total_pload_mw || d.load_mw;
+                                const load = parseFloat(rawLoad) || 0;
+                                const color = getColor(load);
+                                // Ensure load is non-negative for sqrt
+                                const radius = Math.max(4, Math.sqrt(Math.max(0, load)) * 0.8);
+                                const lat = parseFloat(d.latitude);
+                                const lng = parseFloat(d.longitude);
+
+                                if (isNaN(lat) || isNaN(lng)) return null;
+
+                                return (
+                                    <React.Fragment key={d.substation_id}>
+                                        <CircleMarker
+                                            center={[lat, lng]}
+                                            radius={radius * 3.5}
+                                            pathOptions={{
+                                                color: color,
+                                                fillColor: color,
+                                                fillOpacity: 0.1,
+                                                stroke: false
+                                            }}
+                                            interactive={false}
+                                        />
+                                        <CircleMarker
+                                            center={[lat, lng]}
+                                            radius={radius * 2}
+                                            pathOptions={{
+                                                color: color,
+                                                fillColor: color,
+                                                fillOpacity: 0.3,
+                                                stroke: false
+                                            }}
+                                            interactive={false}
+                                        />
+                                        <CircleMarker
+                                            center={[lat, lng]}
+                                            radius={radius}
+                                            pathOptions={{
+                                                color: '#fff',
+                                                weight: 1,
+                                                fillColor: color,
+                                                fillOpacity: 0.9
+                                            }}
+                                        >
+                                            <Tooltip direction="top" offset={[0, -10]} opacity={1} interactive={true}>
+                                                <div style={{ textAlign: 'center', minWidth: '150px' }}>
+                                                    <h4 style={{ margin: '0 0 4px 0', color: color }}>
+                                                        {d.name || d.substation_id}
+                                                        <div style={{ fontSize: '0.75rem', color: '#666', fontWeight: 'normal', marginTop: '2px' }}>
+                                                            {d.substation_id}
+                                                        </div>
+                                                    </h4>
+                                                    <div style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
+                                                        Total: <strong>{(d.total_pload_mw || d.load_mw || 0).toFixed(2)} MW</strong>
+                                                    </div>
+
+                                                    <BayBreakdown
+                                                        bays={d.bays}
+                                                        transformers={d.transformers}
+                                                        incoming_bays={d.incoming_bays}
+                                                        color={color}
+                                                    />
+
+                                                    <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '4px' }}>
+                                                        {d.state}
+                                                    </div>
+                                                </div>
+                                            </Tooltip>
+                                        </CircleMarker>
+                                    </React.Fragment>
+                                );
+                            })}
+                        </LayerGroup>
+                    </LayersControl.Overlay>
                 </LayersControl>
 
                 {/* Map Controller for programmatic zoom/pan */}
                 <MapController center={mapCenter} zoom={mapZoom} />
 
-                <HeatmapLayer points={heatPoints} />
+                {/* Click handler to clear selection */}
+                <MapClickHandler onMapClick={() => setSelectedResult(null)} />
 
-                {/* Selected Result Marker (Highlighted) */}
+                {/* Selected Result Marker (Highlighted) - Always visible if selected */}
                 {selectedResult && selectedResult.latitude && selectedResult.longitude && (
                     <React.Fragment>
                         {/* Pulsing outer ring */}
                         <CircleMarker
-                            center={[selectedResult.latitude, selectedResult.longitude]}
+                            center={[parseFloat(selectedResult.latitude), parseFloat(selectedResult.longitude)]}
                             radius={25}
                             pathOptions={{
                                 color: '#00e5ff',
@@ -500,7 +601,7 @@ const SubstationMap = ({ data, focusLocation }) => {
                         />
                         {/* Inner marker */}
                         <CircleMarker
-                            center={[selectedResult.latitude, selectedResult.longitude]}
+                            center={[parseFloat(selectedResult.latitude), parseFloat(selectedResult.longitude)]}
                             radius={10}
                             pathOptions={{
                                 color: '#fff',
@@ -513,6 +614,9 @@ const SubstationMap = ({ data, focusLocation }) => {
                                 <div style={{ textAlign: 'center', minWidth: '200px', position: 'relative' }}>
                                     <h4 style={{ margin: '0 0 4px 0', color: '#00e5ff', paddingRight: '20px' }}>
                                         {selectedResult.name || selectedResult.substation_id}
+                                        <div style={{ fontSize: '0.75rem', color: '#666', fontWeight: 'normal', marginTop: '2px' }}>
+                                            {selectedResult.substation_id}
+                                        </div>
                                     </h4>
                                     <X
                                         size={14}
@@ -525,6 +629,7 @@ const SubstationMap = ({ data, focusLocation }) => {
                                             zIndex: 9999
                                         }}
                                         onClick={(e) => {
+                                            e.preventDefault();
                                             e.stopPropagation(); // Stop event bubbling to map
                                             setSelectedResult(null);
                                         }}
@@ -534,7 +639,7 @@ const SubstationMap = ({ data, focusLocation }) => {
                                     {selectedResult.type === 'substation' && (
                                         <>
                                             <div style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                                                Total: <strong>{selectedResult.total_pload_mw ? selectedResult.total_pload_mw.toFixed(2) : (selectedResult.load_mw ? selectedResult.load_mw.toFixed(2) : '0.00')} MW</strong>
+                                                Total: <strong>{(selectedResult.total_pload_mw || selectedResult.load_mw || 0).toFixed(2)} MW</strong>
                                             </div>
 
                                             <BayBreakdown
@@ -559,70 +664,6 @@ const SubstationMap = ({ data, focusLocation }) => {
                         </CircleMarker>
                     </React.Fragment>
                 )}
-
-
-                {data.map(d => {
-                    if (!d.latitude || !d.longitude) return null;
-                    const color = getColor(d.load_mw);
-                    const radius = Math.max(4, Math.sqrt(d.load_mw || 0) * 0.8);
-
-                    return (
-                        <React.Fragment key={d.substation_id}>
-                            <CircleMarker
-                                center={[d.latitude, d.longitude]}
-                                radius={radius * 3.5}
-                                pathOptions={{
-                                    color: color,
-                                    fillColor: color,
-                                    fillOpacity: 0.1,
-                                    stroke: false
-                                }}
-                                interactive={false}
-                            />
-                            <CircleMarker
-                                center={[d.latitude, d.longitude]}
-                                radius={radius * 2}
-                                pathOptions={{
-                                    color: color,
-                                    fillColor: color,
-                                    fillOpacity: 0.3,
-                                    stroke: false
-                                }}
-                                interactive={false}
-                            />
-                            <CircleMarker
-                                center={[d.latitude, d.longitude]}
-                                radius={radius}
-                                pathOptions={{
-                                    color: '#fff',
-                                    weight: 1,
-                                    fillColor: color,
-                                    fillOpacity: 0.9
-                                }}
-                            >
-                                <Tooltip direction="top" offset={[0, -10]} opacity={1} interactive={true}>
-                                    <div style={{ textAlign: 'center', minWidth: '150px' }}>
-                                        <h4 style={{ margin: '0 0 4px 0', color: color }}>{d.name || d.substation_id}</h4>
-                                        <div style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                                            Total: <strong>{d.load_mw ? d.load_mw.toFixed(2) : '0.00'} MW</strong>
-                                        </div>
-
-                                        <BayBreakdown
-                                            bays={d.bays}
-                                            transformers={d.transformers}
-                                            incoming_bays={d.incoming_bays}
-                                            color={color}
-                                        />
-
-                                        <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '4px' }}>
-                                            {d.state}
-                                        </div>
-                                    </div>
-                                </Tooltip>
-                            </CircleMarker>
-                        </React.Fragment>
-                    );
-                })}
             </MapContainer>
         </div>
     );

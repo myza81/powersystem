@@ -451,17 +451,23 @@ const MetricCard = ({ icon, label, value, subValue, color, trend, progress }) =>
 
 // Spiral Chart Component (Generic)
 const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', colorFunction }) => {
-    const totalLoad = data.reduce((acc, curr) => acc + (curr[valueKey] || 0), 0);
+    // Robust Parsing: Handle potential strings or nulls
+    const parseVal = (v) => {
+        const p = parseFloat(v);
+        return isNaN(p) ? 0 : p;
+    };
+
+    const totalLoad = data.reduce((acc, curr) => acc + parseVal(curr[valueKey]), 0);
     const [hoveredIndex, setHoveredIndex] = useState(null);
 
     // Sort data by value (descending)
-    const sortedData = [...data].sort((a, b) => (b[valueKey] || 0) - (a[valueKey] || 0));
+    const sortedData = [...data].sort((a, b) => parseVal(b[valueKey]) - parseVal(a[valueKey]));
 
     return (
         <div style={{ position: 'relative', width: '100%', maxWidth: '500px', margin: '0 auto', aspectRatio: '500/340', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg viewBox="0 0 500 340" style={{ overflow: 'visible' }}>
                 {sortedData.map((item, idx) => {
-                    const value = item[valueKey] || 0;
+                    const value = parseVal(item[valueKey]);
                     const percent = totalLoad > 0 ? (value / totalLoad) : 0;
                     const label = item[labelKey];
 

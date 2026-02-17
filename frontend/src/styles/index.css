@@ -234,6 +234,7 @@ button {
   position: relative;
   white-space: nowrap;
   overflow: hidden;
+  text-decoration: none;
 }
 
 .nav-item:hover {

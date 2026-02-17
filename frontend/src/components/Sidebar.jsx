@@ -96,10 +96,14 @@ const Sidebar = ({ currentView, onViewChange }) => {
                                 style={{ overflow: 'hidden' }}
                             >
                                 {loadProfileItems.map(item => (
-                                    <div
+                                    <a
                                         key={item.id}
+                                        href={`?view=${item.id}`}
                                         className={`nav-item sub-item ${currentView === item.id ? 'active' : ''}`}
-                                        onClick={() => handleNavigate(item.id)}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            handleNavigate(item.id);
+                                        }}
                                         title={collapsed ? item.label : ''}
                                         style={collapsed ? { padding: '0.75rem 0', justifyContent: 'center' } : {}}
                                     >
@@ -108,7 +112,7 @@ const Sidebar = ({ currentView, onViewChange }) => {
                                         {collapsed && (
                                             <item.icon size={18} />
                                         )}
-                                    </div>
+                                    </a>
                                 ))}
                             </motion.div>
                         )}
@@ -140,10 +144,14 @@ const Sidebar = ({ currentView, onViewChange }) => {
                                 style={{ overflow: 'hidden' }}
                             >
                                 {assetItems.map(item => (
-                                    <div
+                                    <a
                                         key={item.id}
+                                        href={`?view=${item.id}`}
                                         className={`nav-item sub-item ${currentView === item.id ? 'active' : ''}`}
-                                        onClick={() => handleNavigate(item.id)}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            handleNavigate(item.id);
+                                        }}
                                         title={collapsed ? item.label : ''}
                                         style={collapsed ? { padding: '0.75rem 0', justifyContent: 'center' } : {}}
                                     >
@@ -152,7 +160,7 @@ const Sidebar = ({ currentView, onViewChange }) => {
                                         {collapsed && (
                                             <item.icon size={18} />
                                         )}
-                                    </div>
+                                    </a>
                                 ))}
                             </motion.div>
                         )}
@@ -194,15 +202,19 @@ const Sidebar = ({ currentView, onViewChange }) => {
 };
 
 const NavItem = ({ item, isActive, collapsed, onClick }) => (
-    <div
+    <a
+        href={`?view=${item.id}`}
         className={`nav-item ${isActive ? 'active' : ''} ${collapsed ? 'collapsed' : ''}`}
-        onClick={onClick}
+        onClick={(e) => {
+            e.preventDefault();
+            onClick();
+        }}
         title={collapsed ? item.label : ''}
     >
         <item.icon size={20} className="nav-icon" />
         {!collapsed && <span className="nav-label">{item.label}</span>}
         {isActive && !collapsed && <motion.div layoutId="active-indicator" className="active-indicator" />}
-    </div>
+    </a>
 );
 
 export default Sidebar;

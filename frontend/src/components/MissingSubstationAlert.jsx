@@ -103,7 +103,7 @@ const MissingSubstationAlert = () => {
                 </div>
             )}
 
-            <style jsx>{`
+            <style>{`
                 .missing-substation-alert {
                     background: linear-gradient(135deg, #fff5e6 0%, #ffe8cc 100%);
                     border: 2px solid #ff9800;
