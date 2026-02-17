@@ -221,10 +221,13 @@ class ImportServiceV2:
         areas = {a.number: a for a in NetworkArea.objects.filter(snapshot=snapshot)}
         zones = {z.number: z for z in NetworkZone.objects.filter(snapshot=snapshot)}
         owners = {o.number: o for o in NetworkOwner.objects.filter(snapshot=snapshot)}
-        substations = {s.mnemonic: s for s in Substation.objects.all()}
-        
-        # Track unmatched mnemonics for missing substation alerts
-        unmatched_mnemonics = {}  # {mnemonic: [(bus_number, bus_name, voltage), ...]}
+        # Pre-load reference data
+        from collections import defaultdict
+        substations_by_mnemonic = defaultdict(list)
+        for s in Substation.objects.all():
+            substations_by_mnemonic[s.mnemonic].append(s)
+            
+        unmatched_mnemonics = {}  # Track unmatched mnemonics for secondary analysis
         
         buses = []
         for line in lines:
@@ -238,15 +241,27 @@ class ImportServiceV2:
             bus_number = cls._safe_int(parts[0])
             bus_name = parts[1]
             base_kv = cls._safe_float(parts[2])
-            area_num = cls._safe_int(parts[4]) if parts[4] else 1
-            zone_num = cls._safe_int(parts[5]) if parts[5] else 1
-            owner_num = cls._safe_int(parts[6]) if parts[6] else 1
-            voltage_mag = cls._safe_float(parts[7]) if parts[7] else 1.0
-            voltage_angle = cls._safe_float(parts[8]) if parts[8] else 0.0
+            area_num = cls._safe_int(parts[4]) if len(parts) > 4 and parts[4] else 1
+            zone_num = cls._safe_int(parts[5]) if len(parts) > 5 and parts[5] else 1
+            owner_num = cls._safe_int(parts[6]) if len(parts) > 6 and parts[6] else 1
+            voltage_mag = cls._safe_float(parts[7]) if len(parts) > 7 and parts[7] else 1.0
+            voltage_angle = cls._safe_float(parts[8]) if len(parts) > 8 and parts[8] else 0.0
             
-            # Link to substation via mnemonic matching
+            # Link to substation via mnemonic matching + voltage disambiguation
             mnemonic = cls._extract_mnemonic(bus_name)
-            substation = substations.get(mnemonic) if mnemonic else None
+            substation = None
+            if mnemonic in substations_by_mnemonic:
+                potential_subs = substations_by_mnemonic[mnemonic]
+                if len(potential_subs) == 1:
+                    substation = potential_subs[0]
+                else:
+                    # Multi-voltage substation: match by voltage
+                    # Find substation with minimum voltage difference
+                    substation = min(potential_subs, key=lambda s: abs(float(s.voltage) - base_kv))
+                    # Validate that it's a reasonable match (within 5kV)
+                    if abs(float(substation.voltage) - base_kv) > 5.0:
+                        # Fallback for name variants (e.g. BNTS275 matching BNTS 275)
+                        substation = next((s for s in potential_subs if s.substation_id in bus_name), potential_subs[0])
             
             # Track unmatched mnemonics (only for transmission-level buses: 500, 275, 132 kV)
             # Exclude distribution-level buses (33, 22, 11 kV) and already matched buses
@@ -519,6 +534,11 @@ class ImportServiceV2:
         Import Transformer data (2-winding only for now).
         PSS/E transformers span multiple lines. Simplified parsing.
         """
+    @classmethod
+    def _import_transformers(cls, snapshot: NetworkSnapshot, lines: List[str]):
+        """
+        PSS/E transformers span multiple lines (4 for 2-winding, 5 for 3-winding).
+        """
         buses = {b.bus_number: b for b in NetworkBus.objects.filter(snapshot=snapshot)}
         transformers = []
         
@@ -537,46 +557,69 @@ class ImportServiceV2:
             
             from_bus_num = cls._safe_int(parts[0])
             to_bus_num = cls._safe_int(parts[1])
-            k_bus = cls._safe_int(parts[2]) if parts[2] != '0' else 0
+            tertiary_bus_num = cls._safe_int(parts[2]) if parts[2] != '0' else 0
             ckt_id = parts[3]
             
-            # Skip 3-winding transformers (K != 0)
-            if k_bus != 0:
-                i += 4  # Skip 4 lines for 3-winding
-                continue
-            
-            # Line 2: R1-2, X1-2, SBASE1-2
+            # Line 2: Impedances (R, X)
+            r, x = 0.0, 0.0
             if i + 1 < len(lines):
                 line2 = lines[i + 1].strip()
                 parts2 = [p.strip() for p in line2.split(',')]
                 r = cls._safe_float(parts2[0]) if len(parts2) > 0 else 0.0
                 x = cls._safe_float(parts2[1]) if len(parts2) > 1 else 0.0
-            else:
-                r, x = 0.0, 0.0
             
-            # Line 3: WINDV1, NOMV1, ANG1, RATE1-1, ...
-            rate_a = 0.0
+            # Line 3: Winding 1 data
+            windv1, nomv1, rate_a = 1.0, 0.0, 0.0
             if i + 2 < len(lines):
                 line3 = lines[i + 2].strip()
                 parts3 = [p.strip() for p in line3.split(',')]
+                windv1 = cls._safe_float(parts3[0]) if len(parts3) > 0 else 1.0
+                nomv1 = cls._safe_float(parts3[1]) if len(parts3) > 1 else 0.0
                 rate_a = cls._safe_float(parts3[3]) if len(parts3) > 3 else 0.0
             
+            # Line 4: Winding 2 data
+            windv2, nomv2 = 1.0, 0.0
+            if i + 3 < len(lines):
+                line4 = lines[i + 3].strip()
+                parts4 = [p.strip() for p in line4.split(',')]
+                windv2 = cls._safe_float(parts4[0]) if len(parts4) > 0 else 1.0
+                nomv2 = cls._safe_float(parts4[1]) if len(parts4) > 1 else 0.0
+
+            # Line 5: Winding 3 data (Only for 3-winding)
+            windv3, nomv3 = None, None
+            step = 4
+            if tertiary_bus_num != 0:
+                step = 5
+                if i + 4 < len(lines):
+                    line5 = lines[i + 4].strip()
+                    parts5 = [p.strip() for p in line5.split(',')]
+                    windv3 = cls._safe_float(parts5[0]) if len(parts5) > 0 else 1.0
+                    nomv3 = cls._safe_float(parts5[1]) if len(parts5) > 1 else 0.0
+
             from_bus = buses.get(from_bus_num)
             to_bus = buses.get(to_bus_num)
+            tertiary_bus = buses.get(tertiary_bus_num) if tertiary_bus_num != 0 else None
             
             if from_bus and to_bus:
                 transformers.append(NetworkTransformer(
                     snapshot=snapshot,
                     from_bus=from_bus,
                     to_bus=to_bus,
+                    tertiary_bus=tertiary_bus,
                     ckt_id=ckt_id,
                     r=r,
                     x=x,
+                    windv1=windv1,
+                    windv2=windv2,
+                    windv3=windv3,
+                    nomv1=nomv1,
+                    nomv2=nomv2,
+                    nomv3=nomv3,
                     rate_a=rate_a,
                     is_active=True
                 ))
             
-            i += 4  # Skip to next transformer (4 lines per 2-winding)
+            i += step
         
         NetworkTransformer.objects.bulk_create(transformers, batch_size=1000)
         logger.info(f"Imported {len(transformers)} transformers")

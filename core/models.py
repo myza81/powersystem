@@ -65,7 +65,6 @@ class Substation(models.Model):
     grid = models.CharField(max_length=10, choices=GRID_CHOICES, null=True, blank=True)
     state = models.CharField(max_length=50, null=True, blank=True)
     region = models.CharField(max_length=20, null=True, blank=True)
-    sync_log = models.TextField(null=True, blank=True)
     commission_date = models.DateField(null=True, blank=True)
 
     # Documents
@@ -302,11 +301,16 @@ class NetworkTransformer(models.Model):
     """
     2-Winding or 3-Winding Transformer.
     Note: 3-winding transformers in PSS/E are often 3x 2-winding records or star point buses.
-    This model handles the 2-winding record format primarily.
+    This model handles both the 2-winding and 3-winding record formats.
     """
     snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='transformers')
     from_bus = models.ForeignKey(NetworkBus, on_delete=models.CASCADE, related_name='transformers_from')
     to_bus = models.ForeignKey(NetworkBus, on_delete=models.CASCADE, related_name='transformers_to')
+    tertiary_bus = models.ForeignKey(
+        NetworkBus, on_delete=models.CASCADE, 
+        related_name='transformers_tertiary', null=True, blank=True
+    )
+    
     ckt_id = models.CharField(max_length=2, default='1')
     
     # Parameters
@@ -314,10 +318,22 @@ class NetworkTransformer(models.Model):
     x = models.FloatField()
     primary_winding = models.IntegerField(default=1) # 1=from, 2=to
     
+    # Winding Information (PSS/E Reference)
+    windv1 = models.FloatField(default=1.0, help_text="Winding 1 ratio/voltage")
+    windv2 = models.FloatField(default=1.0, help_text="Winding 2 ratio/voltage")
+    windv3 = models.FloatField(null=True, blank=True, help_text="Winding 3 ratio/voltage")
+    
+    nomv1 = models.FloatField(default=0.0, help_text="Winding 1 nominal voltage (kV)")
+    nomv2 = models.FloatField(default=0.0, help_text="Winding 2 nominal voltage (kV)")
+    nomv3 = models.FloatField(null=True, blank=True, help_text="Winding 3 nominal voltage (kV)")
+
     # Ratings
     rate_a = models.FloatField(default=0.0)
     
     is_active = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['snapshot', 'from_bus', 'to_bus'])]
 
 class NetworkLoad(models.Model):
     """

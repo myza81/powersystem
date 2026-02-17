@@ -3,16 +3,21 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.http import HttpResponse
 from core.models import Substation
-from api.v1.serializers.substation import SubstationSerializer
+from api.v1.serializers.substation import SubstationSerializer, SubstationDetailSerializer
 import os
 
 class SubstationViewSet(viewsets.ModelViewSet):
     """
-    V2: Simplified Substation ViewSet (Master Data only).
-    V1 functionality (transformers, incoming bays) removed.
+    V2: Substation ViewSet.
+    Uses DetailSerializer for single-item lookups to provide equipment breakdown.
     """
     queryset = Substation.objects.all()
     serializer_class = SubstationSerializer
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return SubstationDetailSerializer
+        return SubstationSerializer
     authentication_classes = []
     permission_classes = [permissions.AllowAny]
     filter_backends = [filters.SearchFilter]
