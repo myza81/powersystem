@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { Network, Zap, AlertTriangle, Activity, Search, MapPin, Layers, ArrowRight } from 'lucide-react';
+import { Network, Zap, AlertTriangle, Activity, Search, MapPin, Layers, ArrowRight, AlertCircle, Trash2, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import '../styles/IslandDetection.css';
 
@@ -11,10 +11,12 @@ const IslandDetection = ({ snapshotId }) => {
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedIsland, setExpandedIsland] = useState(null);
+    const [missingData, setMissingData] = useState(null);
 
     // Deletion State
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleteType, setDeleteType] = useState('island'); // 'island' or 'missing_bus'
     const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
@@ -27,17 +29,22 @@ const IslandDetection = ({ snapshotId }) => {
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get(`/api/v1/topology/islands/?snapshot_id=${snapshotId}`);
-            setData(response.data);
+            const [topologyRes, missingRes] = await Promise.all([
+                axios.get(`/api/v1/topology/islands/?snapshot_id=${snapshotId}`),
+                axios.get(`/api/v1/load-analytics/missing-substations/?snapshot_id=${snapshotId}`)
+            ]);
+            setData(topologyRes.data);
+            setMissingData(missingRes.data);
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to fetch island analysis');
+            setError(err.response?.data?.error || 'Failed to fetch analysis data');
         } finally {
             setLoading(false);
         }
     };
 
-    const confirmDelete = (island) => {
-        setDeleteTarget(island);
+    const confirmDelete = (target, type = 'island') => {
+        setDeleteTarget(target);
+        setDeleteType(type);
         setShowDeleteModal(true);
     };
 
@@ -45,15 +52,20 @@ const IslandDetection = ({ snapshotId }) => {
         if (!deleteTarget) return;
         setIsDeleting(true);
         try {
+            // Determine API payload based on type
+            const busIds = deleteType === 'island'
+                ? deleteTarget.bus_ids
+                : (Array.isArray(deleteTarget) ? deleteTarget : [deleteTarget.id]); // Handle group or single bus
+
             await axios.post('/api/v1/topology/cleanup/', {
                 snapshot_id: snapshotId,
-                bus_ids: deleteTarget.bus_ids
+                bus_ids: busIds
             });
             setShowDeleteModal(false);
             setDeleteTarget(null);
-            fetchAnalysis(); // Refresh data
+            fetchAnalysis(); // Refresh all data
         } catch (err) {
-            alert('Failed to delete island: ' + (err.response?.data?.error || err.message));
+            alert('Failed to delete: ' + (err.response?.data?.error || err.message));
         } finally {
             setIsDeleting(false);
         }
@@ -164,6 +176,14 @@ const IslandDetection = ({ snapshotId }) => {
                 </div>
             )}
 
+            {/* Missing Substation Alert Section */}
+            {missingData && missingData.has_missing && (
+                <MissingDataSection
+                    data={missingData}
+                    onDelete={(target) => confirmDelete(target, 'missing_bus')}
+                />
+            )}
+
             {/* Main Grid Layout */}
             <div className="islands-container custom-scrollbar">
                 <div className="islands-grid">
@@ -174,7 +194,7 @@ const IslandDetection = ({ snapshotId }) => {
                                 island={island}
                                 isExpanded={expandedIsland === island.id}
                                 onToggle={() => setExpandedIsland(expandedIsland === island.id ? null : island.id)}
-                                onDelete={confirmDelete}
+                                onDelete={() => confirmDelete(island, 'island')}
                             />
                         ))}
                     </AnimatePresence>
@@ -190,13 +210,224 @@ const IslandDetection = ({ snapshotId }) => {
             {/* Delete Modal */}
             {showDeleteModal && (
                 <DeleteConfirmationModal
-                    island={deleteTarget}
+                    target={deleteTarget}
+                    type={deleteType}
                     onConfirm={executeDelete}
                     onCancel={() => setShowDeleteModal(false)}
                     processing={isDeleting}
                 />
             )}
         </div>
+    );
+};
+
+// ... existing StatCard and IslandCard ...
+
+// New Missing Data Section Component (Premium Design)
+const MissingDataSection = ({ data, onDelete }) => {
+    const [isExpanded, setIsExpanded] = useState(true);
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+                background: 'rgba(20, 20, 25, 0.6)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(249, 115, 22, 0.3)',
+                borderRadius: '16px',
+                marginBottom: '2rem',
+                overflow: 'hidden',
+                boxShadow: '0 8px 32px rgba(249, 115, 22, 0.1)'
+            }}
+        >
+            <div
+                onClick={() => setIsExpanded(!isExpanded)}
+                style={{
+                    padding: '1.25rem 1.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    background: 'linear-gradient(90deg, rgba(249, 115, 22, 0.1) 0%, transparent 100%)',
+                    borderBottom: isExpanded ? '1px solid rgba(249, 115, 22, 0.2)' : 'none',
+                    transition: 'all 0.3s ease'
+                }}
+            >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{
+                        background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                        padding: '10px',
+                        borderRadius: '12px',
+                        color: 'white',
+                        boxShadow: '0 4px 12px rgba(249, 115, 22, 0.4)'
+                    }}>
+                        <AlertTriangle size={24} strokeWidth={2.5} />
+                    </div>
+                    <div>
+                        <h3 style={{
+                            margin: 0,
+                            fontSize: '1.1rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.025em',
+                            color: '#ffedd5',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                        }}>
+                            DATA INTEGRITY ALERT
+                            <span style={{
+                                fontSize: '0.7rem',
+                                padding: '2px 8px',
+                                borderRadius: '12px',
+                                background: 'rgba(249, 115, 22, 0.2)',
+                                color: '#fb923c',
+                                border: '1px solid rgba(249, 115, 22, 0.3)'
+                            }}>
+                                ACTION REQUIRED
+                            </span>
+                        </h3>
+                        <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: '#fed7aa', opacity: 0.8 }}>
+                            Found <strong>{data.missing_count} unmapped bus groups</strong> that are not linked to any substation master data.
+                        </p>
+                    </div>
+                </div>
+
+                <motion.div
+                    animate={{ rotate: isExpanded ? 180 : 0 }}
+                    transition={{ duration: 0.3 }}
+                    style={{ color: '#fb923c' }}
+                >
+                    <ChevronDown size={24} />
+                </motion.div>
+            </div>
+
+            <AnimatePresence>
+                {isExpanded && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        style={{ overflow: 'hidden' }}
+                    >
+                        <div style={{ padding: '1.5rem', background: 'rgba(0,0,0,0.2)' }}>
+                            <div className="missing-list" style={{
+                                display: 'grid',
+                                gap: '1rem',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))'
+                            }}>
+                                {data.missing_mnemonics.map((group, idx) => (
+                                    <motion.div
+                                        key={idx}
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: idx * 0.05 }}
+                                        style={{
+                                            background: 'rgba(20, 20, 25, 0.8)',
+                                            borderRadius: '12px',
+                                            border: '1px solid rgba(255,255,255,0.05)',
+                                            padding: '1.25rem',
+                                            position: 'relative',
+                                            overflow: 'hidden',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            justifyContent: 'space-between'
+                                        }}
+                                        className="group-card-hover"
+                                    >
+                                        <div style={{
+                                            position: 'absolute', top: 0, left: 0, width: '4px', height: '100%',
+                                            background: '#f97316', opacity: 0.8
+                                        }} />
+
+                                        <div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'flex-start' }}>
+                                                <div>
+                                                    <span style={{
+                                                        color: '#fdba74', fontWeight: 700, fontFamily: 'monospace',
+                                                        fontSize: '1.1rem', letterSpacing: '0.05em'
+                                                    }}>
+                                                        {group.mnemonic}
+                                                    </span>
+                                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
+                                                        UNKNOWN SOURCE
+                                                    </div>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>
+                                                        {group.bus_count}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', textTransform: 'uppercase' }}>
+                                                        Buses
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div style={{
+                                                display: 'flex', gap: '8px', marginBottom: '1.25rem',
+                                                background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '8px'
+                                            }}>
+                                                <div style={{ flex: 1, textAlign: 'center' }}>
+                                                    <div style={{ fontSize: '0.7rem', color: '#64748b' }}>TOTAL LOAD</div>
+                                                    <div style={{ color: group.total_load_mw > 0 ? '#f97316' : '#94a3b8', fontWeight: 600 }}>
+                                                        {group.total_load_mw.toFixed(1)} MW
+                                                    </div>
+                                                </div>
+                                                <div style={{ width: '1px', background: 'rgba(255,255,255,0.1)' }} />
+                                                <div style={{ flex: 1, textAlign: 'center' }}>
+                                                    <div style={{ fontSize: '0.7rem', color: '#64748b' }}>STATUS</div>
+                                                    <div style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                        <AlertCircle size={10} /> UNMAPPED
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDelete(group.buses.map(b => b.id));
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                background: 'rgba(239, 68, 68, 0.1)',
+                                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                                color: '#f87171',
+                                                borderRadius: '8px',
+                                                padding: '10px',
+                                                fontSize: '0.85rem',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '8px',
+                                                transition: 'all 0.2s'
+                                            }}
+                                            className="delete-group-btn"
+                                        >
+                                            <Trash2 size={14} /> Remove Group Artifacts
+                                        </button>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+            <style>{`
+                .group-card-hover:hover {
+                    background: rgba(30, 30, 35, 0.9) !important;
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+                }
+                .delete-group-btn:hover {
+                    background: #ef4444 !important;
+                    color: white !important;
+                    border-color: #ef4444 !important;
+                }
+            `}</style>
+        </motion.div>
     );
 };
 
@@ -358,8 +589,12 @@ const IslandCard = ({ island, isExpanded, onToggle, onDelete }) => {
 };
 
 // Confirmation Modal
-const DeleteConfirmationModal = ({ island, onConfirm, onCancel, processing }) => {
-    if (!island) return null;
+const DeleteConfirmationModal = ({ target, type, onConfirm, onCancel, processing }) => {
+    if (!target) return null;
+
+    const isIsland = type === 'island';
+    const title = isIsland ? `Island Cluster #${target.id}` : 'Selected Bus Group';
+    const count = isIsland ? target.bus_count : (Array.isArray(target) ? target.length : 1);
 
     return (
         <div style={{
@@ -373,11 +608,11 @@ const DeleteConfirmationModal = ({ island, onConfirm, onCancel, processing }) =>
                     <AlertTriangle /> CONFIRM DELETION
                 </h3>
                 <p style={{ marginTop: '1rem', color: '#cbd5e1' }}>
-                    Are you sure you want to delete <strong>Island Cluster #{island.id}</strong>?
+                    Are you sure you want to delete <strong>{title}</strong>?
                 </p>
                 <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '0.5rem', marginTop: '1rem' }}>
                     <p style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
-                        This will permanently remove <strong>{island.bus_count} buses</strong> and all connected lines from the snapshot database.
+                        This will permanently remove <strong>{count} buses</strong> and all connected lines from the snapshot database.
                     </p>
                 </div>
 

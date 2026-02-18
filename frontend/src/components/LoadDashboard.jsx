@@ -5,7 +5,6 @@ import axios from 'axios';
 import SldViewer from './SldViewer';
 import BayIdEditor from './BayIdEditor';
 import SubstationMap from './SubstationMap';
-import MissingSubstationAlert from './MissingSubstationAlert';
 import { useRealtimeTelemetry } from '../hooks/useRealtimeTelemetry';
 
 const api = axios.create({ baseURL: '/api/v1' });
@@ -356,19 +355,18 @@ const LoadDashboard = ({ substations = [] }) => {
                 )}
             </AnimatePresence>
 
-            {/* Missing Substation Alert */}
-            <MissingSubstationAlert onRefresh={() => {
-                // Trigger re-fetch of grid data
-                const fetchData = async () => {
-                    try {
-                        const gridRes = await api.get('/load-analytics/aggregate/?level=grid');
-                        setGridData(gridRes.data);
-                    } catch (err) {
-                        console.error('Failed to refresh grid data:', err);
-                    }
-                };
-                fetchData();
-            }} />
+            {/* Bay ID Editor Overlay */}
+            <AnimatePresence>
+                {showBayEditor && (
+                    <BayIdEditor
+                        substation={null}
+                        onClose={() => setShowBayEditor(false)}
+                        onSuccess={() => {
+                            setShowBayEditor(false);
+                        }}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 };

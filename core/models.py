@@ -89,6 +89,8 @@ class Substation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
+        if kwargs.get("raw"):
+            return super().save(*args, **kwargs)
         # 1. Automated Region derivation from grid
         region_map = {
             'North': ['KEDP', 'PPNG', 'PERK'],
@@ -164,6 +166,16 @@ class NetworkSnapshot(models.Model):
     name = models.CharField(max_length=100, help_text="e.g. 'Feb 2026 Forecast'")
     description = models.TextField(blank=True, null=True)
     timestamp = models.DateTimeField(auto_now_add=True)
+    
+    # Ownership
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='snapshots',
+        help_text="User who uploaded this snapshot"
+    )
     
     # System parameters from Case Identification
     base_mva = models.FloatField(default=100.0)
@@ -250,6 +262,9 @@ class NetworkBus(models.Model):
     bus_number = models.IntegerField(db_index=True)
     bus_name = models.CharField(max_length=20)
     base_kv = models.FloatField(db_index=True)
+    
+    # Classification
+    bus_type = models.IntegerField(default=1, help_text="PSS/E IDE Code (1=Load, 2=Gen, 3=Swing, 4=Isolated)")
     
     # Metadata (PSS/E Source)
     psse_area = models.ForeignKey(NetworkArea, on_delete=models.SET_NULL, null=True, blank=True)

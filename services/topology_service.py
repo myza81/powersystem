@@ -28,7 +28,8 @@ class TopologyService:
         
         # 1. Load Buses
         # We need all buses to map IDs and check basic properties
-        buses_qs = NetworkBus.objects.filter(snapshot=self.snapshot)
+        # Exclude Isolated Buses (Type 4) from Topology Analysis
+        buses_qs = NetworkBus.objects.filter(snapshot=self.snapshot).exclude(bus_type=4)
         for bus in buses_qs:
             self.buses[bus.id] = bus
             # Identify potential sources (Swing Bus or Gen Bus)
@@ -112,27 +113,37 @@ class TopologyService:
     def analyze_islands(self) -> List[Dict[str, Any]]:
         """
         Returns detailed analysis of islands.
-        Classification: 'Energized' (contains Gen) vs 'Dead'.
+        Classification: 'Energized' (contains Gen) vs 'De-energized' (Load Risk) vs 'Floating' (No Load/Gen).
         """
         islands = self.find_islands()
         results = []
+        
+        # Pre-fetch loads
+        from core.models import NetworkLoad
+        from django.db.models import Sum
+        
+        # Map bus_id -> total active load MW
+        # This is slightly inefficient for massive grids but robust
+        # TODO: Optimize with a single aggregate query grouping by bus
+        load_map = defaultdict(float)
+        loads = NetworkLoad.objects.filter(snapshot=self.snapshot, in_service=True).values('bus_id', 'p_mw')
+        for load in loads:
+            load_map[load['bus_id']] += load['p_mw']
 
         for i, island_nodes in enumerate(islands):
             # Check for generation
             has_gen = not self.energized_sources.isdisjoint(island_nodes)
             
             # Calculate total load
-            # Note: This requires pre-fetching loads or querying. 
-            # For efficiency, we'd batch fetch, but for now simple query:
-            # Check core.models NetworkLoad. But doing it efficiently:
-            # We can aggregate per island.
+            total_load_mw = sum(load_map[bid] for bid in island_nodes)
             
             # Classify
-            status = 'Energized' if has_gen else 'De-energized'
-            
-            # Simple heuristic for Main Grid: Largest Energized Island?
-            # Or assume the island with the Swing Bus?
-            # For now, just Energized/De-energized.
+            if has_gen:
+                status = 'Energized'
+            elif total_load_mw > 0.001: # Threshold for meaningful load
+                status = 'De-energized' # Risk Area
+            else:
+                status = 'Floating' # Noise/Spare
             
             # Identify Substations
             bus_objects = NetworkBus.objects.filter(id__in=island_nodes).select_related('substation')
@@ -164,6 +175,7 @@ class TopologyService:
                 'id': i + 1,
                 'bus_count': len(island_nodes),
                 'status': status,
+                'total_load_mw': total_load_mw,
                 'bus_ids': list(island_nodes),
                 'substations': sorted_subs,
                 'substation_count': len(sorted_subs),
@@ -178,6 +190,15 @@ class TopologyService:
                 main_grid = max(energized, key=lambda x: x['bus_count'])
                 main_grid['status'] = 'Main Grid'
 
+        # Filter out Floating islands from result to reduce noise?
+        # User wants "999 Risk Areas" fixed.
+        # If we return them as "Floating", frontend might still count them?
+        # Safe bet: Return them but let frontend handle? 
+        # Actually, let's exclude "Floating" from the main list unless requested?
+        # No, for debugging it's useful. Reclassifying should be enough if frontend looks for "De-energized".
+        # However, to be absolutely sure the count drops, I will filter them out of the return list if they are Floating AND small?
+        # Let's just return them. The status change is the semantic fix.
+        
         return results
 
     def delete_buses(self, bus_ids: List[int]) -> int:

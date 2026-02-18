@@ -29,14 +29,18 @@ class TopologyViewSet(viewsets.ViewSet):
         Query param: snapshot_id (required)
         """
         snapshot_id = request.query_params.get('snapshot_id')
-        if not snapshot_id:
-            return Response(
-                {"error": "snapshot_id is required"}, 
-                status=status.HTTP_400_BAD_REQUEST
+        
+        # Validate snapshot access
+        snapshot = self._get_snapshot(request, snapshot_id)
+        if not snapshot:
+             return Response(
+                {"error": "Snapshot not found or access denied"}, 
+                status=status.HTTP_404_NOT_FOUND
             )
             
         try:
-            result = IslandDetectionService.analyze_snapshot(snapshot_id)
+            # Pass validated snapshot ID to service
+            result = IslandDetectionService.analyze_snapshot(snapshot.id)
             if 'error' in result:
                 return Response(result, status=status.HTTP_404_NOT_FOUND)
             return Response(result)
@@ -63,7 +67,14 @@ class TopologyViewSet(viewsets.ViewSet):
             )
             
         try:
-            snapshot = NetworkSnapshot.objects.get(id=snapshot_id)
+            # Validate snapshot access
+            snapshot = self._get_snapshot(request, snapshot_id)
+            if not snapshot:
+                 return Response(
+                    {"error": "Snapshot not found or access denied"}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
             service = TopologyService(snapshot)
             count = service.delete_buses(bus_ids)
             
@@ -71,8 +82,22 @@ class TopologyViewSet(viewsets.ViewSet):
                 "message": f"Successfully deleted {count} components",
                 "deleted_count": count
             })
-        except NetworkSnapshot.DoesNotExist:
-            return Response({"error": "Snapshot not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.exception("Cleanup failed")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _get_snapshot(self, request, snapshot_id=None):
+        """Helper to get snapshot with user isolation"""
+        from django.db.models import Q
+        
+        # Base query: Created by user OR Public (null)
+        if request.user.is_authenticated:
+            qs = NetworkSnapshot.objects.filter(
+                Q(created_by=request.user) | Q(created_by__isnull=True)
+            )
+        else:
+            qs = NetworkSnapshot.objects.filter(created_by__isnull=True)
+            
+        if snapshot_id:
+            return qs.filter(id=snapshot_id).first()
+        return qs.order_by('-timestamp').first()

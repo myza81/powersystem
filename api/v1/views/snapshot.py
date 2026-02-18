@@ -14,9 +14,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SnapshotViewSet(viewsets.ModelViewSet):
-    queryset = NetworkSnapshot.objects.all()
     serializer_class = SnapshotSerializer
     parser_classes = (parsers.MultiPartParser, parsers.FormParser)
+
+    def get_queryset(self):
+        if self.request.user.is_authenticated:
+            # Users can see their own snapshots AND public/legacy ones (NULL owner)
+            return NetworkSnapshot.objects.filter(
+                models.Q(created_by=self.request.user) | 
+                models.Q(created_by__isnull=True)
+            )
+        # Unauthenticated users see only public/legacy snapshots (or none, depending on policy)
+        return NetworkSnapshot.objects.filter(created_by__isnull=True)
 
     @action(detail=False, methods=['post'])
     def upload(self, request):
@@ -47,7 +56,8 @@ class SnapshotViewSet(viewsets.ModelViewSet):
 
         try:
             # Run import service
-            snapshot = ImportServiceV2.import_raw_file(full_path, name, description)
+            user = request.user if request.user.is_authenticated else None
+            snapshot = ImportServiceV2.import_raw_file(full_path, name, description, user=user)
             
             # Link the file to the snapshot
             # We need to re-open the file to save it to the model field, or just move it?

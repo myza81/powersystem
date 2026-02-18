@@ -42,17 +42,11 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         
         snapshot_id = request.query_params.get('snapshot_id')
         
-        # Get snapshot
-        if snapshot_id:
-            try:
-                snapshot = NetworkSnapshot.objects.get(id=snapshot_id)
-            except NetworkSnapshot.DoesNotExist:
-                return Response({'error': 'Snapshot not found'}, status=404)
-        else:
-            snapshot = NetworkSnapshot.objects.order_by('-timestamp').first()
+        # Get snapshot with user isolation
+        snapshot = self._get_snapshot(request, snapshot_id)
         
         if not snapshot:
-            return Response({'error': 'No snapshots found'}, status=404)
+            return Response({'error': 'No accessible snapshots found'}, status=404)
         
         # Get all loads and linked loads
         all_loads = snapshot.loads.all()
@@ -234,24 +228,18 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         
         snapshot_id = request.query_params.get('snapshot_id')
         
-        # Get snapshot
-        if snapshot_id:
-            try:
-                snapshot = NetworkSnapshot.objects.get(id=snapshot_id)
-            except NetworkSnapshot.DoesNotExist:
-                return Response({'error': 'Snapshot not found'}, status=404)
-        else:
-            snapshot = NetworkSnapshot.objects.order_by('-timestamp').first()
+        # Get snapshot with user isolation
+        snapshot = self._get_snapshot(request, snapshot_id)
         
         if not snapshot:
-            return Response({'error': 'No snapshots found'}, status=404)
+            return Response({'error': 'No accessible snapshots found'}, status=404)
         
         # Query Live Data (Transmission Level unmapped buses)
         # We focus on > 33kV to avoid cluttering with distribution feeders if any exist
         unmapped_buses = NetworkBus.objects.filter(
             snapshot=snapshot,
             substation__isnull=True,
-            base_kv__gte=132.0 
+            base_kv__gt=33
         ).prefetch_related('loads', 'branches_from', 'branches_to', 'generators')
         
         # Group by Mnemonic (Extracted from Name)
@@ -263,7 +251,12 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         for bus in unmapped_buses:
             # Extract Mnemonic
             match = re.search(r'([A-Z]+)', bus.bus_name.strip())
-            mnemonic = match.group(1) if match else "UNKNOWN"
+            # ... (rest of logic is fine, just need to ensure indentation is correct)
+            if match:
+                mnemonic = match.group(1)
+            else:
+                mnemonic = bus.bus_name.strip()[:4].upper()
+            
             if re.search(r'(FIC|TEMP|TMP|FICT)', bus.bus_name, re.IGNORECASE):
                 continue
             
@@ -304,3 +297,23 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
             'missing_count': len(missing_mnemonics),
             'missing_mnemonics': missing_mnemonics
         })
+
+    def _get_snapshot(self, request, snapshot_id=None):
+        """Helper to get snapshot with user isolation"""
+        from core.models import NetworkSnapshot
+        from django.db.models import Q
+        
+        # Base query: Created by user OR Public (null)
+        if request.user.is_authenticated:
+            qs = NetworkSnapshot.objects.filter(
+                Q(created_by=request.user) | Q(created_by__isnull=True)
+            )
+        else:
+            qs = NetworkSnapshot.objects.filter(created_by__isnull=True)
+            
+        if snapshot_id:
+            try:
+                return qs.get(id=snapshot_id)
+            except NetworkSnapshot.DoesNotExist:
+                return None
+        return qs.last()

@@ -37,7 +37,7 @@ class ImportServiceV2:
     """
     
     @classmethod
-    def import_raw_file(cls, file_path: str, snapshot_name: str, description: str = '') -> NetworkSnapshot:
+    def import_raw_file(cls, file_path: str, snapshot_name: str, description: str = '', user=None) -> NetworkSnapshot:
         """
         Import a complete .raw file into a new NetworkSnapshot.
         
@@ -45,6 +45,7 @@ class ImportServiceV2:
             file_path: Path to .raw file
             snapshot_name: Name for the snapshot
             description: Optional description
+            user: User object to assign ownership
             
         Returns:
             Created NetworkSnapshot instance
@@ -79,7 +80,8 @@ class ImportServiceV2:
                 name=snapshot_name,
                 description=description,
                 base_mva=base_mva,
-                frequency=frequency
+                frequency=frequency,
+                created_by=user
             )
             
             logger.info(f"Created snapshot: {snapshot.name} (ID: {snapshot.id})")
@@ -241,6 +243,7 @@ class ImportServiceV2:
             bus_number = cls._safe_int(parts[0])
             bus_name = parts[1]
             base_kv = cls._safe_float(parts[2])
+            ide_code = cls._safe_int(parts[3]) if len(parts) > 3 and parts[3] else 1
             area_num = cls._safe_int(parts[4]) if len(parts) > 4 and parts[4] else 1
             zone_num = cls._safe_int(parts[5]) if len(parts) > 5 and parts[5] else 1
             owner_num = cls._safe_int(parts[6]) if len(parts) > 6 and parts[6] else 1
@@ -277,6 +280,7 @@ class ImportServiceV2:
                 bus_number=bus_number,
                 bus_name=bus_name,
                 base_kv=base_kv,
+                bus_type=ide_code,
                 psse_area=areas.get(area_num),
                 psse_zone=zones.get(zone_num),
                 psse_owner=owners.get(owner_num),
