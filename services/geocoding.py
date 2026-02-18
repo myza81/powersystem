@@ -1,12 +1,12 @@
-import requests
+import requests  # type: ignore
 import time
 import os
 import logging
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore
 
 load_dotenv()
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 class GeocodingError(Exception):
     """Custom exception for geocoding failures."""
@@ -37,7 +37,10 @@ class GeocodingService:
             "Selangor Darul Ehsan": "Selangor",
             "Kedah Darul Aman": "Kedah",
             "Negeri Sembilan Darul Khusus": "Negeri Sembilan",
-            "Perlis Indera Kayangan": "Perlis"
+            "Perlis Indera Kayangan": "Perlis",
+            "Federal Territory of Kuala Lumpur": "Kuala Lumpur",
+            "Wilayah Persekutuan Kuala Lumpur": "Kuala Lumpur",
+            "W.P. Kuala Lumpur": "Kuala Lumpur"
         }
         return mapping.get(state_name, state_name)
 
@@ -184,7 +187,7 @@ class GeocodingService:
                         for component in result["address_components"]:
                             if "administrative_area_level_1" in component["types"]:
                                 state = component["long_name"]
-                                logger.info(f"Google Reverse Geocode success: {state}")
+                                logger.info(f"Google Reverse Geocode success: {state}")  # type: ignore
                                 return GeocodingService.normalize_state(state)
             except Exception as e:
                 logger.error(f"Google Reverse Geocode error: {e}")

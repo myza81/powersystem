@@ -4,7 +4,7 @@ Island Detection API Serializers
 Serializers for island detection and critical bay analysis endpoints
 """
 
-from rest_framework import serializers
+from rest_framework import serializers  # type: ignore
 
 
 class IslandSimulationSerializer(serializers.Serializer):
@@ -40,7 +40,7 @@ class IslandResultSerializer(serializers.Serializer):
     isolated_load_mw = serializers.FloatField()
     isolated_load_mvar = serializers.FloatField()
     is_critical = serializers.BooleanField()
-    load_details = SubstationLoadSerializer(many=True, required=False)
+    load_details = SubstationLoadSerializer(many=True, required=False)  # type: ignore
 
 
 class CriticalBaySerializer(serializers.Serializer):
@@ -66,4 +66,4 @@ class NetworkStatisticsSerializer(serializers.Serializer):
     total_substations = serializers.IntegerField()
     total_connections = serializers.IntegerField()
     avg_connections_per_substation = serializers.FloatField()
-    top_hubs = NetworkHubSerializer(many=True)
+    top_hubs = NetworkHubSerializer(many=True)  # type: ignore

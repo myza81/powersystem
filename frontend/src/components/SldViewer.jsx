@@ -144,19 +144,27 @@ const SldViewer = ({ substation, onClose }) => {
                                         <button onClick={() => resetTransform()} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>Reset</button>
                                     </div>
 
-                                    <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }}>
-                                        {content.type === 'svg' && (
-                                            <div
-                                                dangerouslySetInnerHTML={{ __html: content.content }}
-                                                style={{
-                                                    width: '100%',
-                                                    height: '100%',
-                                                    background: '#1a1a1a',
-                                                    display: 'flex',
-                                                    justifyContent: 'center',
-                                                    alignItems: 'center'
-                                                }}
-                                            />
+                                        <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }}>
+                                            {content.type === 'svg' && (
+                                            content.content ? (
+                                                <div
+                                                    dangerouslySetInnerHTML={{ __html: content.content }}
+                                                    style={{
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        background: '#1a1a1a',
+                                                        display: 'flex',
+                                                        justifyContent: 'center',
+                                                        alignItems: 'center'
+                                                    }}
+                                                />
+                                            ) : (
+                                                <img
+                                                    src={content.url}
+                                                    alt="SLD SVG"
+                                                    style={{ maxWidth: '100%', maxHeight: '100%' }}
+                                                />
+                                            )
                                         )}
                                         {content.type === 'image' && (
                                             <img

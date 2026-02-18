@@ -52,10 +52,9 @@ class OpenAIProvider(LLMProvider):
             
             content = response.choices[0].message.content
             
-            # Log response for debugging
+            # Log only minimal metadata to avoid leaking document-derived content.
             if content:
                 logger.info(f"OpenAI response length: {len(content)} chars")
-                logger.debug(f"First 300 chars: {content[:300]}...")
             else:
                 logger.error("OpenAI returned None/empty content")
                 raise ValueError("OpenAI response is empty")
@@ -76,8 +75,6 @@ class OpenAIProvider(LLMProvider):
             
         except json.JSONDecodeError as e:
             logger.error(f"JSON decode error: {str(e)}")
-            if 'content' in locals():
-                logger.error(f"Failed content (first 500 chars): {content[:500]}")
             raise
         except Exception as e:
             logger.error(f"OpenAI parsing failed: {str(e)}")

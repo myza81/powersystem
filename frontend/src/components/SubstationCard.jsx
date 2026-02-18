@@ -8,6 +8,7 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate }
         if (file) onSLDUpload(substation.substation_id, file);
     };
 
+
     return (
         <motion.div
             layout

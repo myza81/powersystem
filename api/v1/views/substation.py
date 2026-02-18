@@ -1,7 +1,7 @@
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.http import HttpResponse
+from django.conf import settings
 from core.models import Substation
 from api.v1.serializers.substation import SubstationSerializer, SubstationDetailSerializer
 import os
@@ -18,8 +18,12 @@ class SubstationViewSet(viewsets.ModelViewSet):
         if self.action == 'retrieve':
             return SubstationDetailSerializer
         return SubstationSerializer
-    authentication_classes = []
-    permission_classes = [permissions.AllowAny]
+
+    def get_permissions(self):
+        if settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}:
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'mnemonic', 'substation_id']
     
@@ -63,19 +67,19 @@ class SubstationViewSet(viewsets.ModelViewSet):
                 'url': file_url
             })
         elif file_ext == '.svg':
-            # Read SVG content
-            try:
-                with open(file_path, 'r') as f:
-                    svg_content = f.read()
-                return Response({
-                    'type': 'svg',
-                    'content': svg_content
-                })
-            except Exception as e:
-                return Response(
-                    {"error": f"Failed to read SVG file: {str(e)}"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+            # Default: avoid inlining SVG content (XSS risk if frontend injects into DOM).
+            if settings.DEBUG and request.query_params.get('inline') in {'1', 'true', 'yes'}:
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        svg_content = f.read()
+                    return Response({'type': 'svg', 'content': svg_content})
+                except Exception:
+                    return Response(
+                        {"error": "Failed to read SVG file"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    )
+
+            return Response({'type': 'svg', 'url': file_url})
         elif file_ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
             return Response({
                 'type': 'image',
@@ -105,6 +109,12 @@ class SubstationViewSet(viewsets.ModelViewSet):
             )
         
         uploaded_file = request.FILES['sld_file']
+        if uploaded_file.size and uploaded_file.size > getattr(settings, 'MAX_UPLOAD_SIZE_BYTES', 20 * 1024 * 1024):
+            return Response(
+                {"error": "File too large"},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
         file_ext = os.path.splitext(uploaded_file.name)[1].lower()
         
         # Validate file type
@@ -114,6 +124,9 @@ class SubstationViewSet(viewsets.ModelViewSet):
                 {"error": f"File must be PDF, Image, DXF, or SVG. Got: {file_ext}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Drop client-supplied name; only keep validated extension
+        uploaded_file.name = f"sld{file_ext}"
         
         # Save the file
         substation.sld_file = uploaded_file

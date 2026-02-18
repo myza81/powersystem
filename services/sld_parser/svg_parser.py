@@ -6,7 +6,7 @@ Extracts text and geometric path data from SVG XML structure.
 import logging
 import os
 import re
-from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as ET
 from typing import Dict, List, Any, Optional
 from .observation_schema import SLDObservations
 
@@ -90,8 +90,8 @@ class SVGParser:
                 }
             }
             
-        except Exception as e:
-            logger.error(f"SVG parsing failed: {str(e)}")
+        except Exception:
+            logger.exception("SVG parsing failed")
             raise
 
     @classmethod

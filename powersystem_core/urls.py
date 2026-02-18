@@ -18,32 +18,35 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+import os
 from rest_framework.routers import DefaultRouter
 from api.v1.views.substation import SubstationViewSet
 from api.v1.views.load_analytics import LoadAnalyticsViewSet
+from api.v1.views.snapshot import SnapshotViewSet
 # V1 ViewSets disabled for V2:
 # from api.v1.views.load_profile import LoadProfileViewSet
 # from api.v1.views.telemetry import TelemetryViewSet
-# from api.v1.views.network_topology import NetworkTopologyViewSet
-# from api.v1.views.island_detection import IslandDetectionViewSet
 from core.views_dev import DatabaseSyncStatusView, DatabaseExportView, DatabaseImportView
+
+from api.v1.views.topology import TopologyViewSet
 
 router = DefaultRouter()
 router.register(r'substations', SubstationViewSet)
 router.register(r'load-analytics', LoadAnalyticsViewSet, basename='load-analytics')
-# V1 routes disabled for V2:
-# router.register(r'load-profiles', LoadProfileViewSet, basename='load-profile')
-# router.register(r'telemetry', TelemetryViewSet, basename='telemetry')
-# router.register(r'network-topology', NetworkTopologyViewSet, basename='network-topology')
-# router.register(r'island-detection', IslandDetectionViewSet, basename='island-detection')
+router.register(r'snapshots', SnapshotViewSet, basename='snapshot')
+router.register(r'topology', TopologyViewSet, basename='topology')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', include(router.urls)),
-    path('api/v1/dev/sync-status/', DatabaseSyncStatusView.as_view(), name='db-sync-status'),
-    path('api/v1/dev/export/', DatabaseExportView.as_view(), name='db-export'),
-    path('api/v1/dev/import/', DatabaseImportView.as_view(), name='db-import'),
 ]
+
+if settings.DEBUG or os.getenv('DJANGO_ENABLE_DEV_ENDPOINTS', 'False').lower() in {"1", "true", "yes"}:
+    urlpatterns += [
+        path('api/v1/dev/sync-status/', DatabaseSyncStatusView.as_view(), name='db-sync-status'),
+        path('api/v1/dev/export/', DatabaseExportView.as_view(), name='db-export'),
+        path('api/v1/dev/import/', DatabaseImportView.as_view(), name='db-import'),
+    ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

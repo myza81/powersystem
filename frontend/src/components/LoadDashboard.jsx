@@ -357,7 +357,18 @@ const LoadDashboard = ({ substations = [] }) => {
             </AnimatePresence>
 
             {/* Missing Substation Alert */}
-            <MissingSubstationAlert />
+            <MissingSubstationAlert onRefresh={() => {
+                // Trigger re-fetch of grid data
+                const fetchData = async () => {
+                    try {
+                        const gridRes = await api.get('/load-analytics/aggregate/?level=grid');
+                        setGridData(gridRes.data);
+                    } catch (err) {
+                        console.error('Failed to refresh grid data:', err);
+                    }
+                };
+                fetchData();
+            }} />
         </div>
     );
 };

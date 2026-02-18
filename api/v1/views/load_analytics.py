@@ -221,36 +221,17 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         })
 
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], url_path='missing-substations')
     def missing_substations(self, request):
         """
         GET /api/v1/load-analytics/missing-substations/
         
-        Returns unmatched mnemonics (buses that couldn't be linked to substations)
-        for frontend notification alerts.
-        
-        Query params:
-        - snapshot_id: UUID of snapshot (optional, uses latest if not provided)
-        
-        Returns:
-        {
-            "snapshot_id": "uuid",
-            "snapshot_name": "Feb 2026 Test",
-            "has_missing": true,
-            "missing_count": 5,
-            "missing_mnemonics": [
-                {
-                    "mnemonic": "NURG",
-                    "bus_count": 2,
-                    "buses": [
-                        {"bus_number": 1960, "bus_name": "NURG132", "voltage": 132.0},
-                        {"bus_number": 1961, "bus_name": "NURG275", "voltage": 275.0}
-                    ]
-                },
-                ...
-            ]
-        }
+        Returns detached buses (unmapped to substations) with detailed analytics
+        (Load MW, Connectivity) to verify if they are ghost data.
         """
+        from core.models import NetworkBus
+        from django.db.models import Sum, Count, F
+        
         snapshot_id = request.query_params.get('snapshot_id')
         
         # Get snapshot
@@ -265,19 +246,55 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         if not snapshot:
             return Response({'error': 'No snapshots found'}, status=404)
         
-        # Get unmatched mnemonics from snapshot metadata
-        unmatched_data = snapshot.metadata.get('unmatched_mnemonics', {}) if snapshot.metadata else {}
+        # Query Live Data (Transmission Level unmapped buses)
+        # We focus on > 33kV to avoid cluttering with distribution feeders if any exist
+        unmapped_buses = NetworkBus.objects.filter(
+            snapshot=snapshot,
+            substation__isnull=True,
+            base_kv__gte=132.0 
+        ).prefetch_related('loads', 'branches_from', 'branches_to', 'generators')
         
-        # Format for frontend
+        # Group by Mnemonic (Extracted from Name)
+        from collections import defaultdict
+        import re
+        
+        grouped = defaultdict(list)
+        
+        for bus in unmapped_buses:
+            # Extract Mnemonic
+            match = re.search(r'([A-Z]+)', bus.bus_name.strip())
+            mnemonic = match.group(1) if match else "UNKNOWN"
+            if re.search(r'(FIC|TEMP|TMP|FICT)', bus.bus_name, re.IGNORECASE):
+                continue
+            
+            # Calculate Load
+            total_load_mw = sum(l.p_mw for l in bus.loads.all())
+            total_gen_mw = sum(g.p_gen for g in bus.generators.all())
+            
+            # Connectivity
+            branch_count = bus.branches_from.count() + bus.branches_to.count()
+            
+            grouped[mnemonic].append({
+                'id': bus.id,
+                'bus_number': bus.bus_number,
+                'bus_name': bus.bus_name,
+                'voltage': bus.base_kv,
+                'load_mw': round(total_load_mw, 2),
+                'gen_mw': round(total_gen_mw, 2),
+                'branch_count': branch_count,
+                'is_isolated': branch_count == 0
+            })
+            
+        # Format Response
         missing_mnemonics = []
-        for mnemonic, buses_list in unmatched_data.items():
+        for mnemonic, buses in grouped.items():
             missing_mnemonics.append({
                 'mnemonic': mnemonic,
-                'bus_count': len(buses_list),
-                'buses': buses_list
+                'bus_count': len(buses),
+                'total_load_mw': sum(b['load_mw'] for b in buses),
+                'buses': sorted(buses, key=lambda x: x['bus_name'])
             })
-        
-        # Sort by bus count (descending)
+            
         missing_mnemonics.sort(key=lambda x: x['bus_count'], reverse=True)
         
         return Response({

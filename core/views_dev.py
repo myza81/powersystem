@@ -42,8 +42,11 @@ class DatabaseExportView(APIView):
                     "models": models
                 })
         except Exception as e:
-            logger.error(f"Export failed: {str(e)}")
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.exception("Export failed")
+            return Response(
+                {"error": "Export failed"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 class DatabaseImportView(APIView):
     def post(self, request):
@@ -55,5 +58,8 @@ class DatabaseImportView(APIView):
             logger.info("Database imported successfully.")
             return Response({"message": "Database imported successfully."})
         except Exception as e:
-            logger.error(f"Import failed: {str(e)}")
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.exception("Import failed")
+            return Response(
+                {"error": "Import failed"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

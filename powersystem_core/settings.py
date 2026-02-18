@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 # Load environment variables from .env
 load_dotenv()
@@ -37,6 +38,13 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() in {"1", "true", "yes"}
+
+_PUBLIC_API = os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}
+
+if not DEBUG and SECRET_KEY == "django-insecure-change-me":
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set when DJANGO_DEBUG is False"
+    )
 
 ALLOWED_HOSTS = _env_list("ALLOWED_HOSTS", ["localhost", "127.0.0.1"])
 
@@ -63,8 +71,11 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    # 'django.middleware.clickjacking.XFrameOptionsMiddleware', # Disabled for local dev (PDF iframe support)
 ]
+
+if not DEBUG:
+    # Keep clickjacking protection enabled outside local dev.
+    MIDDLEWARE.append('django.middleware.clickjacking.XFrameOptionsMiddleware')
 
 # Allow iframes from same origin (or looser for dev)
 # X_FRAME_OPTIONS = 'SAMEORIGIN'
@@ -148,7 +159,10 @@ CORS_ALLOWED_ORIGINS = _env_list(
     "CORS_ALLOWED_ORIGINS",
     default=["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
 )
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = os.getenv(
+    "CORS_ALLOW_CREDENTIALS",
+    "True" if DEBUG else "False",
+).lower() in {"1", "true", "yes"}
 
 # CSRF Configuration
 CSRF_TRUSTED_ORIGINS = _env_list(
@@ -157,7 +171,31 @@ CSRF_TRUSTED_ORIGINS = _env_list(
 )
 
 REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
     ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny'
+        if (DEBUG or _PUBLIC_API)
+        else 'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('DRF_THROTTLE_ANON', '60/min'),
+        'user': os.getenv('DRF_THROTTLE_USER', '600/min'),
+    },
 }
+
+# Upload limits (defense-in-depth for file endpoints)
+MAX_UPLOAD_SIZE_MB = int(os.getenv('DJANGO_MAX_UPLOAD_SIZE_MB', '20'))
+MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE_BYTES
+FILE_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE_BYTES
+
+if not DEBUG:
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'same-origin'

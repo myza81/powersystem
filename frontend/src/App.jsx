@@ -9,13 +9,12 @@ import ConfigurationEditor from './components/ConfigurationEditor';
 import LoadDashboard from './components/LoadDashboard';
 import DevTools from './components/DevTools';
 import MainLayout from './components/MainLayout';
-import TopologyValidation from './components/TopologyValidation';
+// import TopologyValidation from './components/TopologyValidation';
 import SubstationCard from './components/SubstationCard';
 import SubstationFilter from './components/SubstationFilter';
 import SubstationMap from './components/SubstationMap';
-
-
-// API Service
+import IslandDetection from './components/IslandDetection';
+import SnapshotManager from './components/SnapshotManager';
 const api = axios.create({ baseURL: '/api/v1' });
 
 const DEFAULT_FILTERS = {
@@ -36,6 +35,8 @@ const App = () => {
         const params = new URLSearchParams(window.location.search);
         return params.get('view') || 'list';
     });
+
+    const [selectedSnapshotId, setSelectedSnapshotId] = useState(null);
 
     const [selectedSub, setSelectedSub] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -262,7 +263,8 @@ const App = () => {
                             {view === 'create' && 'New Substation Entry'}
                             {view === 'edit' && 'Edit Substation'}
                             {view === 'config' && 'Configuration Editor'}
-                            {view === 'topology' && 'Network Topology Validation'}
+                            {/* {view === 'topology' && 'Network Topology Validation'} */}
+                            {view === 'snapshots' && 'Network Snapshots'}
                             {view === 'dev-tools' && 'Developer Tools'}
                         </h2>
                     </div>
@@ -413,7 +415,7 @@ const App = () => {
                     <LoadDashboard substations={substations} />
                 )}
 
-                {view === 'topology' && (
+                {/* {view === 'topology' && (
                     <TopologyValidation
                         onEditSubstation={(substationId) => {
                             const sub = substations.find(s => s.substation_id === substationId);
@@ -423,10 +425,23 @@ const App = () => {
                             }
                         }}
                     />
-                )}
+                )} */}
 
                 {view === 'dev-tools' && (
                     <DevTools onBack={() => setView('list')} />
+                )}
+
+                {view === 'snapshots' && (
+                    <SnapshotManager
+                        onAnalyze={(id) => {
+                            setSelectedSnapshotId(id);
+                            setView('topology');
+                        }}
+                    />
+                )}
+
+                {view === 'topology' && (
+                    <IslandDetection snapshotId={selectedSnapshotId} />
                 )}
 
                 {viewingSld && (

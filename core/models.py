@@ -17,7 +17,12 @@ class OverwriteStorage(FileSystemStorage):
     """
     def get_available_name(self, name, max_length=None):
         if self.exists(name):
-            os.remove(os.path.join(self.location, name))
+            # Use Django's path resolution to prevent path traversal.
+            existing_path = self.path(name)
+            try:
+                os.remove(existing_path)
+            except FileNotFoundError:
+                pass
         return name
 
 def substation_sld_path(instance, filename):

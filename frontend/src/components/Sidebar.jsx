@@ -32,7 +32,8 @@ const Sidebar = ({ currentView, onViewChange }) => {
     const assetItems = [
         { id: 'list', label: 'Substation', icon: List },
         { id: 'create', label: 'New Subs Entry', icon: PlusCircle },
-        { id: 'topology', label: 'Network Topology', icon: Network },
+        { id: 'snapshots', label: 'Snapshots', icon: Database },
+        { id: 'topology', label: 'Island Detection', icon: Network },
     ];
 
     const handleNavigate = (view) => {
