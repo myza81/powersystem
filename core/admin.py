@@ -40,24 +40,28 @@ class NetworkBusAdmin(admin.ModelAdmin):
 @admin.register(NetworkBranch)
 class NetworkBranchAdmin(admin.ModelAdmin):
     list_display = ('from_bus', 'to_bus', 'ckt_id', 'r', 'x', 'snapshot')
+    search_fields = ('from_bus__bus_number', 'to_bus__bus_number', 'ckt_id', 'snapshot__name')
     list_filter = ('snapshot',)
     raw_id_fields = ('snapshot', 'from_bus', 'to_bus')
 
 @admin.register(NetworkTransformer)
 class NetworkTransformerAdmin(admin.ModelAdmin):
     list_display = ('from_bus', 'to_bus', 'ckt_id', 'x', 'snapshot')
+    search_fields = ('from_bus__bus_number', 'to_bus__bus_number', 'ckt_id', 'snapshot__name')
     list_filter = ('snapshot',)
     raw_id_fields = ('snapshot', 'from_bus', 'to_bus')
 
 @admin.register(NetworkLoad)
 class NetworkLoadAdmin(admin.ModelAdmin):
     list_display = ('bus', 'load_id', 'p_mw', 'q_mvar', 'snapshot')
+    search_fields = ('bus__bus_number', 'bus__bus_name', 'load_id', 'snapshot__name')
     list_filter = ('snapshot',)
     raw_id_fields = ('snapshot', 'bus')
 
 @admin.register(NetworkGenerator)
 class NetworkGeneratorAdmin(admin.ModelAdmin):
     list_display = ('bus', 'gen_id', 'p_gen', 'q_gen', 'snapshot')
+    search_fields = ('bus__bus_number', 'bus__bus_name', 'gen_id', 'snapshot__name')
     list_filter = ('snapshot',)
     raw_id_fields = ('snapshot', 'bus')
 
@@ -86,12 +90,14 @@ class NetworkOwnerAdmin(admin.ModelAdmin):
 @admin.register(NetworkShunt)
 class NetworkShuntAdmin(admin.ModelAdmin):
     list_display = ('bus', 'shunt_id', 'g_mw', 'b_mvar', 'in_service', 'snapshot')
+    search_fields = ('bus__bus_number', 'bus__bus_name', 'shunt_id', 'snapshot__name')
     list_filter = ('snapshot', 'in_service')
     raw_id_fields = ('snapshot', 'bus')
 
 @admin.register(NetworkSwitchedShunt)
 class NetworkSwitchedShuntAdmin(admin.ModelAdmin):
     list_display = ('bus', 'control_mode', 'b_init', 'snapshot')
+    search_fields = ('bus__bus_number', 'bus__bus_name', 'snapshot__name')
     list_filter = ('snapshot', 'control_mode')
     raw_id_fields = ('snapshot', 'bus')
 
@@ -99,4 +105,4 @@ class NetworkSwitchedShuntAdmin(admin.ModelAdmin):
 class NetworkDCLinkAdmin(admin.ModelAdmin):
     list_display = ('name', 'rectifier_bus_number', 'inverter_bus_number', 'setpoint_mw', 'snapshot')
     list_filter = ('snapshot',)
-    search_fields = ('name',)
+    search_fields = ('name', 'rectifier_bus_number', 'inverter_bus_number')

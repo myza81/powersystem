@@ -316,4 +316,5 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
                 return qs.get(id=snapshot_id)
             except NetworkSnapshot.DoesNotExist:
                 return None
-        return qs.last()
+        active = qs.filter(is_active=True).order_by('-activated_at').first()
+        return active or qs.last()

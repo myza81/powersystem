@@ -183,6 +183,10 @@ class NetworkSnapshot(models.Model):
     
     # File tracking
     source_file = models.FileField(upload_to='snapshots/', null=True, blank=True)
+
+    # Active selection
+    is_active = models.BooleanField(default=False)
+    activated_at = models.DateTimeField(null=True, blank=True)
     
     # Metadata for import warnings, alerts, etc.
     metadata = models.JSONField(default=dict, blank=True, help_text="Import metadata including unmatched mnemonics")

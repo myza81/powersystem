@@ -509,7 +509,12 @@ class ImportServiceV2:
             rate_a = cls._safe_float(parts[6])
             rate_b = cls._safe_float(parts[7])
             rate_c = cls._safe_float(parts[8])
-            status = cls._safe_int(parts[13]) if len(parts) > 13 else 1
+            if len(parts) > 23:
+                status = cls._safe_int(parts[23])
+            elif len(parts) > 13:
+                status = cls._safe_int(parts[13])
+            else:
+                status = 1
             
             from_bus = buses.get(from_bus_num)
             to_bus = buses.get(to_bus_num)
@@ -545,10 +550,11 @@ class ImportServiceV2:
         """
         buses = {b.bus_number: b for b in NetworkBus.objects.filter(snapshot=snapshot)}
         transformers = []
+        cleaned_lines = [line for line in lines if line.strip()]
         
         i = 0
-        while i < len(lines):
-            line = lines[i].strip()
+        while i < len(cleaned_lines):
+            line = cleaned_lines[i].strip()
             if not line:
                 i += 1
                 continue
@@ -566,16 +572,16 @@ class ImportServiceV2:
             
             # Line 2: Impedances (R, X)
             r, x = 0.0, 0.0
-            if i + 1 < len(lines):
-                line2 = lines[i + 1].strip()
+            if i + 1 < len(cleaned_lines):
+                line2 = cleaned_lines[i + 1].strip()
                 parts2 = [p.strip() for p in line2.split(',')]
                 r = cls._safe_float(parts2[0]) if len(parts2) > 0 else 0.0
                 x = cls._safe_float(parts2[1]) if len(parts2) > 1 else 0.0
             
             # Line 3: Winding 1 data
             windv1, nomv1, rate_a = 1.0, 0.0, 0.0
-            if i + 2 < len(lines):
-                line3 = lines[i + 2].strip()
+            if i + 2 < len(cleaned_lines):
+                line3 = cleaned_lines[i + 2].strip()
                 parts3 = [p.strip() for p in line3.split(',')]
                 windv1 = cls._safe_float(parts3[0]) if len(parts3) > 0 else 1.0
                 nomv1 = cls._safe_float(parts3[1]) if len(parts3) > 1 else 0.0
@@ -583,8 +589,8 @@ class ImportServiceV2:
             
             # Line 4: Winding 2 data
             windv2, nomv2 = 1.0, 0.0
-            if i + 3 < len(lines):
-                line4 = lines[i + 3].strip()
+            if i + 3 < len(cleaned_lines):
+                line4 = cleaned_lines[i + 3].strip()
                 parts4 = [p.strip() for p in line4.split(',')]
                 windv2 = cls._safe_float(parts4[0]) if len(parts4) > 0 else 1.0
                 nomv2 = cls._safe_float(parts4[1]) if len(parts4) > 1 else 0.0
@@ -594,8 +600,8 @@ class ImportServiceV2:
             step = 4
             if tertiary_bus_num != 0:
                 step = 5
-                if i + 4 < len(lines):
-                    line5 = lines[i + 4].strip()
+                if i + 4 < len(cleaned_lines):
+                    line5 = cleaned_lines[i + 4].strip()
                     parts5 = [p.strip() for p in line5.split(',')]
                     windv3 = cls._safe_float(parts5[0]) if len(parts5) > 0 else 1.0
                     nomv3 = cls._safe_float(parts5[1]) if len(parts5) > 1 else 0.0

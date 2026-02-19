@@ -86,6 +86,65 @@ class TopologyViewSet(viewsets.ViewSet):
             logger.exception("Cleanup failed")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['post'], url_path='load-shedding-sim')
+    def load_shedding_simulation(self, request):
+        """
+        Simulate load shedding groups.
+        Payload:
+        {
+          "snapshot_id": "uuid",
+          "groups": [
+            {
+              "name": "Group 1",
+              "island_instructions": ["TBRU132 isolate PLGI132 1, PLGI132 2"],
+              "load_instructions": ["BLKG132 isolate load T1, T2"],
+              "include_autotransformers": true
+            }
+          ]
+        }
+        """
+        snapshot_id = request.data.get('snapshot_id')
+        groups = request.data.get('groups', [])
+
+        if not groups:
+            return Response(
+                {"error": "groups required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        snapshot = self._get_snapshot(request, snapshot_id)
+        if not snapshot:
+            return Response(
+                {"error": "Snapshot not found or access denied"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            service = TopologyService(snapshot)
+            results = []
+            for idx, group in enumerate(groups):
+                group_name = group.get("name") or f"Group {idx + 1}"
+                group_spec = {
+                    "island_instructions": group.get("island_instructions", []) or [],
+                    "load_instructions": group.get("load_instructions", []) or [],
+                    "include_autotransformers": bool(group.get("include_autotransformers", True)),
+                }
+                results.append({
+                    "name": group_name,
+                    "result": service.evaluate_shedding_group(group_spec),
+                })
+
+            return Response({
+                "snapshot_id": str(snapshot.id),
+                "groups": results
+            })
+        except Exception:
+            logger.exception("Load shedding simulation failed")
+            return Response(
+                {"error": "Failed to simulate load shedding"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     def _get_snapshot(self, request, snapshot_id=None):
         """Helper to get snapshot with user isolation"""
         from django.db.models import Q
@@ -100,4 +159,5 @@ class TopologyViewSet(viewsets.ViewSet):
             
         if snapshot_id:
             return qs.filter(id=snapshot_id).first()
-        return qs.order_by('-timestamp').first()
+        active = qs.filter(is_active=True).order_by('-activated_at').first()
+        return active or qs.order_by('-timestamp').first()

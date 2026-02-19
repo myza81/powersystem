@@ -13,7 +13,7 @@ import MainLayout from './components/MainLayout';
 import SubstationCard from './components/SubstationCard';
 import SubstationFilter from './components/SubstationFilter';
 import SubstationMap from './components/SubstationMap';
-import IslandDetection from './components/IslandDetection';
+
 import SnapshotManager from './components/SnapshotManager';
 const api = axios.create({ baseURL: '/api/v1' });
 
@@ -432,17 +432,10 @@ const App = () => {
                 )}
 
                 {view === 'snapshots' && (
-                    <SnapshotManager
-                        onAnalyze={(id) => {
-                            setSelectedSnapshotId(id);
-                            setView('topology');
-                        }}
-                    />
+                    <SnapshotManager />
                 )}
 
-                {view === 'topology' && (
-                    <IslandDetection snapshotId={selectedSnapshotId} />
-                )}
+
 
                 {viewingSld && (
                     <SldViewer

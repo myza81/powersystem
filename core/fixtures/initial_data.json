@@ -348,15 +348,15 @@
     "ownership": "TNB",
     "voltage": 132,
     "grid": "KLUM",
-    "state": "Kuala Lumpur",
+    "state": "Selangor",
     "region": "Central",
     "commission_date": null,
     "sld": "AMPG132.pdf",
     "sld_file": "",
-    "latitude": "3.171540",
-    "longitude": "101.741970",
+    "latitude": "3.170850",
+    "longitude": "101.741210",
     "created_at": "2026-02-03T12:16:44.965Z",
-    "updated_at": "2026-02-14T04:12:30.427Z"
+    "updated_at": "2026-02-18T08:36:11.809Z"
   }
 },
 {
@@ -368,15 +368,15 @@
     "ownership": "TNB",
     "voltage": 275,
     "grid": "KLUM",
-    "state": "Kuala Lumpur",
+    "state": "Selangor",
     "region": "Central",
     "commission_date": null,
     "sld": "AMPG275.pdf",
     "sld_file": "",
-    "latitude": "3.171540",
-    "longitude": "101.741970",
+    "latitude": "3.171030",
+    "longitude": "101.741310",
     "created_at": "2026-02-03T12:16:41.437Z",
-    "updated_at": "2026-02-14T04:12:30.428Z"
+    "updated_at": "2026-02-18T08:37:18.576Z"
   }
 },
 {
@@ -1008,15 +1008,15 @@
     "ownership": "TNB",
     "voltage": 132,
     "grid": "KLUM",
-    "state": "Kuala Lumpur",
+    "state": "Selangor",
     "region": "Central",
     "commission_date": null,
     "sld": "BCVS132.pdf",
     "sld_file": "",
-    "latitude": "3.230130",
-    "longitude": "101.684670",
+    "latitude": "3.230500",
+    "longitude": "101.684180",
     "created_at": "2026-02-03T12:18:35.855Z",
-    "updated_at": "2026-02-14T04:12:30.442Z"
+    "updated_at": "2026-02-18T08:38:15.890Z"
   }
 },
 {
@@ -1193,10 +1193,10 @@
     "commission_date": null,
     "sld": "BFLD132.pdf",
     "sld_file": "",
-    "latitude": "3.134750",
-    "longitude": "101.693600",
+    "latitude": "3.134950",
+    "longitude": "101.692830",
     "created_at": "2026-02-03T12:19:10.219Z",
-    "updated_at": "2026-02-14T04:12:30.445Z"
+    "updated_at": "2026-02-18T08:40:26.795Z"
   }
 },
 {
@@ -1213,10 +1213,10 @@
     "commission_date": null,
     "sld": "BFLD275.pdf",
     "sld_file": "",
-    "latitude": "3.134750",
-    "longitude": "101.693600",
+    "latitude": "3.134720",
+    "longitude": "101.693060",
     "created_at": "2026-02-03T12:19:13.713Z",
-    "updated_at": "2026-02-14T04:12:30.446Z"
+    "updated_at": "2026-02-18T08:40:59.844Z"
   }
 },
 {
@@ -2513,10 +2513,10 @@
     "commission_date": null,
     "sld": "BTRZ132.pdf",
     "sld_file": "",
-    "latitude": "3.099560",
-    "longitude": "101.708860",
+    "latitude": "3.098710",
+    "longitude": "101.707500",
     "created_at": "2026-02-03T12:23:12.925Z",
-    "updated_at": "2026-02-14T04:12:30.476Z"
+    "updated_at": "2026-02-18T08:42:36.061Z"
   }
 },
 {
@@ -2673,10 +2673,10 @@
     "commission_date": null,
     "sld": "CBDK275.pdf",
     "sld_file": "",
-    "latitude": "3.214630",
-    "longitude": "101.694950",
+    "latitude": "3.214040",
+    "longitude": "101.694060",
     "created_at": "2026-02-03T12:23:43.116Z",
-    "updated_at": "2026-02-14T04:12:30.479Z"
+    "updated_at": "2026-02-18T08:43:26.443Z"
   }
 },
 {
@@ -3008,15 +3008,15 @@
     "ownership": "TNB",
     "voltage": 132,
     "grid": "KLUM",
-    "state": "Kuala Lumpur",
+    "state": "Selangor",
     "region": "Central",
     "commission_date": null,
     "sld": "CJYA132.pdf",
     "sld_file": "",
-    "latitude": "3.021540",
-    "longitude": "101.757990",
+    "latitude": "3.021340",
+    "longitude": "101.756610",
     "created_at": "2026-02-03T12:24:47.277Z",
-    "updated_at": "2026-02-14T04:12:30.486Z"
+    "updated_at": "2026-02-18T08:44:15.859Z"
   }
 },
 {
@@ -3293,10 +3293,10 @@
     "commission_date": null,
     "sld": "DDSA132.pdf",
     "sld_file": "",
-    "latitude": "3.099514",
-    "longitude": "101.686973",
+    "latitude": "3.096810",
+    "longitude": "101.682900",
     "created_at": "2026-02-03T12:25:39.752Z",
-    "updated_at": "2026-02-14T04:12:30.491Z"
+    "updated_at": "2026-02-18T08:47:04.706Z"
   }
 },
 {
@@ -3373,10 +3373,10 @@
     "commission_date": null,
     "sld": "DMHT132.pdf",
     "sld_file": "",
-    "latitude": "3.152395",
-    "longitude": "101.658445",
+    "latitude": "3.137610",
+    "longitude": "101.654310",
     "created_at": "2026-02-03T12:25:54.575Z",
-    "updated_at": "2026-02-14T04:12:30.493Z"
+    "updated_at": "2026-02-18T08:47:55.342Z"
   }
 },
 {
@@ -3453,10 +3453,10 @@
     "commission_date": null,
     "sld": "DWGI132.pdf",
     "sld_file": "",
-    "latitude": "3.156858",
-    "longitude": "101.701985",
+    "latitude": "3.155680",
+    "longitude": "101.699250",
     "created_at": "2026-02-03T12:26:12.073Z",
-    "updated_at": "2026-02-14T04:12:30.494Z"
+    "updated_at": "2026-02-18T08:49:09.542Z"
   }
 },
 {
@@ -4373,10 +4373,10 @@
     "commission_date": null,
     "sld": "GWAY275.pdf",
     "sld_file": "",
-    "latitude": "3.141856",
-    "longitude": "101.704869",
+    "latitude": "3.142280",
+    "longitude": "101.705490",
     "created_at": "2026-02-03T12:29:01.637Z",
-    "updated_at": "2026-02-14T04:12:30.506Z"
+    "updated_at": "2026-02-18T08:50:14.526Z"
   }
 },
 {
@@ -4733,10 +4733,10 @@
     "commission_date": null,
     "sld": "IMBI132.pdf",
     "sld_file": "",
-    "latitude": "3.142627",
-    "longitude": "101.709053",
+    "latitude": "3.141430",
+    "longitude": "101.711940",
     "created_at": "2026-02-03T12:30:12.655Z",
-    "updated_at": "2026-02-14T04:12:30.510Z"
+    "updated_at": "2026-02-18T08:51:14.667Z"
   }
 },
 {
@@ -4973,10 +4973,10 @@
     "commission_date": null,
     "sld": "JING132.pdf",
     "sld_file": "",
-    "latitude": "3.208578",
-    "longitude": "101.654718",
+    "latitude": "3.209080",
+    "longitude": "101.653820",
     "created_at": "2026-02-03T12:31:04.994Z",
-    "updated_at": "2026-02-14T04:12:30.513Z"
+    "updated_at": "2026-02-18T09:26:38.283Z"
   }
 },
 {
@@ -5733,10 +5733,10 @@
     "commission_date": null,
     "sld": "KHCL132.pdf",
     "sld_file": "",
-    "latitude": "3.089438",
-    "longitude": "101.684676",
+    "latitude": "3.090430",
+    "longitude": "101.694750",
     "created_at": "2026-02-03T12:33:52.659Z",
-    "updated_at": "2026-02-14T04:12:30.524Z"
+    "updated_at": "2026-02-18T08:53:25.867Z"
   }
 },
 {
@@ -6153,10 +6153,10 @@
     "commission_date": null,
     "sld": "KLCC132.pdf",
     "sld_file": "",
-    "latitude": "3.155950",
-    "longitude": "101.714575",
+    "latitude": "3.158120",
+    "longitude": "101.716520",
     "created_at": "2026-02-03T12:35:13.357Z",
-    "updated_at": "2026-02-14T04:12:30.531Z"
+    "updated_at": "2026-02-18T08:54:45.626Z"
   }
 },
 {
@@ -6173,10 +6173,10 @@
     "commission_date": null,
     "sld": "KLCP132.pdf",
     "sld_file": "",
-    "latitude": "3.155653",
-    "longitude": "101.714547",
+    "latitude": "3.158030",
+    "longitude": "101.715760",
     "created_at": "2026-02-03T12:35:17.083Z",
-    "updated_at": "2026-02-14T04:12:30.532Z"
+    "updated_at": "2026-02-18T08:56:01.129Z"
   }
 },
 {
@@ -6373,10 +6373,10 @@
     "commission_date": null,
     "sld": "KLPV132.pdf",
     "sld_file": "",
-    "latitude": "3.148719",
-    "longitude": "101.713120",
+    "latitude": "3.150210",
+    "longitude": "101.711780",
     "created_at": "2026-02-03T12:35:56.077Z",
-    "updated_at": "2026-02-14T04:12:30.536Z"
+    "updated_at": "2026-02-18T08:57:25.975Z"
   }
 },
 {
@@ -6728,15 +6728,15 @@
     "ownership": "TNB",
     "voltage": 132,
     "grid": "KLUM",
-    "state": "Kuala Lumpur",
+    "state": "Selangor",
     "region": "Central",
     "commission_date": null,
     "sld": "KPDN132.pdf",
     "sld_file": "",
-    "latitude": "3.140837",
-    "longitude": "101.734727",
+    "latitude": "3.146260",
+    "longitude": "101.740340",
     "created_at": "2026-02-03T12:37:09.376Z",
-    "updated_at": "2026-02-14T04:12:30.539Z"
+    "updated_at": "2026-02-18T08:58:35.957Z"
   }
 },
 {
@@ -6748,15 +6748,15 @@
     "ownership": "TNB",
     "voltage": 275,
     "grid": "KLUM",
-    "state": "Kuala Lumpur",
+    "state": "Selangor",
     "region": "Central",
     "commission_date": null,
     "sld": "KPDN275.pdf",
     "sld_file": "",
-    "latitude": "3.140837",
-    "longitude": "101.734727",
+    "latitude": "3.146580",
+    "longitude": "101.740530",
     "created_at": "2026-02-03T12:37:13.493Z",
-    "updated_at": "2026-02-14T04:12:30.540Z"
+    "updated_at": "2026-02-18T08:59:24.954Z"
   }
 },
 {
@@ -7153,10 +7153,10 @@
     "commission_date": null,
     "sld": "KSLS132.pdf",
     "sld_file": "",
-    "latitude": "3.098282",
-    "longitude": "101.705022",
+    "latitude": "3.098720",
+    "longitude": "101.707490",
     "created_at": "2026-02-03T12:38:33.097Z",
-    "updated_at": "2026-02-14T04:12:30.546Z"
+    "updated_at": "2026-02-18T09:03:48.277Z"
   }
 },
 {
@@ -7388,15 +7388,15 @@
     "ownership": "DC",
     "voltage": 275,
     "grid": "JOH2",
-    "state": "Kuala Lumpur",
+    "state": "Johor",
     "region": "South",
     "commission_date": null,
     "sld": "KTDC275.pdf",
     "sld_file": "",
-    "latitude": "3.183574",
-    "longitude": "101.686694",
+    "latitude": "1.705060",
+    "longitude": "103.411290",
     "created_at": "2026-02-03T12:39:20.608Z",
-    "updated_at": "2026-02-14T04:12:30.550Z"
+    "updated_at": "2026-02-18T09:04:53.608Z"
   }
 },
 {
@@ -7593,10 +7593,10 @@
     "commission_date": null,
     "sld": "KTST132.pdf",
     "sld_file": "",
-    "latitude": "3.181865",
-    "longitude": "101.688607",
+    "latitude": "3.187620",
+    "longitude": "101.689820",
     "created_at": "2026-02-03T12:40:00.109Z",
-    "updated_at": "2026-02-14T04:12:30.553Z"
+    "updated_at": "2026-02-18T09:06:50.083Z"
   }
 },
 {
@@ -7644,19 +7644,19 @@
   "pk": "KULN132",
   "fields": {
     "mnemonic": "KULN",
-    "name": "KULN GIS",
+    "name": "Kuala Lumpur North",
     "ownership": "TNB",
     "voltage": 132,
     "grid": "KLUM",
-    "state": null,
+    "state": "Selangor",
     "region": "Central",
     "commission_date": null,
     "sld": "KULN132.pdf",
     "sld_file": "",
-    "latitude": null,
-    "longitude": null,
+    "latitude": "3.198330",
+    "longitude": "101.602160",
     "created_at": "2026-02-03T12:40:19.270Z",
-    "updated_at": "2026-02-14T03:47:28.052Z"
+    "updated_at": "2026-02-18T09:32:41.649Z"
   }
 },
 {
@@ -7668,15 +7668,15 @@
     "ownership": "TNB",
     "voltage": 275,
     "grid": "KLUM",
-    "state": "Kuala Lumpur",
+    "state": "Selangor",
     "region": "Central",
     "commission_date": null,
     "sld": "KULN275.pdf",
     "sld_file": "",
-    "latitude": "3.214682",
-    "longitude": "101.658555",
+    "latitude": "3.197000",
+    "longitude": "101.602150",
     "created_at": "2026-02-03T12:40:14.593Z",
-    "updated_at": "2026-02-14T04:12:30.554Z"
+    "updated_at": "2026-02-18T09:33:05.983Z"
   }
 },
 {
@@ -7693,10 +7693,10 @@
     "commission_date": null,
     "sld": "KULS132.pdf",
     "sld_file": "",
-    "latitude": "3.080072",
-    "longitude": "101.706597",
+    "latitude": "3.077170",
+    "longitude": "101.667280",
     "created_at": "2026-02-03T12:40:26.602Z",
-    "updated_at": "2026-02-14T04:12:30.554Z"
+    "updated_at": "2026-02-18T09:30:47.233Z"
   }
 },
 {
@@ -7713,10 +7713,10 @@
     "commission_date": null,
     "sld": "KULS275.pdf",
     "sld_file": "",
-    "latitude": "3.080072",
-    "longitude": "101.706597",
+    "latitude": "3.077090",
+    "longitude": "101.666320",
     "created_at": "2026-02-03T12:40:23.032Z",
-    "updated_at": "2026-02-14T04:12:30.555Z"
+    "updated_at": "2026-02-18T09:30:18.601Z"
   }
 },
 {
@@ -7868,15 +7868,15 @@
     "ownership": "LPC",
     "voltage": 132,
     "grid": "KLUM",
-    "state": "Kuala Lumpur",
+    "state": "Selangor",
     "region": "Central",
     "commission_date": null,
     "sld": "LJTK132.pdf",
     "sld_file": "",
-    "latitude": "3.166119",
-    "longitude": "101.735777",
+    "latitude": "3.166130",
+    "longitude": "101.736510",
     "created_at": "2026-02-03T12:40:57.325Z",
-    "updated_at": "2026-02-14T04:12:30.558Z"
+    "updated_at": "2026-02-18T09:28:45.114Z"
   }
 },
 {
@@ -7953,10 +7953,10 @@
     "commission_date": null,
     "sld": "LKRC132.pdf",
     "sld_file": "",
-    "latitude": "3.115492",
-    "longitude": "101.668495",
+    "latitude": "3.115070",
+    "longitude": "101.669770",
     "created_at": "2026-02-03T12:41:13.770Z",
-    "updated_at": "2026-02-14T04:12:30.560Z"
+    "updated_at": "2026-02-18T09:27:41.845Z"
   }
 },
 {
@@ -8593,10 +8593,10 @@
     "commission_date": null,
     "sld": "MJJG132.pdf",
     "sld_file": "",
-    "latitude": "3.208879",
-    "longitude": "101.655674",
+    "latitude": "3.208140",
+    "longitude": "101.654500",
     "created_at": "2026-02-03T12:43:18.473Z",
-    "updated_at": "2026-02-14T04:12:30.568Z"
+    "updated_at": "2026-02-18T09:25:53.068Z"
   }
 },
 {
@@ -8613,10 +8613,10 @@
     "commission_date": null,
     "sld": "MJLR132.pdf",
     "sld_file": "",
-    "latitude": "3.198713",
-    "longitude": "101.625885",
+    "latitude": "3.196100",
+    "longitude": "101.636690",
     "created_at": "2026-02-03T12:43:21.953Z",
-    "updated_at": "2026-02-15T14:01:48.487Z"
+    "updated_at": "2026-02-18T09:23:51.065Z"
   }
 },
 {
@@ -9153,10 +9153,10 @@
     "commission_date": null,
     "sld": "MVLY132.pdf",
     "sld_file": "",
-    "latitude": "3.118718",
-    "longitude": "101.678919",
+    "latitude": "3.116440",
+    "longitude": "101.677660",
     "created_at": "2026-02-03T12:44:59.038Z",
-    "updated_at": "2026-02-14T04:12:30.577Z"
+    "updated_at": "2026-02-18T09:22:50.501Z"
   }
 },
 {
@@ -10773,10 +10773,10 @@
     "commission_date": null,
     "sld": "PNAS132.pdf",
     "sld_file": "",
-    "latitude": "1.506760",
-    "longitude": "103.512715",
+    "latitude": "1.502680",
+    "longitude": "103.518350",
     "created_at": "2026-02-03T12:51:03.235Z",
-    "updated_at": "2026-02-14T04:12:30.604Z"
+    "updated_at": "2026-02-18T09:52:44.966Z"
   }
 },
 {
@@ -11313,10 +11313,10 @@
     "commission_date": null,
     "sld": "PULU132.pdf",
     "sld_file": "",
-    "latitude": "3.119924",
-    "longitude": "101.730060",
+    "latitude": "3.122640",
+    "longitude": "101.727440",
     "created_at": "2026-02-03T12:52:51.782Z",
-    "updated_at": "2026-02-14T04:12:30.612Z"
+    "updated_at": "2026-02-18T09:21:27.999Z"
   }
 },
 {
@@ -11333,10 +11333,10 @@
     "commission_date": null,
     "sld": "PULU275.pdf",
     "sld_file": "",
-    "latitude": "3.119924",
-    "longitude": "101.730060",
+    "latitude": "3.122930",
+    "longitude": "101.727240",
     "created_at": "2026-02-03T12:52:46.998Z",
-    "updated_at": "2026-02-14T04:12:30.613Z"
+    "updated_at": "2026-02-18T09:21:04.366Z"
   }
 },
 {
@@ -11353,10 +11353,10 @@
     "commission_date": null,
     "sld": "PVBJ132.pdf",
     "sld_file": "",
-    "latitude": "3.049725",
-    "longitude": "101.671179",
+    "latitude": "3.052400",
+    "longitude": "101.668270",
     "created_at": "2026-02-03T12:52:55.771Z",
-    "updated_at": "2026-02-14T04:12:30.613Z"
+    "updated_at": "2026-02-18T09:20:13.818Z"
   }
 },
 {
@@ -11933,10 +11933,10 @@
     "commission_date": null,
     "sld": "SDNK132.pdf",
     "sld_file": "",
-    "latitude": "1.712655",
-    "longitude": "103.525730",
+    "latitude": "1.701700",
+    "longitude": "103.414870",
     "created_at": "2026-02-03T12:54:46.526Z",
-    "updated_at": "2026-02-14T04:12:30.622Z"
+    "updated_at": "2026-02-18T09:50:59.822Z"
   }
 },
 {
@@ -11953,10 +11953,10 @@
     "commission_date": null,
     "sld": "SDNK275.pdf",
     "sld_file": "",
-    "latitude": "1.712655",
-    "longitude": "103.525730",
+    "latitude": "1.700540",
+    "longitude": "103.414970",
     "created_at": "2026-02-03T12:54:51.336Z",
-    "updated_at": "2026-02-14T04:12:30.622Z"
+    "updated_at": "2026-02-18T09:50:34.462Z"
   }
 },
 {
@@ -12053,10 +12053,10 @@
     "commission_date": null,
     "sld": "SGBT132.pdf",
     "sld_file": "",
-    "latitude": "3.179316",
-    "longitude": "101.666151",
+    "latitude": "3.188830",
+    "longitude": "101.657850",
     "created_at": "2026-02-03T12:55:10.853Z",
-    "updated_at": "2026-02-14T04:12:30.624Z"
+    "updated_at": "2026-02-18T09:19:14.844Z"
   }
 },
 {
@@ -12733,10 +12733,10 @@
     "commission_date": null,
     "sld": "SLKS275.pdf",
     "sld_file": "",
-    "latitude": "3.098282",
-    "longitude": "101.705022",
+    "latitude": "3.104230",
+    "longitude": "101.707870",
     "created_at": "2026-02-03T12:57:59.509Z",
-    "updated_at": "2026-02-14T04:12:30.634Z"
+    "updated_at": "2026-02-18T09:01:26.464Z"
   }
 },
 {
@@ -12913,10 +12913,10 @@
     "commission_date": null,
     "sld": "SMTN132.pdf",
     "sld_file": "",
-    "latitude": "3.150732",
-    "longitude": "101.665056",
+    "latitude": "3.146170",
+    "longitude": "101.676730",
     "created_at": "2026-02-03T12:58:43.765Z",
-    "updated_at": "2026-02-14T04:12:30.637Z"
+    "updated_at": "2026-02-18T09:18:05.784Z"
   }
 },
 {
@@ -13453,10 +13453,10 @@
     "commission_date": null,
     "sld": "SRYA132.pdf",
     "sld_file": "",
-    "latitude": "3.187294",
-    "longitude": "101.693145",
+    "latitude": "3.188510",
+    "longitude": "101.689300",
     "created_at": "2026-02-03T13:00:35.033Z",
-    "updated_at": "2026-02-14T04:12:30.645Z"
+    "updated_at": "2026-02-18T09:08:05.247Z"
   }
 },
 {
@@ -13473,10 +13473,10 @@
     "commission_date": null,
     "sld": "SRYA275.pdf",
     "sld_file": "",
-    "latitude": "3.187294",
-    "longitude": "101.693145",
+    "latitude": "3.188200",
+    "longitude": "101.689420",
     "created_at": "2026-02-03T13:00:31.336Z",
-    "updated_at": "2026-02-14T04:12:30.646Z"
+    "updated_at": "2026-02-18T09:07:43.971Z"
   }
 },
 {
@@ -13568,15 +13568,15 @@
     "ownership": "LPC",
     "voltage": 132,
     "grid": "NSEM",
-    "state": "Kuala Lumpur",
+    "state": "Negeri Sembilan",
     "region": "South",
     "commission_date": null,
     "sld": "SSUN132.pdf",
     "sld_file": "",
-    "latitude": "3.163817",
-    "longitude": "101.697991",
+    "latitude": "2.673500",
+    "longitude": "102.008530",
     "created_at": "2026-02-03T13:00:55.709Z",
-    "updated_at": "2026-02-14T04:12:30.647Z"
+    "updated_at": "2026-02-18T09:10:04.905Z"
   }
 },
 {
@@ -14868,15 +14868,15 @@
     "ownership": "TNB",
     "voltage": 132,
     "grid": "KLUM",
-    "state": "Kuala Lumpur",
+    "state": "Selangor",
     "region": "Central",
     "commission_date": null,
     "sld": "TMWT132.pdf",
     "sld_file": "",
-    "latitude": "3.210624",
-    "longitude": "101.748573",
+    "latitude": "3.208530",
+    "longitude": "101.753160",
     "created_at": "2026-02-03T13:05:14.319Z",
-    "updated_at": "2026-02-14T04:12:30.665Z"
+    "updated_at": "2026-02-18T09:16:33.271Z"
   }
 },
 {
@@ -15113,10 +15113,10 @@
     "commission_date": null,
     "sld": "TRXC132.pdf",
     "sld_file": "",
-    "latitude": "3.142770",
-    "longitude": "101.720005",
+    "latitude": "3.137680",
+    "longitude": "101.717650",
     "created_at": "2026-02-03T13:05:58.642Z",
-    "updated_at": "2026-02-14T04:12:30.669Z"
+    "updated_at": "2026-02-18T09:14:44.027Z"
   }
 },
 {
@@ -15133,10 +15133,10 @@
     "commission_date": null,
     "sld": "TRXC275.pdf",
     "sld_file": "",
-    "latitude": "3.142770",
-    "longitude": "101.720005",
+    "latitude": "3.137560",
+    "longitude": "101.717960",
     "created_at": "2026-02-03T13:06:05.051Z",
-    "updated_at": "2026-02-14T04:12:30.670Z"
+    "updated_at": "2026-02-18T09:14:19.711Z"
   }
 },
 {
@@ -15233,10 +15233,10 @@
     "commission_date": null,
     "sld": "TWSA132.pdf",
     "sld_file": "",
-    "latitude": "3.174465",
-    "longitude": "101.695987",
+    "latitude": "3.179880",
+    "longitude": "101.704610",
     "created_at": "2026-02-03T13:06:28.533Z",
-    "updated_at": "2026-02-14T04:12:30.672Z"
+    "updated_at": "2026-02-18T09:13:29.586Z"
   }
 },
 {
@@ -15473,10 +15473,10 @@
     "commission_date": null,
     "sld": "VCTY132.pdf",
     "sld_file": "",
-    "latitude": "3.159858",
-    "longitude": "101.700439",
+    "latitude": "3.160530",
+    "longitude": "101.699510",
     "created_at": "2026-02-03T13:07:28.411Z",
-    "updated_at": "2026-02-14T04:12:30.677Z"
+    "updated_at": "2026-02-18T09:12:32.081Z"
   }
 },
 {
@@ -15493,10 +15493,10 @@
     "commission_date": null,
     "sld": "VCTY275.pdf",
     "sld_file": "",
-    "latitude": "3.159858",
-    "longitude": "101.700439",
+    "latitude": "3.160420",
+    "longitude": "101.699400",
     "created_at": "2026-02-03T13:07:24.481Z",
-    "updated_at": "2026-02-14T04:12:30.678Z"
+    "updated_at": "2026-02-18T09:11:57.662Z"
   }
 },
 {
@@ -15573,10 +15573,10 @@
     "commission_date": null,
     "sld": "WMJU132.pdf",
     "sld_file": "",
-    "latitude": "3.205778",
-    "longitude": "101.731861",
+    "latitude": "3.204040",
+    "longitude": "101.737790",
     "created_at": "2026-02-03T13:07:45.457Z",
-    "updated_at": "2026-02-14T04:12:30.679Z"
+    "updated_at": "2026-02-18T09:11:10.545Z"
   }
 },
 {

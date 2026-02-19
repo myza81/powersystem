@@ -13,8 +13,7 @@ import {
     Menu,
     List,
     PlusCircle,
-    Upload,
-    Network
+    Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -33,7 +32,7 @@ const Sidebar = ({ currentView, onViewChange }) => {
         { id: 'list', label: 'Substation', icon: List },
         { id: 'create', label: 'New Subs Entry', icon: PlusCircle },
         { id: 'snapshots', label: 'Snapshots', icon: Database },
-        { id: 'topology', label: 'Island Detection', icon: Network },
+
     ];
 
     const handleNavigate = (view) => {
