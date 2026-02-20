@@ -434,4 +434,241 @@ class NetworkDCLink(models.Model):
     inverter_bus_number = models.IntegerField()
     
     setpoint_mw = models.FloatField()
-    
+
+
+
+# ===========================================================================
+# 8. PROTECTION RELAY REGISTRY
+# ===========================================================================
+
+class ProtectionRelay(models.Model):
+    """
+    One row = one relay wired to one circuit. Captures both the relay panel
+    identity and what it trips. As a system protection engineer, this is the
+    primary record: 'UFLS-01 at BRGS132 trips feeder BRGS132-MGST132 Cct 1'.
+    """
+    RELAY_TYPE_CHOICES = [
+        ('UFLS', 'Under-Frequency Load Shedding (UFLS)'),
+        ('UVLS', 'Under-Voltage Load Shedding (UVLS)'),
+    ]
+    ASSIGNMENT_TYPE_CHOICES = [
+        ('branch', 'Branch (Feeder / Interconnector)'),
+        ('load_transformer', 'Load Transformer'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    relay_type = models.CharField(max_length=10, choices=RELAY_TYPE_CHOICES)
+    relay_panel_id = models.CharField(
+        max_length=30, blank=True, null=True,
+        help_text="Panel label, e.g. 'UFLS-01'. Optional if not recorded.",
+    )
+    substation = models.ForeignKey(
+        Substation,
+        on_delete=models.CASCADE,
+        related_name='protection_relays',
+        help_text="Substation where this relay panel is installed",
+    )
+    # What it trips
+    assignment_type = models.CharField(max_length=20, choices=ASSIGNMENT_TYPE_CHOICES)
+    from_substation_id = models.CharField(
+        max_length=20,
+        help_text="Sending-end substation ID, e.g. 'BRGS132'",
+    )
+    to_substation_id = models.CharField(
+        max_length=20, blank=True, null=True,
+        help_text="Remote-end substation ID (branch only), e.g. 'MGST132'",
+    )
+    circuit_id = models.CharField(
+        max_length=10,
+        help_text="e.g. '1', '2' for feeders; 'T1', 'T2' for transformers",
+    )
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['substation__substation_id', 'relay_type', 'relay_panel_id']
+        verbose_name = 'Protection Relay'
+        verbose_name_plural = 'Protection Relays'
+
+    def __str__(self):
+        panel = self.relay_panel_id or ''
+        if self.assignment_type == 'branch':
+            return f"{self.relay_type} {panel} @ {self.substation_id} → {self.from_substation_id}-{self.to_substation_id} Cct{self.circuit_id}"
+        return f"{self.relay_type} {panel} @ {self.substation_id} → {self.from_substation_id} {self.circuit_id}"
+
+
+# ===========================================================================
+# 9. LOAD SHEDDING SCHEMES
+# ===========================================================================
+
+class LoadSheddingScheme(models.Model):
+    """
+    Top-level definition for a scheme type. Unique per scheme_type.
+    """
+    SCHEME_TYPE_CHOICES = [
+        ('UFLS', 'Under-Frequency Load Shedding (UFLS)'),
+        ('UVLS', 'Under-Voltage Load Shedding (UVLS)'),
+        ('MANUAL', 'Manual Load Shedding'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    scheme_type = models.CharField(max_length=10, choices=SCHEME_TYPE_CHOICES, unique=True)
+    name = models.CharField(max_length=100, help_text='e.g. "National UFLS Scheme"')
+    description = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='created_schemes',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['scheme_type']
+
+    def __str__(self):
+        return f"{self.scheme_type} — {self.name}"
+
+
+class SchemeVersion(models.Model):
+    """
+    Versioned revision of a LoadSheddingScheme.
+    One version per scheme can be 'active' at any time.
+    """
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('active', 'Active'),
+        ('superseded', 'Superseded'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    scheme = models.ForeignKey(
+        LoadSheddingScheme,
+        on_delete=models.CASCADE,
+        related_name='versions',
+    )
+    version_number = models.CharField(max_length=20, help_text="e.g. '2024', 'Rev 3', 'v2.1'")
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='draft')
+    effective_date = models.DateField(blank=True, null=True)
+    published_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='published_versions',
+    )
+    published_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.scheme} v{self.version_number} [{self.status}]"
+
+    def publish(self, user=None):
+        """Set this version active, supersede all previous active versions."""
+        from django.utils import timezone
+        if self.status not in ('draft',):
+            raise ValueError(f"Cannot publish a version with status '{self.status}'.")
+        SchemeVersion.objects.filter(
+            scheme=self.scheme, status='active'
+        ).update(status='superseded')
+        self.status = 'active'
+        self.published_by = user
+        self.published_at = timezone.now()
+        self.save()
+
+
+class ShedGroupSetting(models.Model):
+    """
+    A priority trip group within a SchemeVersion.
+    order=1 is shed first.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    version = models.ForeignKey(
+        SchemeVersion,
+        on_delete=models.CASCADE,
+        related_name='groups',
+    )
+    name = models.CharField(max_length=50, help_text="e.g. 'Group 1', 'Stage A'")
+    operating_stage = models.PositiveSmallIntegerField(help_text="Stage number; 1 = shed first")
+
+    # Dual setpoints: primary and backup relay
+    trigger_setpoint1 = models.FloatField(
+        null=True, blank=True,
+        help_text="Primary setpoint: Hz for UFLS, pu voltage for UVLS",
+    )
+    trigger_delay1 = models.FloatField(null=True, blank=True, help_text="Primary relay delay (seconds)")
+    trigger_setpoint2 = models.FloatField(null=True, blank=True, help_text="Backup/secondary setpoint")
+    trigger_delay2 = models.FloatField(null=True, blank=True, help_text="Backup relay delay (seconds)")
+
+    target_mw_shed = models.FloatField(null=True, blank=True, help_text="Planned MW quantum")
+    include_autotransformers = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = [('version', 'operating_stage')]
+        ordering = ['version', 'operating_stage']
+
+    def __str__(self):
+        return f"{self.version} › {self.name} (stage {self.operating_stage})"
+
+class ShedGroupAssignment(models.Model):
+    """
+    A single circuit assigned to a ShedGroupSetting.
+    substation FK is auto-resolved from from_substation_id on save().
+    """
+    ASSIGNMENT_TYPE_CHOICES = [
+        ('branch', 'Branch (Feeder / Interconnector)'),
+        ('load_transformer', 'Load Transformer'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group = models.ForeignKey(
+        ShedGroupSetting,
+        on_delete=models.CASCADE,
+        related_name='assignments',
+    )
+    assignment_type = models.CharField(max_length=20, choices=ASSIGNMENT_TYPE_CHOICES)
+
+    # String IDs (source of truth)
+    from_substation_id = models.CharField(
+        max_length=20,
+        help_text="Substation ID string, e.g. 'BRGS132'",
+    )
+    to_substation_id = models.CharField(
+        max_length=20, blank=True, null=True,
+        help_text="Remote substation ID (branch only), e.g. 'MGST132'",
+    )
+    circuit_id = models.CharField(
+        max_length=10,
+        help_text="e.g. '1', '2' for branches; 'T1', 'T2' for load transformers",
+    )
+    note = models.TextField(blank=True, null=True)
+    # FK auto-resolved from from_substation_id
+    substation = models.ForeignKey(
+        Substation,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='shed_assignments',
+        help_text="Auto-resolved from from_substation_id",
+    )
+
+    class Meta:
+        ordering = ['group', 'assignment_type', 'from_substation_id']
+
+    def save(self, *args, **kwargs):
+        # Auto-resolve substation FK
+        if self.from_substation_id and not self.substation_id:
+            try:
+                self.substation = Substation.objects.get(substation_id=self.from_substation_id)
+            except Substation.DoesNotExist:
+                self.substation = None
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        if self.assignment_type == 'branch':
+            return f"{self.from_substation_id} - {self.to_substation_id} {self.circuit_id}"
+        return f"{self.from_substation_id} {self.circuit_id}"

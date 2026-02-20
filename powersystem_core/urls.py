@@ -29,12 +29,26 @@ from api.v1.views.snapshot import SnapshotViewSet
 from core.views_dev import DatabaseSyncStatusView, DatabaseExportView, DatabaseImportView
 
 from api.v1.views.topology import TopologyViewSet
+from api.v1.views.shedding import (
+    ProtectionRelayViewSet,
+    LoadSheddingSchemeViewSet,
+    SchemeVersionViewSet,
+    ShedGroupSettingViewSet,
+    ShedGroupAssignmentViewSet,
+)
 
 router = DefaultRouter()
 router.register(r'substations', SubstationViewSet)
 router.register(r'load-analytics', LoadAnalyticsViewSet, basename='load-analytics')
 router.register(r'snapshots', SnapshotViewSet, basename='snapshot')
 router.register(r'topology', TopologyViewSet, basename='topology')
+
+# Load Shedding & Relay Registry
+router.register(r'shedding/relays', ProtectionRelayViewSet, basename='protection-relay')
+router.register(r'shedding/schemes', LoadSheddingSchemeViewSet, basename='shedding-scheme')
+router.register(r'shedding/versions', SchemeVersionViewSet, basename='scheme-version')
+router.register(r'shedding/groups', ShedGroupSettingViewSet, basename='shed-group')
+router.register(r'shedding/assignments', ShedGroupAssignmentViewSet, basename='shed-assignment')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

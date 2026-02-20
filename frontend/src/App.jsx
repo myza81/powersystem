@@ -15,6 +15,7 @@ import SubstationFilter from './components/SubstationFilter';
 import SubstationMap from './components/SubstationMap';
 
 import SnapshotManager from './components/SnapshotManager';
+import LoadSheddingManager from './components/LoadSheddingManager';
 const api = axios.create({ baseURL: '/api/v1' });
 
 const DEFAULT_FILTERS = {
@@ -435,7 +436,9 @@ const App = () => {
                     <SnapshotManager />
                 )}
 
-
+                {view === 'load-shedding' && (
+                    <LoadSheddingManager />
+                )}
 
                 {viewingSld && (
                     <SldViewer

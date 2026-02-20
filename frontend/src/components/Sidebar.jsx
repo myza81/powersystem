@@ -13,7 +13,8 @@ import {
     Menu,
     List,
     PlusCircle,
-    Upload
+    Upload,
+    Shield,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -21,6 +22,7 @@ const Sidebar = ({ currentView, onViewChange }) => {
     const [collapsed, setCollapsed] = useState(false);
     const [loadProfileExpanded, setLoadProfileExpanded] = useState(true);
     const [assetsExpanded, setAssetsExpanded] = useState(true);
+    const [protectionExpanded, setProtectionExpanded] = useState(true);
 
     const toggleCollapse = () => setCollapsed(!collapsed);
 
@@ -160,6 +162,49 @@ const Sidebar = ({ currentView, onViewChange }) => {
                                         {collapsed && (
                                             <item.icon size={18} />
                                         )}
+                                    </a>
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+
+                {/* Protection Group */}
+                <div className="nav-group" style={{ position: 'relative' }}>
+                    <div
+                        className={`nav-group-header ${collapsed ? 'collapsed' : ''}`}
+                        onClick={() => setProtectionExpanded(!protectionExpanded)}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <Shield size={20} className="nav-icon" style={{ color: 'var(--text-secondary)' }} />
+                            {!collapsed && <span className="nav-label" style={{ fontSize: '0.9rem', fontWeight: 500 }}>Protection</span>}
+                        </div>
+                        {!collapsed && <ChevronDown size={14} style={{ transform: protectionExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-secondary)' }} />}
+                    </div>
+
+                    <AnimatePresence>
+                        {protectionExpanded && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                style={{ overflow: 'hidden' }}
+                            >
+                                {[{ id: 'load-shedding', label: 'Load Shedding', icon: Shield }].map(item => (
+                                    <a
+                                        key={item.id}
+                                        href={`?view=${item.id}`}
+                                        className={`nav-item sub-item ${currentView === item.id ? 'active' : ''}`}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            handleNavigate(item.id);
+                                        }}
+                                        title={collapsed ? item.label : ''}
+                                        style={collapsed ? { padding: '0.75rem 0', justifyContent: 'center' } : {}}
+                                    >
+                                        {!collapsed && <item.icon size={16} style={{ marginRight: '10px' }} />}
+                                        {!collapsed && item.label}
+                                        {collapsed && <item.icon size={18} />}
                                     </a>
                                 ))}
                             </motion.div>
