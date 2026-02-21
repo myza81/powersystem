@@ -25,9 +25,17 @@ class SubstationSerializer(serializers.ModelSerializer):
 
     def get_total_pload_mw(self, obj):
         snapshot = self.get_snapshot()
-        if not snapshot: return 0.0
+        if not snapshot:
+            return 0.0
         from django.db.models import Sum
-        return obj.snapshot_buses.filter(snapshot=snapshot).aggregate(t=Sum('loads__p_mw'))['t'] or 0.0
+        from core.models import TopologyBus, NetworkLoad
+        bus_ids = TopologyBus.objects.filter(
+            topology_version=snapshot.topology_version,
+            substation=obj,
+        ).values_list('id', flat=True)
+        return NetworkLoad.objects.filter(snapshot=snapshot, bus_id__in=bus_ids).aggregate(
+            t=Sum('p_mw')
+        )['t'] or 0.0
 
 class TransformerDetailSerializer(serializers.Serializer):
     """
@@ -60,17 +68,21 @@ class SubstationDetailSerializer(SubstationSerializer):
 
     def get_transformers(self, obj):
         snapshot = self.get_snapshot()
-        if not snapshot: return []
+        if not snapshot:
+            return []
         
         from django.db.models import Q
         transformers = []
-        buses = obj.snapshot_buses.filter(snapshot=snapshot)
-        bus_ids = list(buses.values_list('id', flat=True))
+        from core.models import TopologyBus
+        bus_ids = list(TopologyBus.objects.filter(
+            topology_version=snapshot.topology_version,
+            substation=obj,
+        ).values_list('id', flat=True))
         
-        # 1. Physical Transformers (NetworkTransformer)
-        from core.models import NetworkTransformer
-        tx_queryset = NetworkTransformer.objects.filter(
-            snapshot=snapshot
+        # 1. Physical Transformers (TopologyTransformer)
+        from core.models import TopologyTransformer
+        tx_queryset = TopologyTransformer.objects.filter(
+            topology_version=snapshot.topology_version
         ).filter(
             Q(from_bus_id__in=bus_ids) | Q(to_bus_id__in=bus_ids)
         ).distinct().select_related('from_bus', 'to_bus', 'tertiary_bus')

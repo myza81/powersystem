@@ -1,12 +1,11 @@
 import os
 import django
 from collections import Counter
-import json
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'powersystem_core.settings')
 django.setup()
 
-from core.models import NetworkSnapshot, NetworkBus
+from core.models import NetworkSnapshot, TopologyBus, SnapshotBusState
 from services.topology_service import TopologyService
 
 def analyze():
@@ -21,7 +20,7 @@ def analyze():
 
         # 1. Check Bus Type Distribution
         f.write("\n--- Bus Type Distribution ---\n")
-        types = NetworkBus.objects.filter(snapshot=snapshot).values_list('bus_type', flat=True)
+        types = SnapshotBusState.objects.filter(snapshot=snapshot).values_list('bus_type', flat=True)
         type_counts = Counter(types)
         for btype, count in sorted(type_counts.items()):
             f.write(f"Type {btype}: {count} buses\n")
@@ -48,10 +47,10 @@ def analyze():
         # Check what kind of buses are in these small islands
         for idx, island in enumerate(small_islands[:20]): # Show first 20
             bus_ids = island['bus_ids']
-            buses = NetworkBus.objects.filter(id__in=bus_ids)
+            buses = TopologyBus.objects.filter(id__in=bus_ids)
             bus_details = []
             for b in buses:
-                 bus_details.append(f"{b.bus_number} {b.bus_name} ({b.base_kv}kV) Type={b.bus_type}")
+                 bus_details.append(f"{b.bus_number} {b.bus_name} ({b.base_kv}kV)")
             
             status = island['status']
             f.write(f"Island {idx+1} ({status}): {', '.join(bus_details)}\n")

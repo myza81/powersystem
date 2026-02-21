@@ -9,12 +9,13 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'powersystem_core.settings')
 django.setup()
 
 from services.island_detection_service import IslandDetectionService
-from core.models import NetworkBus, NetworkBranch
+from core.models import NetworkSnapshot, TopologyBus, TopologyBranch
 
 def inspect_islands():
     snapshot_id = 'c9921400-0b65-4464-b5aa-2c9ff35451c3'
     print(f"Inspecting snapshot: {snapshot_id}")
     
+    snapshot = NetworkSnapshot.objects.get(id=snapshot_id)
     result = IslandDetectionService.analyze_snapshot(snapshot_id)
     islands = result['islands']
     
@@ -25,7 +26,7 @@ def inspect_islands():
     for island in small_islands:
         print(f"\n--- Island #{island['id']} ({island['status']}) ---")
         bus_ids = island['bus_ids']
-        buses = NetworkBus.objects.filter(id__in=bus_ids).select_related('substation')
+        buses = TopologyBus.objects.filter(id__in=bus_ids).select_related('substation')
         
         for bus in buses:
             sub_name = bus.substation.name if bus.substation else "NO SUBSTATION"
@@ -35,7 +36,11 @@ def inspect_islands():
             print(f"  Sub:  {sub_name}")
             
             # Check connections (even inactive ones)
-            branches = NetworkBranch.objects.filter(from_bus=bus) | NetworkBranch.objects.filter(to_bus=bus)
+            branches = TopologyBranch.objects.filter(
+                topology_version=snapshot.topology_version
+            ).filter(from_bus=bus) | TopologyBranch.objects.filter(
+                topology_version=snapshot.topology_version
+            ).filter(to_bus=bus)
             print(f"  Total Branches Linked: {branches.count()}")
             for b in branches:
                 status = "ACTIVE" if b.is_active else "INACTIVE"

@@ -8,9 +8,13 @@ class SnapshotSerializer(serializers.ModelSerializer):
         model = NetworkSnapshot
         fields = [
             'id', 'name', 'description', 'timestamp', 'base_mva', 'frequency',
-            'source_file', 'is_active', 'activated_at', 'size_bytes'
+            'source_file', 'is_active', 'activated_at', 'size_bytes',
+            'import_type', 'topology_version'
         ]
-        read_only_fields = ['id', 'timestamp', 'base_mva', 'frequency', 'activated_at', 'size_bytes']
+        read_only_fields = [
+            'id', 'timestamp', 'base_mva', 'frequency',
+            'activated_at', 'size_bytes', 'import_type', 'topology_version'
+        ]
 
     def get_size_bytes(self, obj):
         if obj.source_file:

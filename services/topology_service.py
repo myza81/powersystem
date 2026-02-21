@@ -5,7 +5,17 @@ import re
 import logging
 from django.db.models import Q
 import django
-from core.models import NetworkSnapshot, NetworkBus, NetworkBranch, NetworkTransformer, NetworkGenerator, NetworkLoad
+from core.models import (
+    NetworkSnapshot,
+    TopologyBus,
+    TopologyBranch,
+    TopologyTransformer,
+    SnapshotBusState,
+    NetworkGenerator,
+    NetworkLoad,
+    NetworkShunt,
+    NetworkSwitchedShunt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +36,18 @@ class TopologyService:
         Constructs the adjacency list from active branches and transformers.
         """
         logger.info(f"Building topology graph for snapshot: {self.snapshot.name}")
+
+        if not self.snapshot.topology_version:
+            raise ValueError("Snapshot has no topology version assigned.")
         
         # 1. Load Buses
         # We need all buses to map IDs and check basic properties
         # Exclude Isolated Buses (Type 4) from Topology Analysis
-        buses_qs = NetworkBus.objects.filter(snapshot=self.snapshot).exclude(bus_type=4)
-        for bus in buses_qs:
+        bus_states = SnapshotBusState.objects.filter(
+            snapshot=self.snapshot
+        ).exclude(bus_type=4).select_related('bus')
+        for state in bus_states:
+            bus = state.bus
             self.buses[bus.id] = bus
             # Identify potential sources (Swing Bus or Gen Bus)
             # PSS/E standard: Bus Type 3 = Swing. 
@@ -48,8 +64,8 @@ class TopologyService:
         self.energized_sources = set(gen_buses)
 
         # 3. Add Branches (Edges)
-        branches = NetworkBranch.objects.filter(
-            snapshot=self.snapshot,
+        branches = TopologyBranch.objects.filter(
+            topology_version=self.snapshot.topology_version,
             is_active=True
         )
         for br in branches:
@@ -59,8 +75,8 @@ class TopologyService:
                 self.adj[v].append(u)
 
         # 4. Add Transformers (Edges)
-        transformers = NetworkTransformer.objects.filter(
-            snapshot=self.snapshot,
+        transformers = TopologyTransformer.objects.filter(
+            topology_version=self.snapshot.topology_version,
             is_active=True
         )
         for tx in transformers:
@@ -89,17 +105,15 @@ class TopologyService:
         Builds bus connectivity and derived substation connectivity for the snapshot.
         Uses substation_id as the identifier for substations.
         """
-        buses = NetworkBus.objects.filter(snapshot=self.snapshot).select_related('substation').only(
-            'id', 'bus_number', 'substation_id'
-        )
-        bus_map = {bus.id: (bus.bus_number, bus.substation_id) for bus in buses}
+        bus_states = SnapshotBusState.objects.filter(snapshot=self.snapshot).select_related('bus')
+        bus_map = {state.bus_id: (state.bus.bus_number, state.bus.substation_id) for state in bus_states}
 
         adj = defaultdict(set)
         for bus_id in bus_map:
             adj[bus_id] = set()
 
-        branches = NetworkBranch.objects.filter(
-            snapshot=self.snapshot,
+        branches = TopologyBranch.objects.filter(
+            topology_version=self.snapshot.topology_version,
             is_active=True
         ).values_list('from_bus_id', 'to_bus_id')
         for u, v in branches:
@@ -107,8 +121,8 @@ class TopologyService:
                 adj[u].add(v)
                 adj[v].add(u)
 
-        transformers = NetworkTransformer.objects.filter(
-            snapshot=self.snapshot,
+        transformers = TopologyTransformer.objects.filter(
+            topology_version=self.snapshot.topology_version,
             is_active=True
         ).values_list('from_bus_id', 'to_bus_id', 'tertiary_bus_id')
         for u, v, t in transformers:
@@ -166,10 +180,11 @@ class TopologyService:
 
     def build_substation_graph(self, include_inactive: bool = False, include_autotransformers: bool = True) -> Dict[str, Set[str]]:
         bus_to_sub = dict(
-            NetworkBus.objects.filter(snapshot=self.snapshot).values_list('id', 'substation_id')
+            SnapshotBusState.objects.filter(snapshot=self.snapshot)
+            .values_list('bus_id', 'bus__substation_id')
         )
         graph = defaultdict(set)
-        branch_qs = NetworkBranch.objects.filter(snapshot=self.snapshot)
+        branch_qs = TopologyBranch.objects.filter(topology_version=self.snapshot.topology_version)
         if not include_inactive:
             branch_qs = branch_qs.filter(is_active=True)
         for u, v in branch_qs.values_list('from_bus_id', 'to_bus_id'):
@@ -179,7 +194,7 @@ class TopologyService:
                 graph[su].add(sv)
                 graph[sv].add(su)
         if include_autotransformers:
-            tx_qs = NetworkTransformer.objects.filter(snapshot=self.snapshot)
+            tx_qs = TopologyTransformer.objects.filter(topology_version=self.snapshot.topology_version)
             if not include_inactive:
                 tx_qs = tx_qs.filter(is_active=True)
             for u, v, t in tx_qs.values_list('from_bus_id', 'to_bus_id', 'tertiary_bus_id'):
@@ -200,9 +215,10 @@ class TopologyService:
 
     def get_autotransformers_by_substation(self, include_inactive: bool = False) -> Dict[str, List[Dict[str, Any]]]:
         bus_info = dict(
-            NetworkBus.objects.filter(snapshot=self.snapshot).values_list('id', 'substation_id')
+            SnapshotBusState.objects.filter(snapshot=self.snapshot)
+            .values_list('bus_id', 'bus__substation_id')
         )
-        tx_qs = NetworkTransformer.objects.filter(snapshot=self.snapshot)
+        tx_qs = TopologyTransformer.objects.filter(topology_version=self.snapshot.topology_version)
         if not include_inactive:
             tx_qs = tx_qs.filter(is_active=True)
 
@@ -227,7 +243,9 @@ class TopologyService:
 
     def get_load_transformers_by_substation(self, include_inactive: bool = False) -> Dict[str, Dict[str, Any]]:
         bus_to_sub = dict(
-            NetworkBus.objects.filter(snapshot=self.snapshot).values_list('id', 'substation_id')
+            SnapshotBusState.objects.filter(snapshot=self.snapshot)
+            .exclude(bus_type=4)
+            .values_list('bus_id', 'bus__substation_id')
         )
         loads_qs = NetworkLoad.objects.filter(snapshot=self.snapshot).filter(
             Q(load_id__istartswith='T') | Q(load_id__istartswith='F')
@@ -260,7 +278,8 @@ class TopologyService:
             })
 
         bus_to_sub = dict(
-            NetworkBus.objects.filter(snapshot=self.snapshot).values_list('id', 'substation_id')
+            SnapshotBusState.objects.filter(snapshot=self.snapshot)
+            .values_list('bus_id', 'bus__substation_id')
         )
 
         def should_remove_any(edge_type: str, su: Optional[str], sv: Optional[str], ckt_id: Optional[str]) -> bool:
@@ -286,7 +305,10 @@ class TopologyService:
             return False
 
         graph = defaultdict(set)
-        branch_qs = NetworkBranch.objects.filter(snapshot=self.snapshot, is_active=True)
+        branch_qs = TopologyBranch.objects.filter(
+            topology_version=self.snapshot.topology_version,
+            is_active=True
+        )
         for u, v, ckt_id in branch_qs.values_list('from_bus_id', 'to_bus_id', 'ckt_id'):
             su = bus_to_sub.get(u)
             sv = bus_to_sub.get(v)
@@ -296,7 +318,10 @@ class TopologyService:
                     graph[sv].add(su)
 
         if include_autotransformers:
-            tx_qs = NetworkTransformer.objects.filter(snapshot=self.snapshot, is_active=True)
+            tx_qs = TopologyTransformer.objects.filter(
+                topology_version=self.snapshot.topology_version,
+                is_active=True
+            )
             for u, v, t, ckt_id in tx_qs.values_list('from_bus_id', 'to_bus_id', 'tertiary_bus_id', 'ckt_id'):
                 su = bus_to_sub.get(u)
                 sv = bus_to_sub.get(v)
@@ -316,8 +341,8 @@ class TopologyService:
                             graph[st].add(sv)
 
         all_nodes = set(
-            NetworkBus.objects.filter(snapshot=self.snapshot, substation_id__isnull=False)
-            .values_list('substation_id', flat=True)
+            SnapshotBusState.objects.filter(snapshot=self.snapshot, bus__substation_id__isnull=False)
+            .values_list('bus__substation_id', flat=True)
         )
 
         visited = set()
@@ -467,9 +492,19 @@ class TopologyService:
         }
 
     def build_network_topology_tree(self, include_inactive_branches: bool = True) -> Dict[str, Any]:
-        buses = NetworkBus.objects.filter(snapshot=self.snapshot).select_related('substation')
+        buses = TopologyBus.objects.filter(
+            topology_version=self.snapshot.topology_version
+        ).select_related('substation')
+        # Exclude Isolated Buses (Type 4) for consistency with Island analysis
+        bus_states = SnapshotBusState.objects.filter(
+            snapshot=self.snapshot
+        ).exclude(bus_type=4).values_list('bus_id', flat=True)
+        active_bus_ids = set(bus_states)
+
         bus_info = {}
         for bus in buses:
+            if bus.id not in active_bus_ids:
+                continue
             bus_info[bus.id] = {
                 "bus_id": bus.id,
                 "bus_number": bus.bus_number,
@@ -478,7 +513,9 @@ class TopologyService:
                 "substation_name": bus.substation.name if bus.substation else None,
             }
 
-        branches_qs = NetworkBranch.objects.filter(snapshot=self.snapshot)
+        branches_qs = TopologyBranch.objects.filter(
+            topology_version=self.snapshot.topology_version
+        )
         if not include_inactive_branches:
             branches_qs = branches_qs.filter(is_active=True)
 
@@ -518,6 +555,46 @@ class TopologyService:
                     "branch_id": b.id,
                     "ckt_id": b.ckt_id,
                     "is_active": b.is_active,
+                    "from_bus": from_bus,
+                    "to_bus": to_bus,
+                })
+
+        # 4. Process Transformers (Edges)
+        transformers_qs = TopologyTransformer.objects.filter(
+            topology_version=self.snapshot.topology_version
+        )
+        for tx in transformers_qs.select_related(
+            'from_bus', 'to_bus', 'from_bus__substation', 'to_bus__substation'
+        ):
+            from_bus = bus_info.get(tx.from_bus_id)
+            to_bus = bus_info.get(tx.to_bus_id)
+            if not from_bus or not to_bus:
+                continue
+
+            for bus in (from_bus, to_bus):
+                sub_id = bus.get("substation_id")
+                if not sub_id:
+                    continue
+                
+                grouped[sub_id]["substation_id"] = sub_id
+                grouped[sub_id]["substation_name"] = bus.get("substation_name")
+                bus_key = str(bus["bus_number"])
+                if bus_key not in grouped[sub_id]["buses"]:
+                    grouped[sub_id]["buses"][bus_key] = {
+                        "bus_id": bus["bus_id"],
+                        "bus_number": bus["bus_number"],
+                        "bus_name": bus["bus_name"],
+                        "branches": [],
+                        "transformers": [],
+                    }
+                
+                if "transformers" not in grouped[sub_id]["buses"][bus_key]:
+                    grouped[sub_id]["buses"][bus_key]["transformers"] = []
+
+                grouped[sub_id]["buses"][bus_key]["transformers"].append({
+                    "transformer_id": tx.id,
+                    "ckt_id": tx.ckt_id,
+                    "is_active": tx.is_active,
                     "from_bus": from_bus,
                     "to_bus": to_bus,
                 })
@@ -705,7 +782,8 @@ class TopologyService:
             anchor_substation_id = removals[0]["to_substation_id"]
 
         bus_to_sub = dict(
-            NetworkBus.objects.filter(snapshot=self.snapshot).values_list('id', 'substation_id')
+            SnapshotBusState.objects.filter(snapshot=self.snapshot)
+            .values_list('bus_id', 'bus__substation_id')
         )
 
         def should_remove_any(edge_type: str, su: Optional[str], sv: Optional[str], ckt_id: Optional[str]) -> bool:
@@ -731,7 +809,10 @@ class TopologyService:
             return False
 
         graph = defaultdict(set)
-        branch_qs = NetworkBranch.objects.filter(snapshot=self.snapshot, is_active=True)
+        branch_qs = TopologyBranch.objects.filter(
+            topology_version=self.snapshot.topology_version,
+            is_active=True
+        )
         for u, v, ckt_id in branch_qs.values_list('from_bus_id', 'to_bus_id', 'ckt_id'):
             su = bus_to_sub.get(u)
             sv = bus_to_sub.get(v)
@@ -741,7 +822,10 @@ class TopologyService:
                     graph[sv].add(su)
 
         if include_autotransformers:
-            tx_qs = NetworkTransformer.objects.filter(snapshot=self.snapshot, is_active=True)
+            tx_qs = TopologyTransformer.objects.filter(
+                topology_version=self.snapshot.topology_version,
+                is_active=True
+            )
             for u, v, t, ckt_id in tx_qs.values_list('from_bus_id', 'to_bus_id', 'tertiary_bus_id', 'ckt_id'):
                 su = bus_to_sub.get(u)
                 sv = bus_to_sub.get(v)
@@ -761,7 +845,7 @@ class TopologyService:
                             graph[st].add(sv)
 
         all_nodes = set(
-            NetworkBus.objects.filter(snapshot=self.snapshot, substation_id__isnull=False)
+            SnapshotBusState.objects.filter(snapshot=self.snapshot, bus__substation_id__isnull=False)
             .values_list('substation_id', flat=True)
         )
 
@@ -845,7 +929,8 @@ class TopologyService:
         isolation_scope = isolation_scope.lower().strip()
 
         bus_to_sub = dict(
-            NetworkBus.objects.filter(snapshot=self.snapshot).values_list('id', 'substation_id')
+            SnapshotBusState.objects.filter(snapshot=self.snapshot)
+            .values_list('bus_id', 'bus__substation_id')
         )
 
         graph = defaultdict(set)
@@ -867,7 +952,10 @@ class TopologyService:
                 return True
             return str(ckt_id).strip() in normalized_circuits
 
-        branch_qs = NetworkBranch.objects.filter(snapshot=self.snapshot, is_active=True)
+        branch_qs = TopologyBranch.objects.filter(
+            topology_version=self.snapshot.topology_version,
+            is_active=True
+        )
         for u, v, ckt_id in branch_qs.values_list('from_bus_id', 'to_bus_id', 'ckt_id'):
             su = bus_to_sub.get(u)
             sv = bus_to_sub.get(v)
@@ -877,7 +965,10 @@ class TopologyService:
                     graph[sv].add(su)
 
         if include_autotransformers:
-            tx_qs = NetworkTransformer.objects.filter(snapshot=self.snapshot, is_active=True)
+            tx_qs = TopologyTransformer.objects.filter(
+                topology_version=self.snapshot.topology_version,
+                is_active=True
+            )
             for u, v, t, ckt_id in tx_qs.values_list('from_bus_id', 'to_bus_id', 'tertiary_bus_id', 'ckt_id'):
                 su = bus_to_sub.get(u)
                 sv = bus_to_sub.get(v)
@@ -897,7 +988,7 @@ class TopologyService:
                             graph[st].add(sv)
 
         all_nodes = set(
-            NetworkBus.objects.filter(snapshot=self.snapshot, substation_id__isnull=False)
+            SnapshotBusState.objects.filter(snapshot=self.snapshot, bus__substation_id__isnull=False)
             .values_list('substation_id', flat=True)
         )
 
@@ -1045,10 +1136,16 @@ class TopologyService:
         # TODO: Optimize with a single aggregate query grouping by bus
         load_map_mw = defaultdict(float)
         load_map_mvar = defaultdict(float)
-        loads = NetworkLoad.objects.filter(snapshot=self.snapshot, in_service=True).values('bus_id', 'p_mw', 'q_mvar')
+        load_rows_by_bus = defaultdict(list)
+        loads = NetworkLoad.objects.filter(snapshot=self.snapshot, in_service=True).values('bus_id', 'load_id', 'p_mw', 'q_mvar')
         for load in loads:
             load_map_mw[load['bus_id']] += load['p_mw']
             load_map_mvar[load['bus_id']] += load['q_mvar']
+            load_rows_by_bus[load['bus_id']].append({
+                'load_id': load['load_id'],
+                'p_mw': load['p_mw'],
+                'q_mvar': load['q_mvar'],
+            })
 
         for i, island_nodes in enumerate(islands):
             # Check for generation
@@ -1067,10 +1164,13 @@ class TopologyService:
                 status = 'Floating' # Noise/Spare
             
             # Identify Substations
-            bus_objects = NetworkBus.objects.filter(id__in=island_nodes).select_related('substation')
+            bus_objects = list(TopologyBus.objects.filter(id__in=island_nodes).select_related('substation'))
+            bus_by_id = {bus.id: bus for bus in bus_objects}
             substation_map = {}
             orphan_buses = []
             bus_details = []
+            orphan_load_mw = 0.0
+            orphan_load_mvar = 0.0
 
             for bus in bus_objects:
                 if bus.substation:
@@ -1089,6 +1189,8 @@ class TopologyService:
                         'kv': bus.base_kv,
                         'pk': bus.id
                     })
+                    orphan_load_mw += load_map_mw[bus.id]
+                    orphan_load_mvar += load_map_mvar[bus.id]
 
                 bus_details.append({
                     'bus_id': bus.id,
@@ -1104,6 +1206,30 @@ class TopologyService:
             sorted_subs = sorted(substation_map.values(), key=lambda x: x['name'])
             sorted_orphans = sorted(orphan_buses, key=lambda x: x['name'])
 
+            island_loads = []
+            for bus_id in island_nodes:
+                bus = bus_by_id.get(bus_id)
+                if not bus:
+                    continue
+                for load in load_rows_by_bus.get(bus_id, []):
+                    island_loads.append({
+                        'load_id': load['load_id'],
+                        'bus_id': bus.id,
+                        'bus_number': bus.bus_number,
+                        'bus_name': bus.bus_name,
+                        'base_kv': bus.base_kv,
+                        'substation_id': bus.substation.substation_id if bus.substation else None,
+                        'substation_name': bus.substation.name if bus.substation else None,
+                        'p_mw': load['p_mw'],
+                        'q_mvar': load['q_mvar'],
+                    })
+
+            island_loads.sort(key=lambda x: (
+                x['substation_name'] or '',
+                x['bus_number'] or 0,
+                str(x['load_id']) if x['load_id'] is not None else ''
+            ))
+
             results.append({
                 'id': i + 1,
                 'bus_count': len(island_nodes),
@@ -1112,10 +1238,13 @@ class TopologyService:
                 'total_load_mvar': total_load_mvar,
                 'bus_ids': list(island_nodes),
                 'buses': sorted(bus_details, key=lambda x: x['bus_number']),
+                'loads': island_loads,
                 'substations': sorted_subs,
                 'substation_count': len(sorted_subs),
                 'orphan_buses': sorted_orphans,
-                'orphan_count': len(sorted_orphans)
+                'orphan_count': len(sorted_orphans),
+                'orphan_load_mw': orphan_load_mw,
+                'orphan_load_mvar': orphan_load_mvar
             })
             
         # Detect Main Grid (heuristic: max bus count among energized)
@@ -1151,10 +1280,15 @@ class TopologyService:
         # For now, we trust the ID list from the frontend.
         
         with django.db.transaction.atomic():
-            buses_to_delete = NetworkBus.objects.filter(
-                snapshot=self.snapshot, 
-                id__in=bus_ids
+            states_to_delete = SnapshotBusState.objects.filter(
+                snapshot=self.snapshot,
+                bus_id__in=bus_ids,
             )
-            count, _ = buses_to_delete.delete()
-            logger.info(f"Deleted {count} components including {len(bus_ids)} buses from snapshot {self.snapshot.id}")
+            bus_ids_set = set(states_to_delete.values_list('bus_id', flat=True))
+            NetworkLoad.objects.filter(snapshot=self.snapshot, bus_id__in=bus_ids_set).delete()
+            NetworkGenerator.objects.filter(snapshot=self.snapshot, bus_id__in=bus_ids_set).delete()
+            NetworkShunt.objects.filter(snapshot=self.snapshot, bus_id__in=bus_ids_set).delete()
+            NetworkSwitchedShunt.objects.filter(snapshot=self.snapshot, bus_id__in=bus_ids_set).delete()
+            count, _ = states_to_delete.delete()
+            logger.info(f"Deleted {count} bus states for snapshot {self.snapshot.id}")
             return count

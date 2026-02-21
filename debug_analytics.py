@@ -6,7 +6,7 @@ from django.test import RequestFactory
 from django.contrib.auth import get_user_model
 
 sys.path.append('/Volumes/externalDrive/code-gym/powersystem')
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'powersystem.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'powersystem_core.settings')
 django.setup()
 
 from api.v1.views.load_analytics import LoadAnalyticsViewSet

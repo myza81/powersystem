@@ -3973,10 +3973,10 @@
     "commission_date": null,
     "sld": "GHLD132.pdf",
     "sld_file": "",
-    "latitude": "3.406230",
-    "longitude": "101.786290",
+    "latitude": "3.419570",
+    "longitude": "101.796450",
     "created_at": "2026-02-03T12:27:51.559Z",
-    "updated_at": "2026-02-15T14:50:32.215Z"
+    "updated_at": "2026-02-21T07:39:45.157Z"
   }
 },
 {
@@ -11461,26 +11461,6 @@
 },
 {
   "model": "core.substation",
-  "pk": "REF001",
-  "fields": {
-    "mnemonic": "REF",
-    "name": "Refactor Test Sub",
-    "ownership": "TNB",
-    "voltage": 132,
-    "grid": null,
-    "state": null,
-    "region": null,
-    "commission_date": null,
-    "sld": "REF001.pdf",
-    "sld_file": "",
-    "latitude": null,
-    "longitude": null,
-    "created_at": "2026-02-02T16:29:54.156Z",
-    "updated_at": "2026-02-14T03:47:28.141Z"
-  }
-},
-{
-  "model": "core.substation",
   "pk": "RLTG132",
   "fields": {
     "mnemonic": "RLTG",
@@ -13601,26 +13581,6 @@
 },
 {
   "model": "core.substation",
-  "pk": "STD001",
-  "fields": {
-    "mnemonic": "STD",
-    "name": "Standardization Test Sub",
-    "ownership": "TNB",
-    "voltage": 132,
-    "grid": null,
-    "state": null,
-    "region": null,
-    "commission_date": null,
-    "sld": "STD001.pdf",
-    "sld_file": "",
-    "latitude": null,
-    "longitude": null,
-    "created_at": "2026-02-02T16:36:47.756Z",
-    "updated_at": "2026-02-14T03:47:28.191Z"
-  }
-},
-{
-  "model": "core.substation",
   "pk": "STDC275",
   "fields": {
     "mnemonic": "STDC",
@@ -14036,26 +13996,6 @@
     "latitude": null,
     "longitude": null,
     "created_at": "2026-02-03T13:02:23.758Z",
-    "updated_at": "2026-02-14T03:47:28.201Z"
-  }
-},
-{
-  "model": "core.substation",
-  "pk": "TEST99132",
-  "fields": {
-    "mnemonic": "TEST99",
-    "name": "Test Rematch Sub",
-    "ownership": "TNB",
-    "voltage": 132,
-    "grid": null,
-    "state": null,
-    "region": null,
-    "commission_date": null,
-    "sld": "TEST99132.pdf",
-    "sld_file": "",
-    "latitude": null,
-    "longitude": null,
-    "created_at": "2026-02-06T08:48:02.797Z",
     "updated_at": "2026-02-14T03:47:28.201Z"
   }
 },

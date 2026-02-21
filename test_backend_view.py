@@ -1,7 +1,7 @@
 import os
 import django
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "powersystem.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "powersystem_core.settings")
 django.setup()
 
 from api.v1.views.load_analytics import LoadAnalyticsViewSet

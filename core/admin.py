@@ -5,20 +5,17 @@ from .models import (
     NetworkArea,
     NetworkZone,
     NetworkOwner,
-    NetworkBus,
-    NetworkBranch,
-    NetworkTransformer,
+    NetworkTopology,
+    TopologyVersion,
+    TopologyBus,
+    TopologyBranch,
+    TopologyTransformer,
+    SnapshotBusState,
     NetworkLoad,
     NetworkGenerator,
     NetworkShunt,
     NetworkSwitchedShunt,
     NetworkDCLink,
-    # Load Shedding & Relay Registry
-    ProtectionRelay,
-    LoadSheddingScheme,
-    SchemeVersion,
-    ShedGroupSetting,
-    ShedGroupAssignment,
 )
 
 @admin.register(Substation)
@@ -32,30 +29,47 @@ class SubstationAdmin(admin.ModelAdmin):
 
 @admin.register(NetworkSnapshot)
 class NetworkSnapshotAdmin(admin.ModelAdmin):
-    list_display = ('name', 'timestamp', 'base_mva', 'frequency', 'id')
+    list_display = ('name', 'timestamp', 'import_type', 'base_mva', 'frequency', 'topology_version', 'id')
     search_fields = ('name', 'description')
     readonly_fields = ('timestamp', 'id')
 
-@admin.register(NetworkBus)
-class NetworkBusAdmin(admin.ModelAdmin):
-    list_display = ('bus_number', 'bus_name', 'base_kv', 'snapshot', 'substation', 'voltage_mag')
+@admin.register(NetworkTopology)
+class NetworkTopologyAdmin(admin.ModelAdmin):
+    list_display = ('name', 'created_at')
+    search_fields = ('name',)
+
+@admin.register(TopologyVersion)
+class TopologyVersionAdmin(admin.ModelAdmin):
+    list_display = ('topology', 'version_tag', 'signature', 'created_at')
+    search_fields = ('version_tag', 'signature')
+    list_filter = ('topology',)
+
+@admin.register(TopologyBus)
+class TopologyBusAdmin(admin.ModelAdmin):
+    list_display = ('bus_number', 'bus_name', 'base_kv', 'topology_version', 'substation')
     search_fields = ('bus_number', 'bus_name', 'substation__name')
-    list_filter = ('snapshot', 'base_kv')
-    raw_id_fields = ('snapshot', 'substation', 'psse_area', 'psse_zone', 'psse_owner')
+    list_filter = ('topology_version', 'base_kv')
+    raw_id_fields = ('topology_version', 'substation')
 
-@admin.register(NetworkBranch)
-class NetworkBranchAdmin(admin.ModelAdmin):
-    list_display = ('from_bus', 'to_bus', 'ckt_id', 'r', 'x', 'snapshot')
-    search_fields = ('from_bus__bus_number', 'to_bus__bus_number', 'ckt_id', 'snapshot__name')
-    list_filter = ('snapshot',)
-    raw_id_fields = ('snapshot', 'from_bus', 'to_bus')
+@admin.register(TopologyBranch)
+class TopologyBranchAdmin(admin.ModelAdmin):
+    list_display = ('from_bus', 'to_bus', 'ckt_id', 'r', 'x', 'topology_version')
+    search_fields = ('from_bus__bus_number', 'to_bus__bus_number', 'ckt_id')
+    list_filter = ('topology_version',)
+    raw_id_fields = ('topology_version', 'from_bus', 'to_bus')
 
-@admin.register(NetworkTransformer)
-class NetworkTransformerAdmin(admin.ModelAdmin):
-    list_display = ('from_bus', 'to_bus', 'ckt_id', 'x', 'snapshot')
-    search_fields = ('from_bus__bus_number', 'to_bus__bus_number', 'ckt_id', 'snapshot__name')
-    list_filter = ('snapshot',)
-    raw_id_fields = ('snapshot', 'from_bus', 'to_bus')
+@admin.register(TopologyTransformer)
+class TopologyTransformerAdmin(admin.ModelAdmin):
+    list_display = ('from_bus', 'to_bus', 'ckt_id', 'x', 'topology_version')
+    search_fields = ('from_bus__bus_number', 'to_bus__bus_number', 'ckt_id')
+    list_filter = ('topology_version',)
+    raw_id_fields = ('topology_version', 'from_bus', 'to_bus', 'tertiary_bus')
+
+@admin.register(SnapshotBusState)
+class SnapshotBusStateAdmin(admin.ModelAdmin):
+    list_display = ('snapshot', 'bus', 'bus_type', 'voltage_mag', 'voltage_angle')
+    list_filter = ('snapshot', 'bus_type')
+    raw_id_fields = ('snapshot', 'bus')
 
 @admin.register(NetworkLoad)
 class NetworkLoadAdmin(admin.ModelAdmin):
@@ -113,58 +127,4 @@ class NetworkDCLinkAdmin(admin.ModelAdmin):
     list_filter = ('snapshot',)
     search_fields = ('name', 'rectifier_bus_number', 'inverter_bus_number')
 
-
-# ==========================================
-# PROTECTION RELAY REGISTRY
-# ==========================================
-
-@admin.register(ProtectionRelay)
-class ProtectionRelayAdmin(admin.ModelAdmin):
-    list_display = ('relay_type', 'relay_panel_id', 'substation', 'assignment_type', 'from_substation_id', 'to_substation_id', 'circuit_id')
-    search_fields = ('relay_panel_id', 'substation__substation_id', 'substation__name', 'from_substation_id', 'to_substation_id', 'circuit_id')
-    list_filter = ('relay_type', 'assignment_type')
-    raw_id_fields = ('substation',)
-
-
-# ==========================================
-# LOAD SHEDDING SCHEMES
-# ==========================================
-
-class ShedGroupAssignmentInline(admin.TabularInline):
-    model = ShedGroupAssignment
-    extra = 1
-    fields = ('assignment_type', 'from_substation_id', 'to_substation_id', 'circuit_id', 'note')
-    readonly_fields = ('substation',)
-
-class ShedGroupSettingInline(admin.TabularInline):
-    model = ShedGroupSetting
-    extra = 1
-    fields = ('operating_stage', 'name', 'trigger_setpoint1', 'trigger_delay1', 'trigger_setpoint2', 'trigger_delay2', 'target_mw_shed')
-
-@admin.register(LoadSheddingScheme)
-class LoadSheddingSchemeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'scheme_type', 'created_by', 'created_at')
-    list_filter = ('scheme_type',)
-    search_fields = ('name', 'description')
-
-@admin.register(SchemeVersion)
-class SchemeVersionAdmin(admin.ModelAdmin):
-    list_display = ('version_number', 'scheme', 'status', 'effective_date', 'published_by', 'published_at')
-    search_fields = ('version_number', 'scheme__name', 'notes')
-    list_filter = ('status', 'scheme__scheme_type')
-    inlines = [ShedGroupSettingInline]
-
-@admin.register(ShedGroupSetting)
-class ShedGroupSettingAdmin(admin.ModelAdmin):
-    list_display = ('name', 'operating_stage', 'version', 'trigger_setpoint1', 'trigger_delay1', 'trigger_setpoint2', 'trigger_delay2', 'target_mw_shed')
-    search_fields = ('name', 'version__version_number')
-    list_filter = ('version__scheme__scheme_type', 'version__status')
-    inlines = [ShedGroupAssignmentInline]
-
-@admin.register(ShedGroupAssignment)
-class ShedGroupAssignmentAdmin(admin.ModelAdmin):
-    list_display = ('assignment_type', 'from_substation_id', 'to_substation_id', 'circuit_id', 'substation', 'group')
-    search_fields = ('from_substation_id', 'to_substation_id', 'circuit_id')
-    list_filter = ('assignment_type', 'group__version__scheme__scheme_type')
-    readonly_fields = ('substation',)
 

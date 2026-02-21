@@ -19,7 +19,10 @@ class IslandDetectionService:
             return {'error': 'Snapshot not found'}
 
         service = TopologyService(snapshot)
-        service.build_graph()
+        try:
+            service.build_graph()
+        except ValueError as exc:
+            return {'error': str(exc)}
         
         islands = service.analyze_islands()
         

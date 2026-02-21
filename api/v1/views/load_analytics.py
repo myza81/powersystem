@@ -2,7 +2,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Sum, Count
-from core.models import NetworkSnapshot, NetworkLoad
+from core.models import NetworkSnapshot, NetworkLoad, TopologyBus, SnapshotBusState
 
 
 class LoadAnalyticsViewSet(viewsets.ViewSet):
@@ -16,7 +16,7 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         """
         GET /api/v1/load-analytics/aggregate/
         
-        Substation-centric aggregation using NetworkLoad → NetworkBus → Substation chain.
+        Substation-centric aggregation using NetworkLoad → TopologyBus → Substation chain.
         
         Query params:
         - snapshot_id: UUID of snapshot (optional, uses latest if not provided)
@@ -63,7 +63,10 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         # Count unique substations with loads
         substation_count = (
             Substation.objects
-            .filter(snapshot_buses__snapshot=snapshot, snapshot_buses__loads__isnull=False)
+            .filter(
+                topology_buses__topology_version=snapshot.topology_version,
+                topology_buses__loads__snapshot=snapshot,
+            )
             .distinct()
             .count()
         )
@@ -88,8 +91,8 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
                 region_substation_count = (
                     Substation.objects
                     .filter(
-                        snapshot_buses__snapshot=snapshot,
-                        snapshot_buses__loads__isnull=False,
+                        topology_buses__topology_version=snapshot.topology_version,
+                        topology_buses__loads__snapshot=snapshot,
                         region=region
                     )
                     .distinct()
@@ -124,8 +127,8 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
                 state_substation_count = (
                     Substation.objects
                     .filter(
-                        snapshot_buses__snapshot=snapshot,
-                        snapshot_buses__loads__isnull=False,
+                        topology_buses__topology_version=snapshot.topology_version,
+                        topology_buses__loads__snapshot=snapshot,
                         state=state
                     )
                     .distinct()
@@ -160,8 +163,8 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
                 ownership_substation_count = (
                     Substation.objects
                     .filter(
-                        snapshot_buses__snapshot=snapshot,
-                        snapshot_buses__loads__isnull=False,
+                        topology_buses__topology_version=snapshot.topology_version,
+                        topology_buses__loads__snapshot=snapshot,
                         ownership=ownership
                     )
                     .distinct()
@@ -223,8 +226,7 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         Returns detached buses (unmapped to substations) with detailed analytics
         (Load MW, Connectivity) to verify if they are ghost data.
         """
-        from core.models import NetworkBus
-        from django.db.models import Sum, Count, F
+        from django.db.models import Sum, Count
         
         snapshot_id = request.query_params.get('snapshot_id')
         
@@ -236,10 +238,11 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
         
         # Query Live Data (Transmission Level unmapped buses)
         # We focus on > 33kV to avoid cluttering with distribution feeders if any exist
-        unmapped_buses = NetworkBus.objects.filter(
-            snapshot=snapshot,
+        bus_ids = SnapshotBusState.objects.filter(snapshot=snapshot).values_list('bus_id', flat=True)
+        unmapped_buses = TopologyBus.objects.filter(
+            id__in=bus_ids,
             substation__isnull=True,
-            base_kv__gt=33
+            base_kv__gt=33,
         ).prefetch_related('loads', 'branches_from', 'branches_to', 'generators')
         
         # Group by Mnemonic (Extracted from Name)
@@ -261,8 +264,8 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
                 continue
             
             # Calculate Load
-            total_load_mw = sum(l.p_mw for l in bus.loads.all())
-            total_gen_mw = sum(g.p_gen for g in bus.generators.all())
+            total_load_mw = sum(l.p_mw for l in bus.loads.filter(snapshot=snapshot))
+            total_gen_mw = sum(g.p_gen for g in bus.generators.filter(snapshot=snapshot))
             
             # Connectivity
             branch_count = bus.branches_from.count() + bus.branches_to.count()

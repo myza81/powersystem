@@ -5,7 +5,7 @@ from django.test import RequestFactory
 from rest_framework.test import APIRequestFactory, force_authenticate
 from django.contrib.auth.models import User
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "powersystem.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "powersystem_core.settings")
 django.setup()
 
 from api.v1.views.snapshot import SnapshotViewSet

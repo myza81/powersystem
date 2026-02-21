@@ -10,7 +10,7 @@ sys.path.append('/Users/myijat/Documents/Dojo/powersystem')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'powersystem_core.settings')
 django.setup()
 
-from core.models import NetworkBus, NetworkSnapshot
+from core.models import NetworkSnapshot, TopologyBus, SnapshotBusState
 
 def update_metadata():
     snapshot_id = 'c9921400-0b65-4464-b5aa-2c9ff35451c3'
@@ -19,10 +19,11 @@ def update_metadata():
     
     # 1. Find currently unmapped buses (Transmission level only to match import logic)
     # Import logic filtered for base_kv in [500, 275, 132]
-    unmapped_buses = NetworkBus.objects.filter(
-        snapshot=snapshot, 
+    bus_ids = SnapshotBusState.objects.filter(snapshot=snapshot).values_list('bus_id', flat=True)
+    unmapped_buses = TopologyBus.objects.filter(
+        id__in=bus_ids,
         substation__isnull=True,
-        base_kv__in=[500.0, 275.0, 132.0]
+        base_kv__in=[500.0, 275.0, 132.0],
     )
     
     print(f"Found {unmapped_buses.count()} unmapped transmission buses.")

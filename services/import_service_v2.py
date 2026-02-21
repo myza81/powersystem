@@ -1,28 +1,36 @@
 """
 PSS/E .raw File Import Service V2
 
-Parses PSS/E .raw files and populates the Network-centric V2 schema.
-Handles all 11 populated data sections with bulk operations and transaction safety.
+Parses PSS/E .raw files and populates the network schema with
+global topology versions and snapshot-scoped load profiles.
 """
 
-import re
+import hashlib
 import logging
-from typing import Dict, List, Tuple, Optional
+import re
+from typing import Dict, List, Optional, Tuple
+
+import pandas as pd
 from django.db import transaction
+from django.utils import timezone
+
 from core.models import (
     NetworkSnapshot,
     NetworkArea,
     NetworkZone,
     NetworkOwner,
-    NetworkBus,
-    NetworkBranch,
-    NetworkTransformer,
+    NetworkTopology,
+    TopologyVersion,
+    TopologyBus,
+    TopologyBranch,
+    TopologyTransformer,
+    SnapshotBusState,
     NetworkLoad,
     NetworkGenerator,
     NetworkShunt,
     NetworkSwitchedShunt,
     NetworkDCLink,
-    Substation
+    Substation,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,101 +38,328 @@ logger = logging.getLogger(__name__)
 
 class ImportServiceV2:
     """
-    Service for importing PSS/E .raw files into V2 schema.
-    
-    Usage:
-        snapshot = ImportServiceV2.import_raw_file('path/to/file.raw', 'Snapshot Name')
+    Service for importing PSS/E .raw files into V2 schema and
+    load profile-only uploads (CSV/XLSX).
     """
-    
+
     @classmethod
-    def import_raw_file(cls, file_path: str, snapshot_name: str, description: str = '', user=None) -> NetworkSnapshot:
-        """
-        Import a complete .raw file into a new NetworkSnapshot.
-        
-        Args:
-            file_path: Path to .raw file
-            snapshot_name: Name for the snapshot
-            description: Optional description
-            user: User object to assign ownership
-            
-        Returns:
-            Created NetworkSnapshot instance
-        """
+    def import_raw_file(
+        cls,
+        file_path: str,
+        snapshot_name: str,
+        description: str = '',
+        user=None,
+    ) -> NetworkSnapshot:
         logger.info(f"Starting import of {file_path}")
-        
+
         with open(file_path, 'r') as f:
             lines = [line.rstrip('\r\n') for line in f.readlines()]
-        
-        # Parse case identification (first 3 lines)
+
         case_id_line = lines[0] if len(lines) > 0 else ''
-        base_mva = 100.0  # Default
-        frequency = 50.0  # Default
-        
-        # Try to extract SBASE from line 1
-        # Format: IC, SBASE, REV, XFRRAT, NXFRAT, BASFRQ
+        base_mva = 100.0
+        frequency = 50.0
+
         parts = case_id_line.split(',')
         if len(parts) >= 2:
-            try:
-                base_mva = float(parts[1].strip())
-            except:
-                pass
+            base_mva = cls._safe_float(parts[1], default=100.0)
         if len(parts) >= 6:
-            try:
-                frequency = float(parts[5].strip())
-            except:
-                pass
-        
-        # Create snapshot
+            frequency = cls._safe_float(parts[5], default=50.0)
+
+        sections = cls._split_into_sections(lines)
+        bus_records, unmatched_mnemonics = cls._parse_bus_records(sections.get('BUS', []))
+        branch_records = cls._parse_branch_records(sections.get('BRANCH', []))
+        transformer_records = cls._parse_transformer_records(sections.get('TRANSFORMER', []))
+
+        signature = cls._compute_topology_signature(bus_records, branch_records, transformer_records)
+        topology_version = cls._get_or_create_topology_version(
+            signature=signature,
+            snapshot_name=snapshot_name,
+            bus_records=bus_records,
+            branch_records=branch_records,
+            transformer_records=transformer_records,
+        )
+
         with transaction.atomic():
             snapshot = NetworkSnapshot.objects.create(
                 name=snapshot_name,
                 description=description,
                 base_mva=base_mva,
                 frequency=frequency,
-                created_by=user
+                created_by=user,
+                import_type='RAW_FULL',
+                topology_version=topology_version,
             )
-            
+
+            if topology_version.created_from_snapshot_id is None:
+                topology_version.created_from_snapshot = snapshot
+                topology_version.save(update_fields=['created_from_snapshot'])
+
             logger.info(f"Created snapshot: {snapshot.name} (ID: {snapshot.id})")
-            
-            # Parse sections
-            sections = cls._split_into_sections(lines)
-            
-            # Import in dependency order
+
             cls._import_areas(snapshot, sections.get('AREA', []))
             cls._import_zones(snapshot, sections.get('ZONE', []))
             cls._import_owners(snapshot, sections.get('OWNER', []))
-            cls._import_buses(snapshot, sections.get('BUS', []))
-            cls._import_loads(snapshot, sections.get('LOAD', []))
-            cls._import_generators(snapshot, sections.get('GENERATOR', []))
-            cls._import_shunts(snapshot, sections.get('FIXED SHUNT', []))
-            cls._import_switched_shunts(snapshot, sections.get('SWITCHED SHUNT', []))
-            cls._import_branches(snapshot, sections.get('BRANCH', []))
-            cls._import_transformers(snapshot, sections.get('TRANSFORMER', []))
+
+            cls._create_bus_states(snapshot, topology_version, bus_records)
+            cls._import_loads(snapshot, topology_version, sections.get('LOAD', []))
+            cls._import_generators(snapshot, topology_version, sections.get('GENERATOR', []))
+            cls._import_shunts(snapshot, topology_version, sections.get('FIXED SHUNT', []))
+            cls._import_switched_shunts(snapshot, topology_version, sections.get('SWITCHED SHUNT', []))
             cls._import_dc_links(snapshot, sections.get('TWO-TERMINAL DC', []))
-            
+
+            if unmatched_mnemonics:
+                snapshot.metadata = snapshot.metadata or {}
+                snapshot.metadata['unmatched_mnemonics'] = {
+                    mnem: [{'bus_number': b[0], 'bus_name': b[1], 'voltage': b[2]} for b in buses_list]
+                    for mnem, buses_list in unmatched_mnemonics.items()
+                }
+                snapshot.save(update_fields=['metadata'])
+
             logger.info(f"Import complete for snapshot {snapshot.name}")
             return snapshot
-    
+
+    @classmethod
+    def import_load_profile(
+        cls,
+        file_path: str,
+        snapshot_name: str,
+        description: str = '',
+        user=None,
+        topology_version_id: Optional[str] = None,
+    ) -> Tuple[NetworkSnapshot, Dict[str, int]]:
+        topology_version = cls._get_topology_version_or_latest(topology_version_id)
+        if not topology_version:
+            raise ValueError("No topology version available for load profile import.")
+
+        df = cls._read_load_profile_dataframe(file_path)
+        df = cls._normalize_load_profile_columns(df)
+
+        missing_columns = [c for c in ('bus_number', 'p_mw', 'q_mvar') if c not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
+
+        with transaction.atomic():
+            snapshot = NetworkSnapshot.objects.create(
+                name=snapshot_name,
+                description=description,
+                base_mva=100.0,
+                frequency=50.0,
+                created_by=user,
+                import_type='LOAD_PROFILE_ONLY',
+                topology_version=topology_version,
+            )
+
+            bus_states = []
+            for bus in TopologyBus.objects.filter(topology_version=topology_version):
+                bus_states.append(SnapshotBusState(
+                    snapshot=snapshot,
+                    bus=bus,
+                    bus_type=1,
+                    voltage_mag=1.0,
+                    voltage_angle=0.0,
+                ))
+            if bus_states:
+                SnapshotBusState.objects.bulk_create(bus_states, batch_size=1000)
+
+            bus_map = {
+                b.bus_number: b
+                for b in TopologyBus.objects.filter(topology_version=topology_version)
+            }
+
+            loads = []
+            skipped = 0
+
+            for _, row in df.iterrows():
+                bus_number = cls._safe_int(row.get('bus_number'))
+                if not bus_number:
+                    skipped += 1
+                    continue
+
+                bus = bus_map.get(bus_number)
+                if not bus:
+                    skipped += 1
+                    continue
+
+                load_id = row.get('load_id')
+                load_id = str(load_id).strip() if load_id not in (None, '') else '1'
+
+                p_mw = cls._safe_float(row.get('p_mw'))
+                q_mvar = cls._safe_float(row.get('q_mvar'))
+                in_service = row.get('in_service')
+                if in_service in (None, ''):
+                    in_service = True
+                else:
+                    in_service = bool(int(in_service)) if str(in_service).isdigit() else bool(in_service)
+
+                loads.append(NetworkLoad(
+                    snapshot=snapshot,
+                    bus=bus,
+                    load_id=load_id,
+                    p_mw=p_mw,
+                    q_mvar=q_mvar,
+                    in_service=in_service,
+                ))
+
+            NetworkLoad.objects.bulk_create(loads, batch_size=1000)
+            logger.info(f"Imported {len(loads)} load records; skipped {skipped}")
+
+            summary = {
+                'imported': len(loads),
+                'skipped': skipped,
+            }
+            return snapshot, summary
+
+    @classmethod
+    def _read_load_profile_dataframe(cls, file_path: str) -> pd.DataFrame:
+        if file_path.lower().endswith('.csv'):
+            return pd.read_csv(file_path)
+        if file_path.lower().endswith(('.xlsx', '.xls')):
+            return pd.read_excel(file_path)
+        raise ValueError("Unsupported load profile file type. Use CSV or XLSX.")
+
+    @classmethod
+    def _normalize_load_profile_columns(cls, df: pd.DataFrame) -> pd.DataFrame:
+        columns = {c: str(c).strip().lower() for c in df.columns}
+        df = df.rename(columns=columns)
+        return df
+
+    @classmethod
+    def _get_topology_version_or_latest(cls, topology_version_id: Optional[str]) -> Optional[TopologyVersion]:
+        if topology_version_id:
+            return TopologyVersion.objects.filter(id=topology_version_id).first()
+        return TopologyVersion.objects.order_by('-created_at').first()
+
+    @classmethod
+    def _get_or_create_topology_version(
+        cls,
+        signature: str,
+        snapshot_name: str,
+        bus_records: List[Dict[str, object]],
+        branch_records: List[Dict[str, object]],
+        transformer_records: List[Dict[str, object]],
+    ) -> TopologyVersion:
+        existing = TopologyVersion.objects.filter(signature=signature).first()
+        if existing:
+            return existing
+
+        topology, _ = NetworkTopology.objects.get_or_create(name='National Topology')
+        version_tag = timezone.now().strftime('%Y-%m-%d')
+        topology_version = TopologyVersion.objects.create(
+            topology=topology,
+            version_tag=version_tag,
+            signature=signature,
+        )
+
+        buses = []
+        for record in bus_records:
+            buses.append(TopologyBus(
+                topology_version=topology_version,
+                substation=record.get('substation'),
+                bus_number=record['bus_number'],
+                bus_name=record['bus_name'],
+                base_kv=record['base_kv'],
+                psse_area=record.get('psse_area'),
+                psse_zone=record.get('psse_zone'),
+                psse_owner=record.get('psse_owner'),
+            ))
+
+        TopologyBus.objects.bulk_create(buses, batch_size=1000)
+
+        bus_map = {
+            b.bus_number: b
+            for b in TopologyBus.objects.filter(topology_version=topology_version)
+        }
+
+        branches = []
+        for record in branch_records:
+            from_bus = bus_map.get(record['from_bus'])
+            to_bus = bus_map.get(record['to_bus'])
+            if from_bus and to_bus:
+                branches.append(TopologyBranch(
+                    topology_version=topology_version,
+                    from_bus=from_bus,
+                    to_bus=to_bus,
+                    ckt_id=record['ckt_id'],
+                    r=record['r'],
+                    x=record['x'],
+                    b=record['b'],
+                    rate_a=record['rate_a'],
+                    rate_b=record['rate_b'],
+                    rate_c=record['rate_c'],
+                    is_active=record['is_active'],
+                ))
+
+        TopologyBranch.objects.bulk_create(branches, batch_size=1000)
+
+        transformers = []
+        for record in transformer_records:
+            from_bus = bus_map.get(record['from_bus'])
+            to_bus = bus_map.get(record['to_bus'])
+            tertiary_bus = bus_map.get(record.get('tertiary_bus')) if record.get('tertiary_bus') else None
+            if from_bus and to_bus:
+                transformers.append(TopologyTransformer(
+                    topology_version=topology_version,
+                    from_bus=from_bus,
+                    to_bus=to_bus,
+                    tertiary_bus=tertiary_bus,
+                    ckt_id=record['ckt_id'],
+                    r=record['r'],
+                    x=record['x'],
+                    windv1=record['windv1'],
+                    windv2=record['windv2'],
+                    windv3=record.get('windv3'),
+                    nomv1=record['nomv1'],
+                    nomv2=record['nomv2'],
+                    nomv3=record.get('nomv3'),
+                    rate_a=record['rate_a'],
+                    is_active=record['is_active'],
+                ))
+
+        TopologyTransformer.objects.bulk_create(transformers, batch_size=1000)
+
+        logger.info(f"Created topology version {topology_version.id} from {snapshot_name}")
+        return topology_version
+
+    @classmethod
+    def _create_bus_states(
+        cls,
+        snapshot: NetworkSnapshot,
+        topology_version: TopologyVersion,
+        bus_records: List[Dict[str, object]],
+    ):
+        bus_map = {
+            b.bus_number: b
+            for b in TopologyBus.objects.filter(topology_version=topology_version)
+        }
+
+        states = []
+        for record in bus_records:
+            bus = bus_map.get(record['bus_number'])
+            if not bus:
+                continue
+            states.append(SnapshotBusState(
+                snapshot=snapshot,
+                bus=bus,
+                bus_type=record['bus_type'],
+                voltage_mag=record['voltage_mag'],
+                voltage_angle=record['voltage_angle'],
+                nv_hi=record.get('nv_hi'),
+                nv_lo=record.get('nv_lo'),
+            ))
+
+        SnapshotBusState.objects.bulk_create(states, batch_size=1000)
+
     @classmethod
     def _split_into_sections(cls, lines: List[str]) -> Dict[str, List[str]]:
-        """
-        Split raw file lines into sections based on delimiters.
-        
-        Returns:
-            Dict mapping section name to list of data lines
-        """
         sections = {}
         current_section = None
         current_lines = []
-        
+
         for line in lines:
-            # Check for section delimiter (lines starting with "0 /")
             if line.startswith('0 /'):
-                # Save previous section
                 if current_section and current_lines:
                     sections[current_section] = current_lines
-                
-                # Determine new section
+
                 if 'BEGIN BUS DATA' in line:
                     current_section = 'BUS'
                 elif 'BEGIN LOAD DATA' in line:
@@ -149,17 +384,15 @@ class ImportServiceV2:
                     current_section = 'SWITCHED SHUNT'
                 elif 'END OF' in line:
                     current_section = None
-                
+
                 current_lines = []
             elif current_section and not line.startswith('@!'):
-                # Skip comment lines starting with @!
                 current_lines.append(line)
-        
+
         return sections
-    
+
     @classmethod
     def _import_areas(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """Import Area data."""
         areas = []
         for line in lines:
             if not line.strip():
@@ -169,15 +402,13 @@ class ImportServiceV2:
                 areas.append(NetworkArea(
                     snapshot=snapshot,
                     number=cls._safe_int(parts[0]),
-                    name=parts[4] if len(parts) > 4 else ''
+                    name=parts[4] if len(parts) > 4 else '',
                 ))
-        
+
         NetworkArea.objects.bulk_create(areas, ignore_conflicts=True)
-        logger.info(f"Imported {len(areas)} areas")
-    
+
     @classmethod
     def _import_zones(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """Import Zone data."""
         zones = []
         for line in lines:
             if not line.strip():
@@ -187,15 +418,13 @@ class ImportServiceV2:
                 zones.append(NetworkZone(
                     snapshot=snapshot,
                     number=cls._safe_int(parts[0]),
-                    name=parts[1]
+                    name=parts[1],
                 ))
-        
+
         NetworkZone.objects.bulk_create(zones, ignore_conflicts=True)
-        logger.info(f"Imported {len(zones)} zones")
-    
+
     @classmethod
     def _import_owners(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """Import Owner data."""
         owners = []
         for line in lines:
             if not line.strip():
@@ -205,41 +434,28 @@ class ImportServiceV2:
                 owners.append(NetworkOwner(
                     snapshot=snapshot,
                     number=cls._safe_int(parts[0]),
-                    name=parts[1]
+                    name=parts[1],
                 ))
-        
+
         NetworkOwner.objects.bulk_create(owners, ignore_conflicts=True)
-        logger.info(f"Imported {len(owners)} owners")
-    
+
     @classmethod
-    def _import_buses(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """
-        Import Bus data and link to Substations.
-        
-        Bus format (PSS/E v33):
-        I, 'NAME', BASKV, IDE, AREA, ZONE, OWNER, VM, VA
-        """
-        # Pre-load reference data
-        areas = {a.number: a for a in NetworkArea.objects.filter(snapshot=snapshot)}
-        zones = {z.number: z for z in NetworkZone.objects.filter(snapshot=snapshot)}
-        owners = {o.number: o for o in NetworkOwner.objects.filter(snapshot=snapshot)}
-        # Pre-load reference data
-        from collections import defaultdict
-        substations_by_mnemonic = defaultdict(list)
+    def _parse_bus_records(cls, lines: List[str]) -> Tuple[List[Dict[str, object]], Dict[str, list]]:
+        substations_by_mnemonic = {}
         for s in Substation.objects.all():
-            substations_by_mnemonic[s.mnemonic].append(s)
-            
-        unmatched_mnemonics = {}  # Track unmatched mnemonics for secondary analysis
-        
-        buses = []
+            substations_by_mnemonic.setdefault(s.mnemonic, []).append(s)
+
+        unmatched_mnemonics = {}
+        records = []
+
         for line in lines:
             if not line.strip():
                 continue
-            
+
             parts = [p.strip().strip("'") for p in line.split(',')]
             if len(parts) < 9:
                 continue
-            
+
             bus_number = cls._safe_int(parts[0])
             bus_name = parts[1]
             base_kv = cls._safe_float(parts[2])
@@ -249,259 +465,57 @@ class ImportServiceV2:
             owner_num = cls._safe_int(parts[6]) if len(parts) > 6 and parts[6] else 1
             voltage_mag = cls._safe_float(parts[7]) if len(parts) > 7 and parts[7] else 1.0
             voltage_angle = cls._safe_float(parts[8]) if len(parts) > 8 and parts[8] else 0.0
-            
-            # Link to substation via mnemonic matching + voltage disambiguation
+
             mnemonic = cls._extract_mnemonic(bus_name)
             substation = None
             if mnemonic in substations_by_mnemonic:
                 potential_subs = substations_by_mnemonic[mnemonic]
+            else:
+                # Try prefix matching (e.g. OLPTRHS matches OLPT)
+                potential_subs = []
+                for m, subs in substations_by_mnemonic.items():
+                    if mnemonic and m and mnemonic.startswith(m) and len(m) >= 3:
+                        potential_subs.extend(subs)
+
+            if potential_subs:
                 if len(potential_subs) == 1:
                     substation = potential_subs[0]
                 else:
-                    # Multi-voltage substation: match by voltage
-                    # Find substation with minimum voltage difference
                     substation = min(potential_subs, key=lambda s: abs(float(s.voltage) - base_kv))
-                    # Validate that it's a reasonable match (within 5kV)
                     if abs(float(substation.voltage) - base_kv) > 5.0:
-                        # Fallback for name variants (e.g. BNTS275 matching BNTS 275)
                         substation = next((s for s in potential_subs if s.substation_id in bus_name), potential_subs[0])
-            
-            # Track unmatched mnemonics (only for transmission-level buses: 500, 275, 132 kV)
-            # Exclude distribution-level buses (33, 22, 11 kV) and already matched buses
+
             if mnemonic and not substation and bus_name.strip():
-                if base_kv in [500.0, 275.0, 132.0]:  # Only transmission-level
-                    if mnemonic not in unmatched_mnemonics:
-                        unmatched_mnemonics[mnemonic] = []
-                    unmatched_mnemonics[mnemonic].append((bus_number, bus_name, base_kv))
-            
-            buses.append(NetworkBus(
-                snapshot=snapshot,
-                substation=substation,
-                bus_number=bus_number,
-                bus_name=bus_name,
-                base_kv=base_kv,
-                bus_type=ide_code,
-                psse_area=areas.get(area_num),
-                psse_zone=zones.get(zone_num),
-                psse_owner=owners.get(owner_num),
-                voltage_mag=voltage_mag,
-                voltage_angle=voltage_angle
-            ))
-        
-        NetworkBus.objects.bulk_create(buses, batch_size=1000)
-        linked_count = sum(1 for b in buses if b.substation)
-        
-        # Log results
-        logger.info(f"Imported {len(buses)} buses ({linked_count} linked to substations)")
-        if unmatched_mnemonics:
-            logger.warning(f"Found {len(unmatched_mnemonics)} unmatched mnemonics: {sorted(unmatched_mnemonics.keys())}")
-            # Store unmatched mnemonics in snapshot metadata for frontend alerts
-            snapshot.metadata = snapshot.metadata or {}
-            snapshot.metadata['unmatched_mnemonics'] = {
-                mnem: [{'bus_number': b[0], 'bus_name': b[1], 'voltage': b[2]} for b in buses_list]
-                for mnem, buses_list in unmatched_mnemonics.items()
-            }
-            snapshot.save()
-    
+                if base_kv in [500.0, 275.0, 132.0]:
+                    unmatched_mnemonics.setdefault(mnemonic, []).append((bus_number, bus_name, base_kv))
+
+            records.append({
+                'bus_number': bus_number,
+                'bus_name': bus_name,
+                'base_kv': base_kv,
+                'bus_type': ide_code,
+                'psse_area': area_num,
+                'psse_zone': zone_num,
+                'psse_owner': owner_num,
+                'voltage_mag': voltage_mag,
+                'voltage_angle': voltage_angle,
+                'substation': substation,
+            })
+
+        return records, unmatched_mnemonics
+
     @classmethod
-    def _extract_mnemonic(cls, bus_name: str) -> Optional[str]:
-        """
-        Extract substation mnemonic from bus name.
-        Returns None for fictitious/temporary buses.
-        
-        Example: "SDAO132" -> "SDAO", "PME275" -> "PME"
-        Filters: "SDAOFIC" -> None (fictitious)
-        """
-        if not bus_name or not bus_name.strip():
-            return None
-        
-        # Filter out fictitious/temporary buses
-        if re.search(r'(FIC|TEMP|TMP|FICT)', bus_name, re.IGNORECASE):
-            return None
-        
-        # Extract mnemonic (uppercase letters before numbers/symbols)
-        match = re.match(r'([A-Z]+)', bus_name.strip())
-        return match.group(1) if match else None
-    
-    @classmethod
-    def _import_loads(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """
-        Import Load data.
-        Format: I, 'ID', STATUS, AREA, ZONE, PL, QL
-        """
-        buses = {b.bus_number: b for b in NetworkBus.objects.filter(snapshot=snapshot)}
-        loads = []
-        
-        for line in lines:
-            if not line.strip():
-                continue
-            parts = [p.strip().strip("'") for p in line.split(',')]
-            if len(parts) < 7:
-                continue
-            
-            bus_num = cls._safe_int(parts[0])
-            load_id = parts[1]
-            status = cls._safe_int(parts[2]) if parts[2] else 1
-            p_mw = cls._safe_float(parts[5]) if parts[5] else 0.0
-            q_mvar = cls._safe_float(parts[6]) if parts[6] else 0.0
-            
-            bus = buses.get(bus_num)
-            if bus:
-                loads.append(NetworkLoad(
-                    snapshot=snapshot,
-                    bus=bus,
-                    load_id=load_id,
-                    p_mw=p_mw,
-                    q_mvar=q_mvar,
-                    in_service=(status == 1)
-                ))
-        
-        NetworkLoad.objects.bulk_create(loads, batch_size=1000)
-        logger.info(f"Imported {len(loads)} loads")
-    
-    @classmethod
-    def _import_generators(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """
-        Import Generator data.
-        Format: I, 'ID', PG, QG, QT, QB, VS, ...
-        """
-        buses = {b.bus_number: b for b in NetworkBus.objects.filter(snapshot=snapshot)}
-        generators = []
-        
-        for line in lines:
-            if not line.strip():
-                continue
-            parts = [p.strip().strip("'") for p in line.split(',')]
-            if len(parts) < 15:
-                continue
-            
-            bus_num = cls._safe_int(parts[0])
-            gen_id = parts[1]
-            p_gen = cls._safe_float(parts[2]) if parts[2] else 0.0
-            q_gen = cls._safe_float(parts[3]) if parts[3] else 0.0
-            q_max = cls._safe_float(parts[4]) if parts[4] else 0.0
-            q_min = cls._safe_float(parts[5]) if parts[5] else 0.0
-            status = cls._safe_int(parts[14]) if len(parts) > 14 and parts[14] else 1
-            p_max = cls._safe_float(parts[8]) if len(parts) > 8 and parts[8] else 0.0
-            p_min = cls._safe_float(parts[9]) if len(parts) > 9 and parts[9] else 0.0
-            
-            bus = buses.get(bus_num)
-            if bus:
-                generators.append(NetworkGenerator(
-                    snapshot=snapshot,
-                    bus=bus,
-                    gen_id=gen_id,
-                    p_gen=p_gen,
-                    q_gen=q_gen,
-                    p_max=p_max,
-                    p_min=p_min,
-                    q_max=q_max,
-                    q_min=q_min,
-                    in_service=(status == 1)
-                ))
-        
-        NetworkGenerator.objects.bulk_create(generators, batch_size=1000)
-        logger.info(f"Imported {len(generators)} generators")
-    
-    @classmethod
-    def _import_shunts(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """Import Fixed Shunt data."""
-        buses = {b.bus_number: b for b in NetworkBus.objects.filter(snapshot=snapshot)}
-        shunts = []
-        
-        for line in lines:
-            if not line.strip():
-                continue
-            parts = [p.strip().strip("'") for p in line.split(',')]
-            if len(parts) < 5:
-                continue
-            
-            bus_num = cls._safe_int(parts[0])
-            shunt_id = parts[1]
-            status = cls._safe_int(parts[2]) if parts[2] else 1
-            g_mw = cls._safe_float(parts[3]) if parts[3] else 0.0
-            b_mvar = cls._safe_float(parts[4]) if parts[4] else 0.0
-            
-            bus = buses.get(bus_num)
-            if bus:
-                shunts.append(NetworkShunt(
-                    snapshot=snapshot,
-                    bus=bus,
-                    shunt_id=shunt_id,
-                    g_mw=g_mw,
-                    b_mvar=b_mvar,
-                    in_service=(status == 1)
-                ))
-        
-        NetworkShunt.objects.bulk_create(shunts)
-        logger.info(f"Imported {len(shunts)} fixed shunts")
-    
-    @classmethod
-    def _import_switched_shunts(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """Import Switched Shunt data."""
-        buses = {b.bus_number: b for b in NetworkBus.objects.filter(snapshot=snapshot)}
-        switched_shunts = []
-        
-        for line in lines:
-            if not line.strip():
-                continue
-            parts = [p.strip().strip("'") for p in line.split(',')]
-            if len(parts) < 10:
-                continue
-            
-            bus_num = cls._safe_int(parts[0])
-            control_mode = cls._safe_int(parts[1]) if parts[1] else 0
-            b_init = cls._safe_float(parts[9]) if len(parts) > 9 and parts[9] else 0.0
-            
-            bus = buses.get(bus_num)
-            if bus:
-                switched_shunts.append(NetworkSwitchedShunt(
-                    snapshot=snapshot,
-                    bus=bus,
-                    control_mode=control_mode,
-                    b_init=b_init,
-                    step_info=''  # Simplified for now
-                ))
-        
-        NetworkSwitchedShunt.objects.bulk_create(switched_shunts)
-        logger.info(f"Imported {len(switched_shunts)} switched shunts")
-    
-    @classmethod
-    def _safe_float(cls, value: str, default: float = 0.0) -> float:
-        """Safely convert string to float, handling whitespace and empty strings."""
-        try:
-            stripped = value.strip()
-            return float(stripped) if stripped else default
-        except (ValueError, AttributeError):
-            return default
-    
-    @classmethod
-    def _safe_int(cls, value: str, default: int = 0) -> int:
-        """Safely convert string to int, handling whitespace and empty strings."""
-        try:
-            stripped = value.strip()
-            return int(stripped) if stripped else default
-        except (ValueError, AttributeError):
-            return default
-    
-    @classmethod
-    def _import_branches(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """
-        Import Branch (transmission line) data.
-        Format: I, J, 'CKT', R, X, B, RATEA, RATEB, RATEC, ...
-        """
-        buses = {b.bus_number: b for b in NetworkBus.objects.filter(snapshot=snapshot)}
-        branches = []
-        
+    def _parse_branch_records(cls, lines: List[str]) -> List[Dict[str, object]]:
+        records = []
         for line in lines:
             if not line.strip():
                 continue
             parts = [p.strip().strip("'") for p in line.split(',')]
             if len(parts) < 12:
                 continue
-            
-            from_bus_num = cls._safe_int(parts[0])
-            to_bus_num = cls._safe_int(parts[1])
+
+            from_bus = cls._safe_int(parts[0])
+            to_bus = cls._safe_int(parts[1])
             ckt_id = parts[2]
             r = cls._safe_float(parts[3])
             x = cls._safe_float(parts[4])
@@ -515,70 +529,47 @@ class ImportServiceV2:
                 status = cls._safe_int(parts[13])
             else:
                 status = 1
-            
-            from_bus = buses.get(from_bus_num)
-            to_bus = buses.get(to_bus_num)
-            
-            if from_bus and to_bus:
-                branches.append(NetworkBranch(
-                    snapshot=snapshot,
-                    from_bus=from_bus,
-                    to_bus=to_bus,
-                    ckt_id=ckt_id,
-                    r=r,
-                    x=x,
-                    b=b,
-                    rate_a=rate_a,
-                    rate_b=rate_b,
-                    rate_c=rate_c,
-                    is_active=(status == 1)
-                ))
-        
-        NetworkBranch.objects.bulk_create(branches, batch_size=1000)
-        logger.info(f"Imported {len(branches)} branches")
-    
+
+            records.append({
+                'from_bus': from_bus,
+                'to_bus': to_bus,
+                'ckt_id': ckt_id,
+                'r': r,
+                'x': x,
+                'b': b,
+                'rate_a': rate_a,
+                'rate_b': rate_b,
+                'rate_c': rate_c,
+                'is_active': status == 1,
+            })
+
+        return records
+
     @classmethod
-    def _import_transformers(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """
-        Import Transformer data (2-winding only for now).
-        PSS/E transformers span multiple lines. Simplified parsing.
-        """
-    @classmethod
-    def _import_transformers(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """
-        PSS/E transformers span multiple lines (4 for 2-winding, 5 for 3-winding).
-        """
-        buses = {b.bus_number: b for b in NetworkBus.objects.filter(snapshot=snapshot)}
-        transformers = []
+    def _parse_transformer_records(cls, lines: List[str]) -> List[Dict[str, object]]:
+        records = []
         cleaned_lines = [line for line in lines if line.strip()]
-        
+
         i = 0
         while i < len(cleaned_lines):
             line = cleaned_lines[i].strip()
-            if not line:
-                i += 1
-                continue
-            
-            # Line 1: I, J, K, 'CKT', ...
             parts = [p.strip().strip("'") for p in line.split(',')]
             if len(parts) < 4:
                 i += 1
                 continue
-            
-            from_bus_num = cls._safe_int(parts[0])
-            to_bus_num = cls._safe_int(parts[1])
-            tertiary_bus_num = cls._safe_int(parts[2]) if parts[2] != '0' else 0
+
+            from_bus = cls._safe_int(parts[0])
+            to_bus = cls._safe_int(parts[1])
+            tertiary_bus = cls._safe_int(parts[2]) if parts[2] != '0' else 0
             ckt_id = parts[3]
-            
-            # Line 2: Impedances (R, X)
+
             r, x = 0.0, 0.0
             if i + 1 < len(cleaned_lines):
                 line2 = cleaned_lines[i + 1].strip()
                 parts2 = [p.strip() for p in line2.split(',')]
                 r = cls._safe_float(parts2[0]) if len(parts2) > 0 else 0.0
                 x = cls._safe_float(parts2[1]) if len(parts2) > 1 else 0.0
-            
-            # Line 3: Winding 1 data
+
             windv1, nomv1, rate_a = 1.0, 0.0, 0.0
             if i + 2 < len(cleaned_lines):
                 line3 = cleaned_lines[i + 2].strip()
@@ -586,8 +577,7 @@ class ImportServiceV2:
                 windv1 = cls._safe_float(parts3[0]) if len(parts3) > 0 else 1.0
                 nomv1 = cls._safe_float(parts3[1]) if len(parts3) > 1 else 0.0
                 rate_a = cls._safe_float(parts3[3]) if len(parts3) > 3 else 0.0
-            
-            # Line 4: Winding 2 data
+
             windv2, nomv2 = 1.0, 0.0
             if i + 3 < len(cleaned_lines):
                 line4 = cleaned_lines[i + 3].strip()
@@ -595,10 +585,9 @@ class ImportServiceV2:
                 windv2 = cls._safe_float(parts4[0]) if len(parts4) > 0 else 1.0
                 nomv2 = cls._safe_float(parts4[1]) if len(parts4) > 1 else 0.0
 
-            # Line 5: Winding 3 data (Only for 3-winding)
             windv3, nomv3 = None, None
             step = 4
-            if tertiary_bus_num != 0:
+            if tertiary_bus != 0:
                 step = 5
                 if i + 4 < len(cleaned_lines):
                     line5 = cleaned_lines[i + 4].strip()
@@ -606,78 +595,257 @@ class ImportServiceV2:
                     windv3 = cls._safe_float(parts5[0]) if len(parts5) > 0 else 1.0
                     nomv3 = cls._safe_float(parts5[1]) if len(parts5) > 1 else 0.0
 
-            from_bus = buses.get(from_bus_num)
-            to_bus = buses.get(to_bus_num)
-            tertiary_bus = buses.get(tertiary_bus_num) if tertiary_bus_num != 0 else None
-            
-            if from_bus and to_bus:
-                transformers.append(NetworkTransformer(
-                    snapshot=snapshot,
-                    from_bus=from_bus,
-                    to_bus=to_bus,
-                    tertiary_bus=tertiary_bus,
-                    ckt_id=ckt_id,
-                    r=r,
-                    x=x,
-                    windv1=windv1,
-                    windv2=windv2,
-                    windv3=windv3,
-                    nomv1=nomv1,
-                    nomv2=nomv2,
-                    nomv3=nomv3,
-                    rate_a=rate_a,
-                    is_active=True
-                ))
-            
+            records.append({
+                'from_bus': from_bus,
+                'to_bus': to_bus,
+                'tertiary_bus': tertiary_bus if tertiary_bus != 0 else None,
+                'ckt_id': ckt_id,
+                'r': r,
+                'x': x,
+                'windv1': windv1,
+                'windv2': windv2,
+                'windv3': windv3,
+                'nomv1': nomv1,
+                'nomv2': nomv2,
+                'nomv3': nomv3,
+                'rate_a': rate_a,
+                'is_active': True,
+            })
+
             i += step
-        
-        NetworkTransformer.objects.bulk_create(transformers, batch_size=1000)
-        logger.info(f"Imported {len(transformers)} transformers")
-    
+
+        return records
+
+    @classmethod
+    def _import_loads(cls, snapshot: NetworkSnapshot, topology_version: TopologyVersion, lines: List[str]):
+        buses = {b.bus_number: b for b in TopologyBus.objects.filter(topology_version=topology_version)}
+        loads = []
+
+        for line in lines:
+            if not line.strip():
+                continue
+            parts = [p.strip().strip("'") for p in line.split(',')]
+            if len(parts) < 7:
+                continue
+
+            bus_num = cls._safe_int(parts[0])
+            load_id = parts[1]
+            status = cls._safe_int(parts[2]) if parts[2] else 1
+            p_mw = cls._safe_float(parts[5]) if parts[5] else 0.0
+            q_mvar = cls._safe_float(parts[6]) if parts[6] else 0.0
+
+            bus = buses.get(bus_num)
+            if bus:
+                loads.append(NetworkLoad(
+                    snapshot=snapshot,
+                    bus=bus,
+                    load_id=load_id,
+                    p_mw=p_mw,
+                    q_mvar=q_mvar,
+                    in_service=(status == 1),
+                ))
+
+        NetworkLoad.objects.bulk_create(loads, batch_size=1000)
+
+    @classmethod
+    def _import_generators(cls, snapshot: NetworkSnapshot, topology_version: TopologyVersion, lines: List[str]):
+        buses = {b.bus_number: b for b in TopologyBus.objects.filter(topology_version=topology_version)}
+        generators = []
+
+        for line in lines:
+            if not line.strip():
+                continue
+            parts = [p.strip().strip("'") for p in line.split(',')]
+            if len(parts) < 15:
+                continue
+
+            bus_num = cls._safe_int(parts[0])
+            gen_id = parts[1]
+            p_gen = cls._safe_float(parts[2]) if parts[2] else 0.0
+            q_gen = cls._safe_float(parts[3]) if parts[3] else 0.0
+            q_max = cls._safe_float(parts[4]) if parts[4] else 0.0
+            q_min = cls._safe_float(parts[5]) if parts[5] else 0.0
+            status = cls._safe_int(parts[14]) if len(parts) > 14 and parts[14] else 1
+            p_max = cls._safe_float(parts[8]) if len(parts) > 8 and parts[8] else 0.0
+            p_min = cls._safe_float(parts[9]) if len(parts) > 9 and parts[9] else 0.0
+
+            bus = buses.get(bus_num)
+            if bus:
+                generators.append(NetworkGenerator(
+                    snapshot=snapshot,
+                    bus=bus,
+                    gen_id=gen_id,
+                    p_gen=p_gen,
+                    q_gen=q_gen,
+                    p_max=p_max,
+                    p_min=p_min,
+                    q_max=q_max,
+                    q_min=q_min,
+                    in_service=(status == 1),
+                ))
+
+        NetworkGenerator.objects.bulk_create(generators, batch_size=1000)
+
+    @classmethod
+    def _import_shunts(cls, snapshot: NetworkSnapshot, topology_version: TopologyVersion, lines: List[str]):
+        buses = {b.bus_number: b for b in TopologyBus.objects.filter(topology_version=topology_version)}
+        shunts = []
+
+        for line in lines:
+            if not line.strip():
+                continue
+            parts = [p.strip().strip("'") for p in line.split(',')]
+            if len(parts) < 5:
+                continue
+
+            bus_num = cls._safe_int(parts[0])
+            shunt_id = parts[1]
+            status = cls._safe_int(parts[2]) if parts[2] else 1
+            g_mw = cls._safe_float(parts[3]) if parts[3] else 0.0
+            b_mvar = cls._safe_float(parts[4]) if parts[4] else 0.0
+
+            bus = buses.get(bus_num)
+            if bus:
+                shunts.append(NetworkShunt(
+                    snapshot=snapshot,
+                    bus=bus,
+                    shunt_id=shunt_id,
+                    g_mw=g_mw,
+                    b_mvar=b_mvar,
+                    in_service=(status == 1),
+                ))
+
+        NetworkShunt.objects.bulk_create(shunts, batch_size=1000)
+
+    @classmethod
+    def _import_switched_shunts(cls, snapshot: NetworkSnapshot, topology_version: TopologyVersion, lines: List[str]):
+        buses = {b.bus_number: b for b in TopologyBus.objects.filter(topology_version=topology_version)}
+        switched_shunts = []
+
+        for line in lines:
+            if not line.strip():
+                continue
+            parts = [p.strip().strip("'") for p in line.split(',')]
+            if len(parts) < 10:
+                continue
+
+            bus_num = cls._safe_int(parts[0])
+            control_mode = cls._safe_int(parts[1]) if parts[1] else 0
+            b_init = cls._safe_float(parts[9]) if len(parts) > 9 and parts[9] else 0.0
+
+            bus = buses.get(bus_num)
+            if bus:
+                switched_shunts.append(NetworkSwitchedShunt(
+                    snapshot=snapshot,
+                    bus=bus,
+                    control_mode=control_mode,
+                    b_init=b_init,
+                    step_info='',
+                ))
+
+        NetworkSwitchedShunt.objects.bulk_create(switched_shunts, batch_size=1000)
+
     @classmethod
     def _import_dc_links(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        """Import Two-Terminal DC Line data."""
         dc_links = []
-        
+
         i = 0
         while i < len(lines):
             line = lines[i].strip()
             if not line:
                 i += 1
                 continue
-            
-            # Line 1: 'NAME', MDC, RDC, SETVL, ...
+
             parts = [p.strip().strip("'\"") for p in line.split(',')]
             if len(parts) < 4:
                 i += 1
                 continue
-            
+
             name = parts[0]
             setpoint_mw = cls._safe_float(parts[3]) if len(parts) > 3 and parts[3] else 0.0
-            
-            # Line 2: Rectifier data (IPR, ...)
+
             rect_bus = 0
             if i + 1 < len(lines):
                 line2 = lines[i + 1].strip()
                 parts2 = [p.strip() for p in line2.split(',')]
                 rect_bus = cls._safe_int(parts2[0]) if len(parts2) > 0 and parts2[0] else 0
-            
-            # Line 3: Inverter data (IPI, ...)
+
             inv_bus = 0
             if i + 2 < len(lines):
                 line3 = lines[i + 2].strip()
                 parts3 = [p.strip() for p in line3.split(',')]
                 inv_bus = cls._safe_int(parts3[0]) if len(parts3) > 0 and parts3[0] else 0
-            
+
             dc_links.append(NetworkDCLink(
                 snapshot=snapshot,
                 name=name,
                 rectifier_bus_number=rect_bus,
                 inverter_bus_number=inv_bus,
-                setpoint_mw=setpoint_mw
+                setpoint_mw=setpoint_mw,
             ))
-            
-            i += 3  # DC links span 3 lines
-        
+
+            i += 3
+
         NetworkDCLink.objects.bulk_create(dc_links)
-        logger.info(f"Imported {len(dc_links)} DC links")
+
+    @classmethod
+    def _compute_topology_signature(
+        cls,
+        bus_records: List[Dict[str, object]],
+        branch_records: List[Dict[str, object]],
+        transformer_records: List[Dict[str, object]],
+    ) -> str:
+        bus_items = sorted(
+            [
+                f"{b['bus_number']}|{b['bus_name']}|{b['base_kv']}"
+                for b in bus_records
+            ]
+        )
+        branch_items = sorted(
+            [
+                f"{b['from_bus']}|{b['to_bus']}|{b['ckt_id']}|{b['r']}|{b['x']}|{b['b']}|{b['rate_a']}|{b['rate_b']}|{b['rate_c']}|{int(b['is_active'])}"
+                for b in branch_records
+            ]
+        )
+        transformer_items = sorted(
+            [
+                f"{t['from_bus']}|{t['to_bus']}|{t.get('tertiary_bus') or 0}|{t['ckt_id']}|{t['r']}|{t['x']}|{t['windv1']}|{t['windv2']}|{t.get('windv3') or 0}|{t['nomv1']}|{t['nomv2']}|{t.get('nomv3') or 0}|{t['rate_a']}|{int(t['is_active'])}"
+                for t in transformer_records
+            ]
+        )
+
+        payload = '\n'.join(bus_items + branch_items + transformer_items)
+        return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+    @classmethod
+    def _extract_mnemonic(cls, bus_name: str) -> Optional[str]:
+        if not bus_name or not bus_name.strip():
+            return None
+        # Exclude known fictitious/temporary markers, but allow TMPI
+        if re.search(r'(FIC|TEMP|FICT)', bus_name, re.IGNORECASE):
+            return None
+        # Only block TMP if it's not followed by 'I' (Tampoi)
+        if re.search(r'TMP(?!I)', bus_name, re.IGNORECASE):
+            return None
+        match = re.match(r'([A-Z]+)', bus_name.strip())
+        return match.group(1) if match else None
+
+    @classmethod
+    def _safe_float(cls, value: object, default: float = 0.0) -> float:
+        try:
+            if value is None:
+                return default
+            stripped = str(value).strip()
+            return float(stripped) if stripped else default
+        except (ValueError, AttributeError):
+            return default
+
+    @classmethod
+    def _safe_int(cls, value: object, default: int = 0) -> int:
+        try:
+            if value is None:
+                return default
+            stripped = str(value).strip()
+            return int(stripped) if stripped else default
+        except (ValueError, AttributeError):
+            return default

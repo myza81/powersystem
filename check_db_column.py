@@ -5,7 +5,7 @@ import traceback
 from django.db import connection
 
 sys.path.append('/Volumes/externalDrive/code-gym/powersystem')
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'powersystem.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'powersystem_core.settings')
 django.setup()
 
 def check_column():
