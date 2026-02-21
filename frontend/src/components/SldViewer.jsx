@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Loader2, AlertTriangle, X, FileText, ZoomIn, ZoomOut } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
-const api = axios.create({ baseURL: '/api/v1' });
+import api from '../api';
 
 const SldViewer = ({ substation, onClose }) => {
     const [content, setContent] = useState(null);

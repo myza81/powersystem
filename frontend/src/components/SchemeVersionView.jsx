@@ -7,7 +7,7 @@ import {
     AlertTriangle, RefreshCw, Radio
 } from 'lucide-react';
 
-const api = axios.create({ baseURL: '/api/v1' });
+import api from '../api';
 
 const REGION_COLORS = {
     'North': '#00e5ff',
@@ -25,7 +25,7 @@ function computeRegionBreakdown(groups) {
     let total = 0;
     for (const g of groups) {
         for (const a of g.assignments || []) {
-            const region = a.substation_region || 'Unknown';
+            const region = a.relay_trip_detail?.relay_substation_region || 'Unknown';
             if (!map[region]) map[region] = 0;
         }
     }
@@ -35,10 +35,10 @@ function computeRegionBreakdown(groups) {
         total += mw;
         const regions = {};
         for (const a of g.assignments || []) {
-            const r = a.substation_region || 'Unknown';
+            const r = a.relay_trip_detail?.relay_substation_region || 'Unknown';
             regions[r] = (regions[r] || 0) + 1;
         }
-        const dominant = Object.keys(regions).sort((a, b) => regions[b] - regions[a])[0] || 'Unknown';
+        const dominant = Object.keys(regions).sort((x, y) => regions[y] - regions[x])[0] || 'Unknown';
         map[dominant] = (map[dominant] || 0) + mw;
     }
     return { map, total };
@@ -82,12 +82,13 @@ const RegionBreakdown = ({ groups }) => {
 
 // ─── Assignment item ──────────────────────────────────────────────
 const AssignmentRow = ({ assignment }) => {
-    const isBranch = assignment.assignment_type === 'branch';
+    const detail = assignment.relay_trip_detail || {};
+    const isBranch = detail.assignment_type === 'branch';
     const label = isBranch
-        ? `${assignment.from_substation_id} — ${assignment.to_substation_id} ${assignment.circuit_id}`
-        : `${assignment.from_substation_id} ${assignment.circuit_id}`;
+        ? `${detail.relay_substation_id || 'Unknown'} — ${detail.target_substation_id || 'Unknown'} ${detail.circuit_id || ''}`
+        : `${detail.relay_substation_id || 'Unknown'} ${detail.circuit_id || ''}`;
 
-    const unresolved = !assignment.substation;
+    const unresolved = !detail.relay_substation_id;
 
     return (
         <div style={{
@@ -106,18 +107,18 @@ const AssignmentRow = ({ assignment }) => {
             <span style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.85rem', color: '#e2e8f0' }}>
                 {label}
             </span>
-            {assignment.substation_name && (
+            {detail.relay_substation_name && (
                 <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)' }}>
-                    {assignment.substation_name}
+                    {detail.relay_substation_name}
                 </span>
             )}
-            {assignment.substation_region && (
+            {detail.relay_substation_region && (
                 <span style={{
                     fontSize: '0.68rem', padding: '1px 7px', borderRadius: '20px',
-                    color: REGION_COLORS[assignment.substation_region] || '#94a3b8',
-                    background: `${REGION_COLORS[assignment.substation_region] || '#94a3b8'}15`,
+                    color: REGION_COLORS[detail.relay_substation_region] || '#94a3b8',
+                    background: `${REGION_COLORS[detail.relay_substation_region] || '#94a3b8'}15`,
                 }}>
-                    {assignment.substation_region}
+                    {detail.relay_substation_region}
                 </span>
             )}
             {unresolved && (

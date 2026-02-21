@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, X, Trash2, Zap, Activity, Network } from 'lucide-react';
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api/v1' });
+import api from '../api';
 
 const MissingSubstationAlert = ({ snapshotId, onRefresh }) => {
     const [alertData, setAlertData] = useState(null);

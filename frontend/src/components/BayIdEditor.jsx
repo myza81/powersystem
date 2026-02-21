@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, AlertTriangle, CheckCircle2, Edit3, ShieldAlert } from 'lucide-react';
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api/v1' });
+import api from '../api';
 
 const BayIdEditor = ({ substation, onClose, onSuccess }) => {
     const [transformers, setTransformers] = useState([]);

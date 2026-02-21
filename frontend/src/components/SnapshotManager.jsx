@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api/v1' });
+import api from '../api';
 
 import ImportSummaryView from './ImportSummaryView';
 
@@ -83,8 +83,8 @@ const SnapshotManager = () => {
     const [showUpload, setShowUpload] = useState(false);
     const [status, setStatus] = useState(null);
     const [activeSnapshot, setActiveSnapshot] = useState(null);
-    const [showSummary, setShowSummary] = useState(false);
     const [summaryData, setSummaryData] = useState(null);
+    const SUMMARY_STORAGE_KEY = 'snapshot_summary_cache';
 
     // Fetch Snapshots
     const fetchSnapshots = async () => {
@@ -95,6 +95,16 @@ const SnapshotManager = () => {
             setSnapshots(sorted);
             const active = sorted.find(s => s.is_active);
             setActiveSnapshot(active);
+            if (active) {
+                try {
+                    const cached = JSON.parse(localStorage.getItem(SUMMARY_STORAGE_KEY) || 'null');
+                    if (cached && cached.snapshotId === active.id && cached.summary) {
+                        setSummaryData(cached.summary);
+                    }
+                } catch (e) {
+                    console.warn('Failed to restore summary cache', e);
+                }
+            }
         } catch (err) {
             console.error("Failed to fetch snapshots", err);
             setStatus({ type: 'error', msg: 'Failed to load snapshots' });
@@ -104,6 +114,17 @@ const SnapshotManager = () => {
 
     useEffect(() => {
         fetchSnapshots();
+    }, []);
+
+    useEffect(() => {
+        try {
+            const cached = JSON.parse(localStorage.getItem(SUMMARY_STORAGE_KEY) || 'null');
+            if (cached?.summary && !summaryData) {
+                setSummaryData(cached.summary);
+            }
+        } catch (e) {
+            console.warn('Failed to read summary cache', e);
+        }
     }, []);
 
     // Actions
@@ -128,7 +149,12 @@ const SnapshotManager = () => {
             // Show summary
             if (res.data.summary) {
                 setSummaryData(res.data.summary);
-                setShowSummary(true);
+                if (res.data.snapshot?.id) {
+                    localStorage.setItem(SUMMARY_STORAGE_KEY, JSON.stringify({
+                        snapshotId: res.data.snapshot.id,
+                        summary: res.data.summary,
+                    }));
+                }
             }
 
             fetchSnapshots();
@@ -159,7 +185,12 @@ const SnapshotManager = () => {
             // Show summary
             if (res.data.summary) {
                 setSummaryData(res.data.summary);
-                setShowSummary(true);
+                if (res.data.snapshot?.id) {
+                    localStorage.setItem(SUMMARY_STORAGE_KEY, JSON.stringify({
+                        snapshotId: res.data.snapshot.id,
+                        summary: res.data.summary,
+                    }));
+                }
             }
 
             fetchSnapshots();
@@ -535,7 +566,7 @@ const SnapshotManager = () => {
             `}</style>
 
             <AnimatePresence>
-                {showSummary && summaryData && (
+                {summaryData && (
                     <ImportSummaryView summary={summaryData} />
                 )}
             </AnimatePresence>

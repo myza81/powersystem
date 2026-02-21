@@ -7,7 +7,7 @@ import 'leaflet.heat';
 import { Settings, X, RefreshCw, Search, MapPin, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api/v1' });
+import api from '../api';
 
 // Helper to handle map clicks
 const MapClickHandler = ({ onMapClick }) => {
@@ -57,8 +57,8 @@ const MapController = ({ center, zoom }) => {
 
 // Default thresholds configuration
 const DEFAULT_THRESHOLDS = [
-    { max: 1, color: '#3bf7ea', label: '< 1 MW (Cyan)' },
-    { max: 30, color: '#3b82f6', label: '1-30 MW (Blue)' },
+    { max: 1, color: '#3b82f6', label: '< 1 MW (Blue)' },
+    { max: 30, color: '#3bf7ea', label: '1-30 MW (Cyan)' },
     { max: 50, color: '#22c55e', label: '30-50 MW (Green)' },
     { max: 80, color: '#eab308', label: '50-80 MW (Yellow)' },
     { max: 100, color: '#f97316', label: '80-100 MW (Orange)' },

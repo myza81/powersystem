@@ -4,7 +4,7 @@ import { RefreshCw, Download, Upload, ChevronDown, ChevronRight, AlertTriangle, 
 import axios from 'axios';
 
 // API Service (reusing the one from App.jsx if possible, but defining here for now)
-const api = axios.create({ baseURL: '/api/v1' });
+import api from '../api';
 
 const DevTools = ({ onBack }) => {
     const [diff, setDiff] = useState(null);

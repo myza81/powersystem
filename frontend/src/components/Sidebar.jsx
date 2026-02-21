@@ -15,26 +15,36 @@ import {
     PlusCircle,
     Upload,
     Shield,
+    Activity,
+    Cpu,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Sidebar = ({ currentView, onViewChange }) => {
     const [collapsed, setCollapsed] = useState(false);
-    const [loadProfileExpanded, setLoadProfileExpanded] = useState(true);
+    const [monitoringExpanded, setMonitoringExpanded] = useState(true);
     const [assetsExpanded, setAssetsExpanded] = useState(true);
-    const [protectionExpanded, setProtectionExpanded] = useState(true);
+    const [operationsExpanded, setOperationsExpanded] = useState(true);
+    const [systemExpanded, setSystemExpanded] = useState(false);
 
     const toggleCollapse = () => setCollapsed(!collapsed);
 
-    const loadProfileItems = [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    const monitoringItems = [
+        { id: 'dashboard', label: 'Live Dashboard', icon: LayoutDashboard },
+        { id: 'snapshots', label: 'Network Analysis', icon: Activity },
     ];
 
     const assetItems = [
-        { id: 'list', label: 'Substation', icon: List },
-        { id: 'create', label: 'New Subs Entry', icon: PlusCircle },
-        { id: 'snapshots', label: 'Snapshots', icon: Database },
+        { id: 'list', label: 'Substation Assets', icon: List },
+        { id: 'create', label: 'Register New Entry', icon: PlusCircle },
+    ];
 
+    const operationItems = [
+        { id: 'load-shedding', label: 'Load Shedding', icon: Shield },
+    ];
+
+    const systemItems = [
+        { id: 'dev-tools', label: 'Developer Tools', icon: Cpu },
     ];
 
     const handleNavigate = (view) => {
@@ -73,31 +83,28 @@ const Sidebar = ({ currentView, onViewChange }) => {
             {/* Navigation */}
             <nav className="sidebar-nav">
 
-                {/* Load Profile Group */}
+                {/* Monitoring & Analysis */}
                 <div className="nav-group" style={{ position: 'relative' }}>
                     <div
                         className={`nav-group-header ${collapsed ? 'collapsed' : ''}`}
-                        onClick={() => {
-                            // Only toggle the sub-menu state, do NOT expand sidebar
-                            setLoadProfileExpanded(!loadProfileExpanded);
-                        }}
+                        onClick={() => setMonitoringExpanded(!monitoringExpanded)}
                     >
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                             <LineChart size={20} className="nav-icon" style={{ color: 'var(--text-secondary)' }} />
-                            {!collapsed && <span className="nav-label" style={{ fontSize: '0.9rem', fontWeight: 500 }}>Load Profile</span>}
+                            {!collapsed && <span className="nav-label" style={{ fontSize: '0.9rem', fontWeight: 500 }}>Monitoring</span>}
                         </div>
-                        {!collapsed && <ChevronDown size={14} style={{ transform: loadProfileExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-secondary)' }} />}
+                        {!collapsed && <ChevronDown size={14} style={{ transform: monitoringExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-secondary)' }} />}
                     </div>
 
                     <AnimatePresence>
-                        {loadProfileExpanded && (
+                        {monitoringExpanded && (
                             <motion.div
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }}
                                 style={{ overflow: 'hidden' }}
                             >
-                                {loadProfileItems.map(item => (
+                                {monitoringItems.map(item => (
                                     <a
                                         key={item.id}
                                         href={`?view=${item.id}`}
@@ -169,28 +176,28 @@ const Sidebar = ({ currentView, onViewChange }) => {
                     </AnimatePresence>
                 </div>
 
-                {/* Protection Group */}
+                {/* Operations Group */}
                 <div className="nav-group" style={{ position: 'relative' }}>
                     <div
                         className={`nav-group-header ${collapsed ? 'collapsed' : ''}`}
-                        onClick={() => setProtectionExpanded(!protectionExpanded)}
+                        onClick={() => setOperationsExpanded(!operationsExpanded)}
                     >
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                             <Shield size={20} className="nav-icon" style={{ color: 'var(--text-secondary)' }} />
-                            {!collapsed && <span className="nav-label" style={{ fontSize: '0.9rem', fontWeight: 500 }}>Protection</span>}
+                            {!collapsed && <span className="nav-label" style={{ fontSize: '0.9rem', fontWeight: 500 }}>Operations</span>}
                         </div>
-                        {!collapsed && <ChevronDown size={14} style={{ transform: protectionExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-secondary)' }} />}
+                        {!collapsed && <ChevronDown size={14} style={{ transform: operationsExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-secondary)' }} />}
                     </div>
 
                     <AnimatePresence>
-                        {protectionExpanded && (
+                        {operationsExpanded && (
                             <motion.div
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
                                 exit={{ height: 0, opacity: 0 }}
                                 style={{ overflow: 'hidden' }}
                             >
-                                {[{ id: 'load-shedding', label: 'Load Shedding', icon: Shield }].map(item => (
+                                {operationItems.map(item => (
                                     <a
                                         key={item.id}
                                         href={`?view=${item.id}`}
@@ -212,14 +219,47 @@ const Sidebar = ({ currentView, onViewChange }) => {
                     </AnimatePresence>
                 </div>
 
-                {/* DevSync */}
-                <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
-                    <NavItem
-                        item={{ id: 'dev-tools', label: 'DevSync', icon: Database }}
-                        isActive={currentView === 'dev-tools'}
-                        collapsed={collapsed}
-                        onClick={() => handleNavigate('dev-tools')}
-                    />
+                {/* System Group */}
+                <div className="nav-group" style={{ position: 'relative', marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
+                    <div
+                        className={`nav-group-header ${collapsed ? 'collapsed' : ''}`}
+                        onClick={() => setSystemExpanded(!systemExpanded)}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <Settings size={20} className="nav-icon" style={{ color: 'var(--text-secondary)' }} />
+                            {!collapsed && <span className="nav-label" style={{ fontSize: '0.9rem', fontWeight: 500 }}>System</span>}
+                        </div>
+                        {!collapsed && <ChevronDown size={14} style={{ transform: systemExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-secondary)' }} />}
+                    </div>
+
+                    <AnimatePresence>
+                        {systemExpanded && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                style={{ overflow: 'hidden' }}
+                            >
+                                {systemItems.map(item => (
+                                    <a
+                                        key={item.id}
+                                        href={`?view=${item.id}`}
+                                        className={`nav-item sub-item ${currentView === item.id ? 'active' : ''}`}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            handleNavigate(item.id);
+                                        }}
+                                        title={collapsed ? item.label : ''}
+                                        style={collapsed ? { padding: '0.75rem 0', justifyContent: 'center' } : {}}
+                                    >
+                                        {!collapsed && <item.icon size={16} style={{ marginRight: '10px' }} />}
+                                        {!collapsed && item.label}
+                                        {collapsed && <item.icon size={18} />}
+                                    </a>
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             </nav>
 

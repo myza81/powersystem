@@ -9,7 +9,7 @@ import {
 import SchemeVersionView from './SchemeVersionView';
 import ShedDesign from './ShedDesign';
 
-const api = axios.create({ baseURL: '/api/v1' });
+import api from '../api';
 
 const SCHEME_TYPES = ['UFLS', 'UVLS', 'MANUAL'];
 const SCHEME_LABELS = {

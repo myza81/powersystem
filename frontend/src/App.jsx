@@ -16,7 +16,7 @@ import SubstationMap from './components/SubstationMap';
 
 import SnapshotManager from './components/SnapshotManager';
 import LoadSheddingManager from './components/LoadSheddingManager';
-const api = axios.create({ baseURL: '/api/v1' });
+import api from './api';
 
 const DEFAULT_FILTERS = {
     region: 'All',
@@ -258,15 +258,14 @@ const App = () => {
                 <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                     <div>
                         <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
-                            {view === 'dashboard' && 'System Dashboard'}
-                            {view === 'load-profile' && 'Load Profile Management'}
+                            {view === 'dashboard' && 'Live Dashboard'}
                             {view === 'list' && 'Substation Assets'}
-                            {view === 'create' && 'New Substation Entry'}
+                            {view === 'create' && 'Register New Entry'}
                             {view === 'edit' && 'Edit Substation'}
                             {view === 'config' && 'Configuration Editor'}
-                            {/* {view === 'topology' && 'Network Topology Validation'} */}
-                            {view === 'snapshots' && 'Network Snapshots'}
+                            {view === 'snapshots' && 'Network Analysis'}
                             {view === 'dev-tools' && 'Developer Tools'}
+                            {view === 'load-shedding' && 'Load Shedding Module'}
                         </h2>
                     </div>
                 </header>

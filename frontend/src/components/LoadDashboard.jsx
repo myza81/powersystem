@@ -6,7 +6,7 @@ import SldViewer from './SldViewer';
 import BayIdEditor from './BayIdEditor';
 import SubstationMap from './SubstationMap';
 
-const api = axios.create({ baseURL: '/api/v1' });
+import api from '../api';
 
 const LoadDashboard = ({ substations = [] }) => {
     const [loading, setLoading] = useState(true);
