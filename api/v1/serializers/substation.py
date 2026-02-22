@@ -1,5 +1,13 @@
 from rest_framework import serializers
-from core.models import Substation
+from core.models import (
+    Substation,
+    LoadTransformer,
+    IncomingBranch,
+    IncomingBranchAlias,
+    AutoTransformer,
+    EquipmentTopologyMap,
+    EquipmentSnapshotState,
+)
 
 class SubstationSerializer(serializers.ModelSerializer):
     """
@@ -136,3 +144,69 @@ class SubstationDetailSerializer(SubstationSerializer):
             })
             
         return transformers
+
+
+class LoadTransformerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoadTransformer
+        fields = [
+            'id', 'bay_id', 'substation', 'transformer_no',
+            'hv_voltage', 'hv_breaker_number',
+            'lv_voltage', 'lv_breaker_number',
+            'capacity_mva', 'commissioning_date',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['bay_id', 'created_at', 'updated_at']
+
+
+class IncomingBranchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IncomingBranch
+        fields = [
+            'id', 'bay_id', 'substation', 'to_substation', 'ckt_id',
+            'breaker_number', 'commissioning_date',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['bay_id', 'created_at', 'updated_at']
+
+
+class IncomingBranchAliasSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IncomingBranchAlias
+        fields = ['id', 'incoming_branch', 'bay_id', 'effective_from', 'effective_to']
+
+
+class AutoTransformerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AutoTransformer
+        fields = [
+            'id', 'bay_id', 'substation', 'transformer_no',
+            'hv_voltage', 'hv_breaker_number',
+            'lv_voltage', 'lv_breaker_number',
+            'capacity_mva', 'commissioning_date',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['bay_id', 'created_at', 'updated_at']
+
+
+class EquipmentTopologyMapSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EquipmentTopologyMap
+        fields = [
+            'id', 'equipment_type', 'topology_version',
+            'load_transformer', 'incoming_branch', 'auto_transformer',
+            'topology_transformer', 'topology_branch',
+            'created_at'
+        ]
+        read_only_fields = ['created_at']
+
+
+class EquipmentSnapshotStateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EquipmentSnapshotState
+        fields = [
+            'id', 'snapshot', 'equipment_type',
+            'load_transformer', 'incoming_branch', 'auto_transformer',
+            'in_service', 'state_source', 'updated_at'
+        ]
+        read_only_fields = ['updated_at']

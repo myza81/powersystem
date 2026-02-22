@@ -31,6 +31,11 @@ from core.models import (
     NetworkSwitchedShunt,
     NetworkDCLink,
     Substation,
+    LoadTransformer,
+    IncomingBranch,
+    AutoTransformer,
+    EquipmentTopologyMap,
+    EquipmentSnapshotState,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,6 +111,7 @@ class ImportServiceV2:
             cls._import_shunts(snapshot, topology_version, sections.get('FIXED SHUNT', []))
             cls._import_switched_shunts(snapshot, topology_version, sections.get('SWITCHED SHUNT', []))
             cls._import_dc_links(snapshot, sections.get('TWO-TERMINAL DC', []))
+            cls._create_equipment_snapshot_state(snapshot, topology_version)
 
             if unmatched_mnemonics:
                 snapshot.metadata = snapshot.metadata or {}
@@ -317,8 +323,148 @@ class ImportServiceV2:
 
         TopologyTransformer.objects.bulk_create(transformers, batch_size=1000)
 
+        cls._create_equipment_topology_maps(topology_version)
+
         logger.info(f"Created topology version {topology_version.id} from {snapshot_name}")
         return topology_version
+
+    @classmethod
+    def _parse_transformer_no(cls, ckt_id: str) -> Optional[int]:
+        if not ckt_id:
+            return None
+        match = re.search(r'\d+', ckt_id)
+        if not match:
+            return None
+        try:
+            return int(match.group(0))
+        except ValueError:
+            return None
+
+    @classmethod
+    def _select_by_voltage(cls, transformers: List[object], lv_kv: int):
+        matches = [t for t in transformers if not t.lv_voltage or t.lv_voltage == lv_kv]
+        if len(matches) == 1:
+            return matches[0]
+        return None
+
+    @classmethod
+    def _create_equipment_topology_maps(cls, topology_version: TopologyVersion) -> None:
+        incoming_lookup = {
+            (b.substation_id, b.to_substation_id, b.ckt_id): b
+            for b in IncomingBranch.objects.select_related('substation', 'to_substation')
+        }
+
+        load_by_substation = {}
+        for lt in LoadTransformer.objects.select_related('substation'):
+            load_by_substation.setdefault(lt.substation_id, []).append(lt)
+
+        auto_by_substation = {}
+        for at in AutoTransformer.objects.select_related('substation'):
+            auto_by_substation.setdefault(at.substation_id, []).append(at)
+
+        maps = []
+
+        branches = TopologyBranch.objects.filter(topology_version=topology_version).select_related(
+            'from_bus__substation', 'to_bus__substation'
+        )
+        for br in branches:
+            from_sub = br.from_bus.substation
+            to_sub = br.to_bus.substation
+            if not from_sub or not to_sub:
+                continue
+            key = (from_sub.substation_id, to_sub.substation_id, br.ckt_id)
+            if key in incoming_lookup:
+                maps.append(EquipmentTopologyMap(
+                    topology_version=topology_version,
+                    equipment_type=EquipmentTopologyMap.EquipmentType.INCOMING_BRANCH,
+                    incoming_branch=incoming_lookup[key],
+                    topology_branch=br,
+                ))
+            reverse_key = (to_sub.substation_id, from_sub.substation_id, br.ckt_id)
+            if reverse_key != key and reverse_key in incoming_lookup:
+                maps.append(EquipmentTopologyMap(
+                    topology_version=topology_version,
+                    equipment_type=EquipmentTopologyMap.EquipmentType.INCOMING_BRANCH,
+                    incoming_branch=incoming_lookup[reverse_key],
+                    topology_branch=br,
+                ))
+
+        transformers = TopologyTransformer.objects.filter(topology_version=topology_version).select_related(
+            'from_bus__substation', 'to_bus__substation'
+        )
+        for tx in transformers:
+            if tx.from_bus.substation and tx.to_bus.substation:
+                if tx.from_bus.substation_id != tx.to_bus.substation_id:
+                    continue
+            tx_no = cls._parse_transformer_no(tx.ckt_id)
+            candidates = []
+            if tx.from_bus.substation:
+                candidates.append((tx.from_bus.substation, int(round(tx.to_bus.base_kv))))
+            if tx.to_bus.substation and tx.to_bus.substation != tx.from_bus.substation:
+                candidates.append((tx.to_bus.substation, int(round(tx.from_bus.base_kv))))
+
+            for sub, lv_kv in candidates:
+                sub_id = sub.substation_id
+                if lv_kv in (33, 22, 11):
+                    lt = None
+                    if tx_no is not None:
+                        lt = next((t for t in load_by_substation.get(sub_id, []) if t.transformer_no == tx_no), None)
+                    if lt is None:
+                        lt = cls._select_by_voltage(load_by_substation.get(sub_id, []), lv_kv)
+                    if lt:
+                        maps.append(EquipmentTopologyMap(
+                            topology_version=topology_version,
+                            equipment_type=EquipmentTopologyMap.EquipmentType.LOAD_TRANSFORMER,
+                            load_transformer=lt,
+                            topology_transformer=tx,
+                        ))
+                elif lv_kv in (275, 132):
+                    at = None
+                    if tx_no is not None:
+                        at = next((t for t in auto_by_substation.get(sub_id, []) if t.transformer_no == tx_no), None)
+                    if at is None:
+                        at = cls._select_by_voltage(auto_by_substation.get(sub_id, []), lv_kv)
+                    if at:
+                        maps.append(EquipmentTopologyMap(
+                            topology_version=topology_version,
+                            equipment_type=EquipmentTopologyMap.EquipmentType.AUTO_TRANSFORMER,
+                            auto_transformer=at,
+                            topology_transformer=tx,
+                        ))
+
+        if maps:
+            EquipmentTopologyMap.objects.bulk_create(maps, batch_size=1000, ignore_conflicts=True)
+
+    @classmethod
+    def _create_equipment_snapshot_state(cls, snapshot: NetworkSnapshot, topology_version: TopologyVersion) -> None:
+        maps = EquipmentTopologyMap.objects.filter(topology_version=topology_version).select_related(
+            'topology_branch',
+            'topology_transformer',
+            'load_transformer',
+            'incoming_branch',
+            'auto_transformer',
+        )
+        states = []
+        for mapping in maps:
+            if mapping.topology_branch:
+                in_service = mapping.topology_branch.is_active
+            elif mapping.topology_transformer:
+                in_service = mapping.topology_transformer.is_active
+            else:
+                continue
+
+            states.append(EquipmentSnapshotState(
+                snapshot=snapshot,
+                equipment_type=mapping.equipment_type,
+                load_transformer=mapping.load_transformer,
+                incoming_branch=mapping.incoming_branch,
+                auto_transformer=mapping.auto_transformer,
+                in_service=in_service,
+                state_source='snapshot',
+            ))
+
+        if states:
+            EquipmentSnapshotState.objects.bulk_create(states, batch_size=1000, ignore_conflicts=True)
 
     @classmethod
     def _create_bus_states(

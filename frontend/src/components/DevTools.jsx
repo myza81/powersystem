@@ -11,6 +11,8 @@ const DevTools = ({ onBack }) => {
     const [loading, setLoading] = useState(false);
     const [syncStatus, setSyncStatus] = useState(null); // { type: 'success'|'error', msg: '' }
     const [expandedRows, setExpandedRows] = useState({});
+    const [resetMaster, setResetMaster] = useState(false);
+    const [forceImport, setForceImport] = useState(false);
 
     const fetchDiff = async () => {
         setLoading(true);
@@ -46,8 +48,11 @@ const DevTools = ({ onBack }) => {
         if (!confirm("WARNING: This will overwrite your local database with data from the fixture. All local changes not exported will be lost. Continue?")) return;
         setLoading(true);
         try {
-            await api.post('/dev/import/');
-            setSyncStatus({ type: 'success', msg: 'Database successfully synced from fixture.' });
+            await api.post('/dev/import/', {
+                reset_master: resetMaster,
+                force_import: forceImport,
+            });
+            setSyncStatus({ type: 'success', msg: 'Database successfully synced from fixture. Backup created before import.' });
             fetchDiff(); // Refresh diff
         } catch (err) {
             setSyncStatus({ type: 'error', msg: err.response?.data?.error || 'Import failed.' });
@@ -109,7 +114,7 @@ const DevTools = ({ onBack }) => {
                         <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '0.5rem' }}>
                             <h4 style={{ marginBottom: '0.5rem' }}>Export to Fixture</h4>
                             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                                Dumps current database state to `core/fixtures/initial_data.json`.
+                                Dumps master data (Substation, LoadTransformer, IncomingBranch, AutoTransformer) to `core/fixtures/initial_data.json`.
                                 Commit this file to share changes.
                             </p>
                             <button
@@ -125,9 +130,27 @@ const DevTools = ({ onBack }) => {
                         <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '0.5rem' }}>
                             <h4 style={{ marginBottom: '0.5rem' }}>Import from Fixture</h4>
                             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                                Loads `core/fixtures/initial_data.json` into database.
+                                Loads `core/fixtures/initial_data.json` into database and resets master data.
                                 <strong style={{ color: '#ff6b6b' }}> Overwrites local data!</strong>
                             </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={resetMaster}
+                                        onChange={(e) => setResetMaster(e.target.checked)}
+                                    />
+                                    Reset master data before import (recommended for non-owner workstations)
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={forceImport}
+                                        onChange={(e) => setForceImport(e.target.checked)}
+                                    />
+                                    Force import even if fixture is older than local DB
+                                </label>
+                            </div>
                             <button
                                 className="btn-primary"
                                 onClick={handleImport}

@@ -21,6 +21,7 @@ from django.conf.urls.static import static
 import os
 from rest_framework.routers import DefaultRouter
 from api.v1.views.substation import SubstationViewSet
+from api.v1.views.bay_assets import LoadTransformerViewSet, AutoTransformerViewSet, IncomingBranchViewSet
 from api.v1.views.load_analytics import LoadAnalyticsViewSet
 from api.v1.views.snapshot import SnapshotViewSet
 # V1 ViewSets disabled for V2:
@@ -32,6 +33,9 @@ from api.v1.views.topology import TopologyViewSet
 
 router = DefaultRouter()
 router.register(r'substations', SubstationViewSet)
+router.register(r'load-transformers', LoadTransformerViewSet)
+router.register(r'auto-transformers', AutoTransformerViewSet)
+router.register(r'incoming-branches', IncomingBranchViewSet)
 router.register(r'load-analytics', LoadAnalyticsViewSet, basename='load-analytics')
 router.register(r'snapshots', SnapshotViewSet, basename='snapshot')
 router.register(r'topology', TopologyViewSet, basename='topology')

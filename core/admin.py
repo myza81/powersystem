@@ -16,6 +16,12 @@ from .models import (
     NetworkShunt,
     NetworkSwitchedShunt,
     NetworkDCLink,
+    LoadTransformer,
+    IncomingBranch,
+    IncomingBranchAlias,
+    AutoTransformer,
+    EquipmentTopologyMap,
+    EquipmentSnapshotState,
 )
 
 @admin.register(Substation)
@@ -26,6 +32,45 @@ class SubstationAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at')
     # Removed inlines for now as Transformer/IncomingBay are gone. 
     # Future: specific "Snapshot Views" might be added here.
+
+class IncomingBranchAliasInline(admin.TabularInline):
+    model = IncomingBranchAlias
+    extra = 0
+    fields = ('bay_id', 'effective_from', 'effective_to')
+
+@admin.register(LoadTransformer)
+class LoadTransformerAdmin(admin.ModelAdmin):
+    list_display = ('bay_id', 'substation', 'transformer_no', 'hv_voltage', 'lv_voltage', 'capacity_mva')
+    search_fields = ('bay_id', 'substation__substation_id')
+    list_filter = ('hv_voltage', 'lv_voltage')
+    raw_id_fields = ('substation',)
+
+@admin.register(IncomingBranch)
+class IncomingBranchAdmin(admin.ModelAdmin):
+    list_display = ('bay_id', 'substation', 'to_substation', 'ckt_id', 'breaker_number')
+    search_fields = ('bay_id', 'substation__substation_id', 'to_substation__substation_id')
+    list_filter = ('substation',)
+    raw_id_fields = ('substation', 'to_substation')
+    inlines = (IncomingBranchAliasInline,)
+
+@admin.register(AutoTransformer)
+class AutoTransformerAdmin(admin.ModelAdmin):
+    list_display = ('bay_id', 'substation', 'transformer_no', 'hv_voltage', 'lv_voltage', 'capacity_mva')
+    search_fields = ('bay_id', 'substation__substation_id')
+    list_filter = ('hv_voltage', 'lv_voltage')
+    raw_id_fields = ('substation',)
+
+@admin.register(EquipmentTopologyMap)
+class EquipmentTopologyMapAdmin(admin.ModelAdmin):
+    list_display = ('equipment_type', 'topology_version', 'load_transformer', 'incoming_branch', 'auto_transformer', 'topology_transformer', 'topology_branch')
+    list_filter = ('equipment_type', 'topology_version')
+    raw_id_fields = ('topology_version', 'load_transformer', 'incoming_branch', 'auto_transformer', 'topology_transformer', 'topology_branch')
+
+@admin.register(EquipmentSnapshotState)
+class EquipmentSnapshotStateAdmin(admin.ModelAdmin):
+    list_display = ('equipment_type', 'snapshot', 'load_transformer', 'incoming_branch', 'auto_transformer', 'in_service', 'state_source', 'updated_at')
+    list_filter = ('equipment_type', 'snapshot', 'in_service')
+    raw_id_fields = ('snapshot', 'load_transformer', 'incoming_branch', 'auto_transformer')
 
 @admin.register(NetworkSnapshot)
 class NetworkSnapshotAdmin(admin.ModelAdmin):
@@ -126,5 +171,4 @@ class NetworkDCLinkAdmin(admin.ModelAdmin):
     list_display = ('name', 'rectifier_bus_number', 'inverter_bus_number', 'setpoint_mw', 'snapshot')
     list_filter = ('snapshot',)
     search_fields = ('name', 'rectifier_bus_number', 'inverter_bus_number')
-
 

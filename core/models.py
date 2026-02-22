@@ -1,5 +1,7 @@
 import uuid
 from django.db import models
+from django.db.models import Q
+from django.utils import timezone
 from django.core.files.storage import FileSystemStorage
 from django.conf import settings
 import os
@@ -152,6 +154,198 @@ class Substation(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.substation_id})"
+
+# ==========================================
+# 2.1 BAY MASTER DATA (Substation-Scoped)
+# ==========================================
+
+class LoadTransformer(models.Model):
+    substation = models.ForeignKey(Substation, on_delete=models.CASCADE, related_name='load_transformers')
+    transformer_no = models.IntegerField()
+    bay_id = models.CharField(max_length=50, unique=True, blank=True)
+    hv_voltage = models.IntegerField(null=True, blank=True)
+    hv_breaker_number = models.CharField(max_length=10, null=True, blank=True)
+    lv_voltage = models.IntegerField(null=True, blank=True)
+    lv_breaker_number = models.CharField(max_length=10, null=True, blank=True)
+    capacity_mva = models.IntegerField(null=True, blank=True)
+    commissioning_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('substation', 'transformer_no')
+        ordering = ['substation__substation_id', 'transformer_no']
+
+    def save(self, *args, **kwargs):
+        if self.substation_id is not None and self.transformer_no is not None:
+            self.bay_id = f"{self.substation_id}_T{self.transformer_no}"
+        if self.hv_voltage is None and self.substation_id is not None:
+            self.hv_voltage = self.substation.voltage
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return str(self.bay_id)
+
+
+class IncomingBranch(models.Model):
+    substation = models.ForeignKey(Substation, on_delete=models.CASCADE, related_name='incoming_branches')
+    to_substation = models.ForeignKey(Substation, on_delete=models.CASCADE, related_name='incoming_from_branches')
+    ckt_id = models.CharField(max_length=2)
+    breaker_number = models.CharField(max_length=10, null=True, blank=True)
+    bay_id = models.CharField(max_length=80, unique=True, blank=True)
+    commissioning_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('substation', 'to_substation', 'ckt_id')
+        ordering = ['substation__substation_id', 'to_substation__substation_id', 'ckt_id']
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        previous_bay_id = None
+        if not is_new:
+            try:
+                previous_bay_id = IncomingBranch.objects.values_list('bay_id', flat=True).get(pk=self.pk)
+            except IncomingBranch.DoesNotExist:
+                previous_bay_id = None
+        if self.substation_id and self.to_substation_id and self.ckt_id:
+            self.bay_id = f"{self.substation_id}_{self.to_substation_id}_{self.ckt_id}"
+        super().save(*args, **kwargs)
+        if is_new:
+            effective_from = self.commissioning_date or timezone.now().date()
+            IncomingBranchAlias.objects.create(
+                incoming_branch=self,
+                bay_id=self.bay_id,
+                effective_from=effective_from,
+            )
+            return
+        if previous_bay_id and previous_bay_id != self.bay_id:
+            IncomingBranchAlias.objects.filter(
+                incoming_branch=self,
+                bay_id=previous_bay_id,
+                effective_to__isnull=True,
+            ).update(effective_to=timezone.now().date())
+            IncomingBranchAlias.objects.create(
+                incoming_branch=self,
+                bay_id=self.bay_id,
+                effective_from=timezone.now().date(),
+            )
+
+    def __str__(self):
+        return str(self.bay_id)
+
+
+class IncomingBranchAlias(models.Model):
+    incoming_branch = models.ForeignKey(IncomingBranch, on_delete=models.CASCADE, related_name='aliases')
+    bay_id = models.CharField(max_length=80, unique=True)
+    effective_from = models.DateField()
+    effective_to = models.DateField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-effective_from']
+
+    def __str__(self):
+        return str(self.bay_id)
+
+
+class AutoTransformer(models.Model):
+    substation = models.ForeignKey(Substation, on_delete=models.CASCADE, related_name='auto_transformers')
+    transformer_no = models.IntegerField()
+    bay_id = models.CharField(max_length=50, unique=True, blank=True)
+    hv_voltage = models.IntegerField(null=True, blank=True)
+    hv_breaker_number = models.CharField(max_length=10, null=True, blank=True)
+    lv_voltage = models.IntegerField()
+    lv_breaker_number = models.CharField(max_length=10, null=True, blank=True)
+    capacity_mva = models.IntegerField(null=True, blank=True)
+    commissioning_date = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('substation', 'transformer_no')
+        ordering = ['substation__substation_id', 'transformer_no']
+
+    def save(self, *args, **kwargs):
+        if self.substation_id is not None and self.transformer_no is not None:
+            self.bay_id = f"{self.substation_id}_AT{self.transformer_no}"
+        if self.hv_voltage is None and self.substation_id is not None:
+            self.hv_voltage = self.substation.voltage
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return str(self.bay_id)
+
+
+class EquipmentTopologyMap(models.Model):
+    class EquipmentType(models.TextChoices):
+        LOAD_TRANSFORMER = 'load_transformer', 'Load Transformer'
+        INCOMING_BRANCH = 'incoming_branch', 'Incoming Branch'
+        AUTO_TRANSFORMER = 'auto_transformer', 'Auto Transformer'
+
+    topology_version = models.ForeignKey('TopologyVersion', on_delete=models.CASCADE, related_name='equipment_maps')
+    equipment_type = models.CharField(max_length=30, choices=EquipmentType.choices)
+
+    load_transformer = models.ForeignKey(LoadTransformer, on_delete=models.CASCADE, null=True, blank=True)
+    incoming_branch = models.ForeignKey(IncomingBranch, on_delete=models.CASCADE, null=True, blank=True)
+    auto_transformer = models.ForeignKey(AutoTransformer, on_delete=models.CASCADE, null=True, blank=True)
+
+    topology_transformer = models.ForeignKey('TopologyTransformer', on_delete=models.CASCADE, null=True, blank=True)
+    topology_branch = models.ForeignKey('TopologyBranch', on_delete=models.CASCADE, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (Q(load_transformer__isnull=False) & Q(incoming_branch__isnull=True) & Q(auto_transformer__isnull=True)) |
+                    (Q(load_transformer__isnull=True) & Q(incoming_branch__isnull=False) & Q(auto_transformer__isnull=True)) |
+                    (Q(load_transformer__isnull=True) & Q(incoming_branch__isnull=True) & Q(auto_transformer__isnull=False))
+                ),
+                name='equipment_map_master_xor'
+            ),
+            models.CheckConstraint(
+                condition=(
+                    (Q(topology_transformer__isnull=False) & Q(topology_branch__isnull=True)) |
+                    (Q(topology_transformer__isnull=True) & Q(topology_branch__isnull=False))
+                ),
+                name='equipment_map_topology_xor'
+            ),
+            models.UniqueConstraint(fields=['topology_version', 'equipment_type', 'load_transformer'], name='uniq_map_load_transformer'),
+            models.UniqueConstraint(fields=['topology_version', 'equipment_type', 'incoming_branch'], name='uniq_map_incoming_branch'),
+            models.UniqueConstraint(fields=['topology_version', 'equipment_type', 'auto_transformer'], name='uniq_map_auto_transformer'),
+        ]
+
+
+class EquipmentSnapshotState(models.Model):
+    class EquipmentType(models.TextChoices):
+        LOAD_TRANSFORMER = 'load_transformer', 'Load Transformer'
+        INCOMING_BRANCH = 'incoming_branch', 'Incoming Branch'
+        AUTO_TRANSFORMER = 'auto_transformer', 'Auto Transformer'
+
+    snapshot = models.ForeignKey('NetworkSnapshot', on_delete=models.CASCADE, related_name='equipment_states')
+    equipment_type = models.CharField(max_length=30, choices=EquipmentType.choices)
+
+    load_transformer = models.ForeignKey(LoadTransformer, on_delete=models.CASCADE, null=True, blank=True)
+    incoming_branch = models.ForeignKey(IncomingBranch, on_delete=models.CASCADE, null=True, blank=True)
+    auto_transformer = models.ForeignKey(AutoTransformer, on_delete=models.CASCADE, null=True, blank=True)
+
+    in_service = models.BooleanField(default=True)
+    state_source = models.CharField(max_length=20, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (Q(load_transformer__isnull=False) & Q(incoming_branch__isnull=True) & Q(auto_transformer__isnull=True)) |
+                    (Q(load_transformer__isnull=True) & Q(incoming_branch__isnull=False) & Q(auto_transformer__isnull=True)) |
+                    (Q(load_transformer__isnull=True) & Q(incoming_branch__isnull=True) & Q(auto_transformer__isnull=False))
+                ),
+                name='equipment_state_master_xor'
+            )
+        ]
 
 # ==========================================
 # 3. SNAPSHOT MANAGEMENT
@@ -478,4 +672,3 @@ class NetworkDCLink(models.Model):
     inverter_bus_number = models.IntegerField()
     
     setpoint_mw = models.FloatField()
-

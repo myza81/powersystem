@@ -1,5 +1,6 @@
 import os
 import json
+from datetime import datetime, timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -8,13 +9,39 @@ from django.core.management import call_command
 from django.http import JsonResponse
 import logging
 from core.utils.diff import get_fixture_diff
-from core.models import Substation
+from django.db.models import Max
+from core.models import Substation, LoadTransformer, IncomingBranch, IncomingBranchAlias, AutoTransformer
 from core.utils.geo import get_state_from_coordinates
 from services.geocoding import GeocodingService
 
 logger = logging.getLogger(__name__)
 
 FIXTURE_PATH = os.path.join(settings.BASE_DIR, 'core', 'fixtures', 'initial_data.json')
+BACKUP_DIR = os.path.join(settings.BASE_DIR, 'core', 'fixtures', 'backups')
+DEFAULT_EXPORT_MODELS = [
+    'core.Substation',
+    'core.LoadTransformer',
+    'core.IncomingBranch',
+    'core.IncomingBranchAlias',
+    'core.AutoTransformer',
+]
+
+def _get_latest_master_update_ts():
+    candidates = []
+    candidates.append(Substation.objects.aggregate(ts=Max('updated_at'))['ts'])
+    candidates.append(LoadTransformer.objects.aggregate(ts=Max('updated_at'))['ts'])
+    candidates.append(IncomingBranch.objects.aggregate(ts=Max('updated_at'))['ts'])
+    candidates.append(AutoTransformer.objects.aggregate(ts=Max('updated_at'))['ts'])
+    latest = max([c for c in candidates if c is not None], default=None)
+    return latest
+
+def _backup_master_fixture():
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    backup_path = os.path.join(BACKUP_DIR, f'initial_data_{ts}.json')
+    with open(backup_path, 'w') as f:
+        call_command('dumpdata', *DEFAULT_EXPORT_MODELS, indent=2, stdout=f)
+    return backup_path
 
 def _sync_substations_from_fixture(fixture_path, recompute_state=True, force_state=False):
     try:
@@ -85,8 +112,8 @@ class DatabaseExportView(APIView):
             return Response({"error": "Dev tools only available in DEBUG mode"}, status=status.HTTP_403_FORBIDDEN)
 
         try:
-            # Get models parameter, default to Substation only
-            models = request.data.get('models', ['core.Substation'])
+            # Get models parameter, default to master data set
+            models = request.data.get('models', DEFAULT_EXPORT_MODELS)
             
             # Ensure directory exists
             os.makedirs(os.path.dirname(FIXTURE_PATH), exist_ok=True)
@@ -113,12 +140,41 @@ class DatabaseImportView(APIView):
             return Response({"error": "Dev tools only available in DEBUG mode"}, status=status.HTTP_403_FORBIDDEN)
 
         try:
+            reset_master = request.data.get('reset_master', False)
+            force_import = request.data.get('force_import', False)
+
+            if os.path.exists(FIXTURE_PATH):
+                fixture_mtime = datetime.fromtimestamp(os.path.getmtime(FIXTURE_PATH), tz=timezone.utc)
+            else:
+                fixture_mtime = None
+
+            latest_master_ts = _get_latest_master_update_ts()
+            if fixture_mtime and latest_master_ts and fixture_mtime <= latest_master_ts and not force_import:
+                return Response(
+                    {"error": "Fixture appears older than local DB. Export your DB or enable force_import."},
+                    status=status.HTTP_409_CONFLICT,
+                )
+
+            backup_path = _backup_master_fixture()
+
+            if reset_master:
+                IncomingBranchAlias.objects.all().delete()
+                IncomingBranch.objects.all().delete()
+                LoadTransformer.objects.all().delete()
+                AutoTransformer.objects.all().delete()
+                Substation.objects.all().delete()
+
             call_command('loaddata', FIXTURE_PATH)
             recompute_state = request.data.get('recompute_state', True)
             force_state = request.data.get('force_state', False)
             sync_result = _sync_substations_from_fixture(FIXTURE_PATH, recompute_state=recompute_state, force_state=force_state)
             logger.info("Database imported successfully.")
-            return Response({"message": "Database imported successfully.", "substations": sync_result})
+            return Response({
+                "message": "Database imported successfully.",
+                "substations": sync_result,
+                "reset_master": reset_master,
+                "backup_path": backup_path,
+            })
         except Exception as e:
             logger.exception("Import failed")
             return Response(
