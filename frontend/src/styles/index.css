@@ -371,3 +371,114 @@ button {
 .logout-btn:hover {
   background: rgba(245, 101, 101, 0.1);
 }
+
+/* Masterclass Technical UI */
+.glass-input-slot {
+  position: relative;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.glass-input-slot:focus-within {
+  border-color: rgba(0, 229, 255, 0.3);
+  border-bottom-color: var(--accent-cyan);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.1), inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  background: rgba(0, 229, 255, 0.02);
+}
+
+.glass-input-slot::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+}
+
+.instrument-action-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: #fff;
+  transition: all 0.3s;
+}
+
+.instrument-action-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.instrument-secondary-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 700;
+  letter-spacing: 1px;
+  transition: all 0.3s;
+}
+
+.instrument-secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.8);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Scrollbar refinement for Obsidian theme */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.15);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-cyan);
+}
+
+/* Platinum Precision Theme Extension */
+.platinum-input {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: #fff;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  width: 100%;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.platinum-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  background: rgba(0, 229, 255, 0.05);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.1);
+}
+
+.platinum-input:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.platinum-input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+/* Precision Datasheet Refinements */
+.datasheet-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.datasheet-cell {
+  background: #0f1115;
+  padding: 0.5rem;
+}

@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SubstationForm from './components/SubstationForm';
 import SldViewer from './components/SldViewer';
-import BayAssetManager from './components/BayAssetManager';
 
 import ConfigurationEditor from './components/ConfigurationEditor';
 import LoadDashboard from './components/LoadDashboard';
@@ -416,29 +415,6 @@ const App = () => {
                     <LoadDashboard substations={substations} />
                 )}
 
-                {view === 'load-transformers' && (
-                    <BayAssetManager
-                        assetType="load-transformer"
-                        title="Load Transformers"
-                        endpoint="load-transformers"
-                    />
-                )}
-
-                {view === 'auto-transformers' && (
-                    <BayAssetManager
-                        assetType="auto-transformer"
-                        title="Auto Transformers"
-                        endpoint="auto-transformers"
-                    />
-                )}
-
-                {view === 'incoming-branches' && (
-                    <BayAssetManager
-                        assetType="incoming-branch"
-                        title="Incoming Branches"
-                        endpoint="incoming-branches"
-                    />
-                )}
 
                 {/* {view === 'topology' && (
                     <TopologyValidation

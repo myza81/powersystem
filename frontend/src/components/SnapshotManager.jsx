@@ -17,60 +17,43 @@ const StatusBadge = ({ active }) => (
     <div style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '6px',
-        padding: '4px 10px',
-        borderRadius: '999px',
-        background: active ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.1)',
-        color: active ? '#34d399' : '#94a3b8',
-        fontSize: '0.75rem',
-        fontWeight: 700,
-        letterSpacing: '0.02em',
-        border: active ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(148, 163, 184, 0.1)',
-        boxShadow: active ? '0 0 10px rgba(16, 185, 129, 0.1)' : 'none'
+        gap: '4px',
+        padding: '2px 8px',
+        borderRadius: '4px',
+        background: active ? 'rgba(0, 229, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
+        color: active ? 'var(--accent-blue)' : 'rgba(255, 255, 255, 0.3)',
+        fontSize: '0.65rem',
+        fontWeight: 800,
+        letterSpacing: '0.5px',
+        border: `1px solid ${active ? 'rgba(0, 229, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)'}`
     }}>
-        {active ? <Activity size={12} /> : <Server size={12} />}
-        {active ? 'ACTIVE MODEL' : 'ARCHIVED'}
+        {active ? <Activity size={10} /> : <Server size={10} />}
+        {active ? 'ACTIVE_SYSTEM_MODEL' : 'ARCHIVED_DATASET'}
     </div>
 );
 
 const StatCard = ({ icon: Icon, label, value, subLabel, color }) => (
-    <motion.div
-        whileHover={{ y: -2 }}
+    <div
         style={{
-            background: 'rgba(30, 41, 59, 0.4)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '16px',
-            padding: '1.25rem',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
+            background: 'rgba(255, 255, 255, 0.03)',
+            borderRadius: '4px',
+            padding: '1rem',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '0.5rem',
-            position: 'relative',
-            overflow: 'hidden'
+            gap: '0.25rem',
+            minWidth: '0'
         }}
     >
-        <div style={{
-            position: 'absolute', top: 0, right: 0, p: 20,
-            opacity: 0.05, transform: 'translate(20%, -20%) scale(3)'
-        }}>
-            <Icon size={100} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+            <Icon size={12} style={{ color: 'rgba(255, 255, 255, 0.4)' }} />
+            <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}>{label}</span>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-            <div style={{
-                padding: '8px', borderRadius: '10px',
-                background: `${color}20`, color: color
-            }}>
-                <Icon size={20} />
-            </div>
-            <span style={{ color: '#94a3b8', fontSize: '0.875rem', fontWeight: 600 }}>{label}</span>
-        </div>
-
-        <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#f8fafc' }}>
+        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {value}
         </div>
-        {subLabel && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{subLabel}</div>}
-    </motion.div>
+        {subLabel && <div style={{ fontSize: '0.6rem', color: 'rgba(255, 255, 255, 0.25)', fontFamily: 'monospace' }}>{subLabel}</div>}
+    </div>
 );
 
 const SnapshotManager = () => {
@@ -241,75 +224,63 @@ const SnapshotManager = () => {
             </AnimatePresence>
 
             {/* Header Section */}
-            <div style={{ marginBottom: '3rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                     <div>
-                        <motion.h1
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            style={{
-                                fontSize: '2.15rem', fontWeight: 800, margin: '0 0 0.5rem 0',
-                                background: 'linear-gradient(135deg, #fff 0%, #94a3b8 100%)',
-                                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                                letterSpacing: '-0.03em'
-                            }}
-                        >
+                        <h1 style={{
+                            fontSize: '1.5rem', fontWeight: 900, margin: '0 0 0.5rem 0',
+                            color: '#fff', letterSpacing: '-0.02em', textTransform: 'uppercase'
+                        }}>
                             Model Registry
-                        </motion.h1>
-                        <motion.p
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.1 }}
-                            style={{ color: '#64748b', fontSize: '0.8rem', maxWidth: '600px', lineHeight: 1.5 }}
-                        >
-                            Manage and version control your PSS/E network models. <br />
-                            Active models drive the topology analysis and load flow engines.
-                        </motion.p>
+                        </h1>
+                        <p style={{ color: 'rgba(255, 255, 255, 0.3)', fontSize: '0.75rem', letterSpacing: '0.5px' }}>
+                            CORE_VERSION_CONTROL / PPS/E_NETWORK_MODELS
+                        </p>
                     </div>
 
-                    <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
+                    <button
                         onClick={() => setShowUpload(true)}
+                        className="btn-primary"
                         style={{
-                            background: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
-                            border: 'none', borderRadius: '12px',
-                            padding: '12px 24px', color: '#fff',
-                            fontWeight: 600, fontSize: '0.95rem',
+                            padding: '10px 20px', borderRadius: '4px',
+                            fontSize: '0.8rem', height: '40px',
                             display: 'flex', alignItems: 'center', gap: '8px',
-                            cursor: 'pointer',
-                            boxShadow: '0 0 20px rgba(6, 182, 212, 0.3)',
-                            textShadow: '0 1px 2px rgba(0,0,0,0.1)'
                         }}
                     >
-                        <Plus size={20} />
-                        New Snapshot
-                    </motion.button>
+                        <Plus size={16} /> NEW_IMPORT
+                    </button>
                 </div>
 
-                {/* KPI Cards */}
+                {/* KPI Area */}
                 <div style={{
-                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: '1.5rem', marginTop: '2rem'
+                    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: '0.75rem', marginTop: '1.5rem'
                 }}>
                     <StatCard
                         icon={Database}
-                        label="Total Snapshots"
-                        value={totalSnapshots}
-                        color="#3b82f6"
+                        label="Registry Capacity"
+                        value={`${totalSnapshots} Snapshots`}
+                        color="var(--accent-blue)"
                     />
                     <StatCard
                         icon={Activity}
                         label="Active Model"
-                        value={activeSnapshot ? activeSnapshot.name : 'None'}
-                        subLabel={activeSnapshot ? `ID: ${activeSnapshot.id.substring(0, 8)}` : 'Select a model'}
+                        value={activeSnapshot ? activeSnapshot.name : 'NULL'}
+                        subLabel={activeSnapshot ? `UID: ${activeSnapshot.id.substring(0, 12)}...` : 'NONE_ACTIVE'}
                         color="#10b981"
                     />
                     <StatCard
                         icon={Calendar}
-                        label="Latest Update"
+                        label="Last Modification"
                         value={lastUpdate}
                         color="#8b5cf6"
+                    />
+                    <StatCard
+                        icon={Zap}
+                        label="System State"
+                        value={activeSnapshot ? 'SYNCHRONIZED' : 'IDLE'}
+                        subLabel="TOPOLOGY_ENGINE_V1"
+                        color="#06b6d4"
                     />
                 </div>
             </div>
@@ -343,107 +314,123 @@ const SnapshotManager = () => {
                             onClick={e => e.stopPropagation()}
                         >
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                                <h2 style={{ fontSize: '1.5rem', margin: 0, fontWeight: 700 }}>Import .raw File</h2>
-                                <button onClick={() => setShowUpload(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>
-                                    <X size={24} />
+                                <div>
+                                    <h2 style={{ fontSize: '0.8rem', margin: 0, fontWeight: 800, color: '#fff', letterSpacing: '1px', textTransform: 'uppercase' }}>Initialize_New_Model_Case</h2>
+                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', marginTop: '2px' }}>System Model Import Module</div>
+                                </div>
+                                <button onClick={() => setShowUpload(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', cursor: 'pointer' }}>
+                                    <X size={18} />
                                 </button>
                             </div>
 
                             <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.85rem', color: '#94a3b8', marginBottom: '0.5rem', fontWeight: 600 }}>Snapshot Name</label>
+                                    <label style={{ display: 'block', fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', marginBottom: '6px', fontWeight: 700, textTransform: 'uppercase' }}>Snapshot Identifier</label>
                                     <input
                                         autoFocus
                                         value={name}
                                         onChange={e => setName(e.target.value)}
-                                        placeholder="e.g. Q1 2026 Forecast"
-                                        style={{
-                                            width: '100%', background: '#0f172a', border: '1px solid #334155',
-                                            padding: '12px', borderRadius: '12px', color: '#fff', fontSize: '1rem',
-                                            outline: 'none', transition: 'border-color 0.2s'
-                                        }}
+                                        placeholder="Q1_2026_FORECAST"
+                                        className="platinum-input mono"
+                                        style={{ fontSize: '0.8rem' }}
                                         required
                                     />
                                 </div>
 
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.5rem', fontWeight: 600 }}>Description</label>
+                                    <label style={{ display: 'block', fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', marginBottom: '6px', fontWeight: 700, textTransform: 'uppercase' }}>Model Metadata</label>
                                     <textarea
                                         value={description}
                                         onChange={e => setDescription(e.target.value)}
-                                        placeholder="Optional notes about this case..."
+                                        placeholder="Notes regarding topology constraints or case variance..."
                                         rows={3}
-                                        style={{
-                                            width: '100%', background: '#0f172a', border: '1px solid #334155',
-                                            padding: '12px', borderRadius: '12px', color: '#fff', fontSize: '0.9rem',
-                                            outline: 'none', resize: 'none', fontFamily: 'inherit'
-                                        }}
+                                        className="platinum-input"
+                                        style={{ resize: 'none', fontSize: '0.75rem' }}
                                     />
                                 </div>
 
                                 <div
                                     onClick={() => document.getElementById('raw-upload').click()}
                                     style={{
-                                        border: '2px dashed #334155', borderRadius: '16px', padding: '2rem',
+                                        border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px', padding: '1.5rem',
                                         textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s',
-                                        background: file ? 'rgba(6, 182, 212, 0.05)' : 'transparent',
-                                        borderColor: file ? '#06b6d4' : '#334155'
+                                        background: file ? 'rgba(0, 229, 255, 0.05)' : 'rgba(255,255,255,0.01)',
+                                        borderColor: file ? 'var(--accent-blue)' : 'rgba(255,255,255,0.1)'
                                     }}
                                 >
                                     <input type="file" id="raw-upload" hidden accept=".raw" onChange={e => setFile(e.target.files[0])} />
-                                    <Upload size={32} style={{ color: file ? '#06b6d4' : '#64748b', marginBottom: '0.75rem' }} />
-                                    <div style={{ color: '#e2e8f0', fontWeight: 500 }}>
-                                        {file ? file.name : "Click to select .raw file"}
+                                    <Upload size={24} style={{ color: file ? 'var(--accent-blue)' : 'rgba(255,255,255,0.2)', marginBottom: '0.5rem' }} />
+                                    <div style={{ color: '#fff', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'monospace' }}>
+                                        {file ? file.name : "MODEL_SOURCE_REQUIRED"}
                                     </div>
-                                    <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '4px' }}>
-                                        {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : "or drag and drop here"}
+                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>
+                                        {file ? `SIZE:${(file.size / 1024 / 1024).toFixed(2)}MB` : "Tap to select PSS/E .raw file"}
                                     </div>
                                 </div>
 
-                                <motion.button
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
+                                <button
                                     disabled={uploading}
                                     type="submit"
+                                    className="btn-primary"
                                     style={{
                                         marginTop: '0.5rem',
-                                        background: uploading ? '#334155' : 'linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%)',
-                                        color: uploading ? '#94a3b8' : '#000',
-                                        border: 'none', padding: '14px', borderRadius: '12px',
-                                        fontWeight: 700, cursor: uploading ? 'not-allowed' : 'pointer',
+                                        padding: '12px', borderRadius: '4px',
+                                        fontSize: '0.75rem',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                                     }}
                                 >
-                                    {uploading && <Loader2 className="animate-spin" size={20} />}
-                                    {uploading ? 'Processing...' : 'Import Schematic'}
-                                </motion.button>
+                                    {uploading && <Loader2 className="animate-spin" size={16} />}
+                                    {uploading ? 'SYNCHRONIZING...' : 'START_SYSTEM_IMPORT'}
+                                </button>
                             </form>
                         </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
 
-            {/* List Section */}
+            {/* Registry List Section */}
             <div style={{
-                background: 'rgba(30, 41, 59, 0.4)', borderRadius: '24px',
-                border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden',
-                backdropFilter: 'blur(10px)'
+                background: '#0f1115',
+                borderRadius: '8px',
+                border: '1px solid rgba(255,255,255,0.08)',
+                overflow: 'hidden'
             }}>
-                <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Available Models</h3>
+                <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h3 style={{ margin: 0, fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Available_Datasets</h3>
+                        <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)' }} />
+                        <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>COUNT:{snapshots.length}</span>
+                    </div>
                     <div style={{ position: 'relative' }}>
-                        <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                        <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.2)' }} />
                         <input
-                            placeholder="Filter snapshots..."
-                            style={{
-                                background: '#0f172a', border: '1px solid #334155', borderRadius: '8px',
-                                padding: '8px 12px 8px 36px', color: '#fff', fontSize: '0.8rem', width: '250px'
-                            }}
+                            placeholder="FILTER_REGISTRY..."
+                            className="platinum-input"
+                            style={{ padding: '6px 10px 6px 30px', fontSize: '0.75rem', width: '220px', background: 'rgba(0,0,0,0.2)' }}
                         />
                     </div>
                 </div>
 
-                <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+                <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                    {/* Table Header */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(300px, 2fr) 180px 1fr 120px',
+                        gap: '1rem',
+                        padding: '0.75rem 1.5rem',
+                        background: 'rgba(0,0,0,0.2)',
+                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                        fontSize: '0.6rem',
+                        fontWeight: 800,
+                        color: 'rgba(255,255,255,0.3)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '1px'
+                    }}>
+                        <div>Identifier / State</div>
+                        <div>Synchronization Time</div>
+                        <div>Context_Notes</div>
+                        <div style={{ textAlign: 'right' }}>Integration</div>
+                    </div>
                     {loading ? (
                         <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
                             <Loader2 className="animate-spin" size={32} style={{ marginBottom: '1rem', opacity: 0.5 }} />
@@ -456,91 +443,84 @@ const SnapshotManager = () => {
                         </div>
                     ) : (
                         snapshots.map((snap, i) => (
-                            <motion.div
+                            <div
                                 key={snap.id}
-                                initial={{ opacity: 0, x: -10 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: i * 0.05 }}
                                 style={{
                                     display: 'grid',
-                                    gridTemplateColumns: 'minmax(300px, 2fr) 1fr 1fr auto',
+                                    gridTemplateColumns: 'minmax(300px, 2fr) 180px 1fr 120px',
                                     gap: '1rem',
-                                    padding: '1.25rem 2rem',
+                                    padding: '1rem 1.5rem',
                                     borderBottom: '1px solid rgba(255,255,255,0.05)',
                                     alignItems: 'center',
-                                    transition: 'background 0.2s',
-                                    cursor: 'pointer'
+                                    background: snap.is_active ? 'rgba(0, 229, 255, 0.02)' : 'transparent',
+                                    borderLeft: snap.is_active ? '2px solid var(--accent-blue)' : '2px solid transparent'
                                 }}
                                 className="snapshot-row"
-                                onClick={() => handleActivate(snap.id)}
+                                onClick={() => !snap.is_active && handleActivate(snap.id)}
                             >
                                 {/* Column 1: Info */}
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: snap.is_active ? '#fff' : '#cbd5e1' }}>
+                                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: snap.is_active ? '#fff' : 'rgba(255,255,255,0.7)' }}>
                                             {snap.name}
                                         </div>
                                         <StatusBadge active={snap.is_active} />
                                     </div>
-                                    <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
-                                        {snap.id}
+                                    <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>
+                                        UID:{snap.id}
                                     </div>
                                 </div>
 
                                 {/* Column 2: Date */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8', fontSize: '0.8rem' }}>
-                                    <Calendar size={14} />
+                                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>
                                     {new Date(snap.timestamp).toLocaleDateString()}
-                                    <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>
+                                    <span style={{ marginLeft: '8px', opacity: 0.5 }}>
                                         {new Date(snap.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                 </div>
 
                                 {/* Column 3: Description */}
-                                <div style={{ color: '#64748b', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {snap.description || '-'}
+                                <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {snap.description || '--'}
                                 </div>
 
                                 {/* Column 4: Actions */}
                                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                                    {!snap.is_active && (
+                                    {!snap.is_active ? (
                                         <button
                                             onClick={(e) => handleActivate(snap.id, e)}
                                             style={{
-                                                background: 'transparent',
-                                                border: '1px solid #334155',
-                                                color: '#34d399',
-                                                padding: '8px 12px',
-                                                borderRadius: '8px',
-                                                fontSize: '0.8rem',
-                                                fontWeight: 600,
-                                                cursor: 'pointer',
-                                                display: 'flex', alignItems: 'center', gap: '6px'
+                                                background: 'rgba(255,255,255,0.03)',
+                                                border: '1px solid rgba(255,255,255,0.1)',
+                                                color: '#fff',
+                                                padding: '4px 8px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.65rem',
+                                                fontWeight: 800,
+                                                cursor: 'pointer'
                                             }}
-                                            className="action-btn"
                                         >
-                                            <Zap size={14} /> Activate
+                                            ACTIVATE
                                         </button>
+                                    ) : (
+                                        <div style={{ color: 'var(--accent-blue)', fontSize: '0.6rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <Check size={10} /> CURRENT
+                                        </div>
                                     )}
                                     <button
                                         onClick={(e) => handleDelete(snap.id, e)}
                                         style={{
-                                            background: 'rgba(239, 68, 68, 0.1)',
+                                            background: 'transparent',
                                             border: 'none',
-                                            color: '#f87171',
-                                            padding: '8px',
-                                            borderRadius: '8px',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                            color: 'rgba(239, 68, 68, 0.4)',
+                                            padding: '4px',
+                                            cursor: 'pointer'
                                         }}
-                                        title="Delete"
-                                        className="delete-btn"
                                     >
-                                        <Trash2 size={16} />
+                                        <Trash2 size={14} />
                                     </button>
                                 </div>
-                            </motion.div>
+                            </div>
                         ))
                     )}
                 </div>

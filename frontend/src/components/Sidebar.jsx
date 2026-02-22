@@ -37,9 +37,6 @@ const Sidebar = ({ currentView, onViewChange }) => {
     const assetItems = [
         { id: 'list', label: 'Substation Assets', icon: List },
         { id: 'create', label: 'Register New Entry', icon: PlusCircle },
-        { id: 'load-transformers', label: 'Load Transformers', icon: Database },
-        { id: 'auto-transformers', label: 'Auto Transformers', icon: Database },
-        { id: 'incoming-branches', label: 'Incoming Branches', icon: Database },
     ];
 
     const operationItems = [

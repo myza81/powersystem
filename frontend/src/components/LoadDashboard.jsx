@@ -3,7 +3,6 @@ import { Search, Zap, TrendingUp, MapPin, Building2, Database, Loader2, BarChart
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SldViewer from './SldViewer';
-import BayIdEditor from './BayIdEditor';
 import SubstationMap from './SubstationMap';
 
 import api from '../api';
@@ -12,7 +11,6 @@ const LoadDashboard = ({ substations = [] }) => {
     const [loading, setLoading] = useState(true);
     const [gridData, setGridData] = useState(null);
     const [viewingSld, setViewingSld] = useState(null); // SLD Viewer State
-    const [showBayEditor, setShowBayEditor] = useState(false);
     const [mapData, setMapData] = useState([]);
 
 
@@ -267,31 +265,6 @@ const LoadDashboard = ({ substations = [] }) => {
 
             </div>
 
-            {/* Bay ID Editor Overlay */}
-            <AnimatePresence>
-                {showBayEditor && (
-                    <BayIdEditor
-                        substation={null}
-                        onClose={() => setShowBayEditor(false)}
-                        onSuccess={() => {
-                            setShowBayEditor(false);
-                        }}
-                    />
-                )}
-            </AnimatePresence>
-
-            {/* Bay ID Editor Overlay */}
-            <AnimatePresence>
-                {showBayEditor && (
-                    <BayIdEditor
-                        substation={null}
-                        onClose={() => setShowBayEditor(false)}
-                        onSuccess={() => {
-                            setShowBayEditor(false);
-                        }}
-                    />
-                )}
-            </AnimatePresence>
         </div>
     );
 };
