@@ -16,6 +16,7 @@ import SubstationMap from './components/SubstationMap';
 
 import SnapshotManager from './components/SnapshotManager';
 import LoadSheddingManager from './components/LoadSheddingManager';
+import CriticalSubstationManager from './components/CriticalSubstationManager';
 import api from './api';
 
 const DEFAULT_FILTERS = {
@@ -266,6 +267,7 @@ const App = () => {
                             {view === 'snapshots' && 'Network Analysis'}
                             {view === 'dev-tools' && 'Developer Tools'}
                             {view === 'load-shedding' && 'Load Shedding Module'}
+                            {view === 'critical-substations' && 'Critical Substations'}
                         </h2>
                     </div>
                 </header>
@@ -438,6 +440,10 @@ const App = () => {
 
                 {view === 'load-shedding' && (
                     <LoadSheddingManager />
+                )}
+
+                {view === 'critical-substations' && (
+                    <CriticalSubstationManager />
                 )}
 
                 {viewingSld && (

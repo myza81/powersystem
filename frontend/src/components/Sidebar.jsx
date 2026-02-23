@@ -41,6 +41,7 @@ const Sidebar = ({ currentView, onViewChange }) => {
 
     const operationItems = [
         { id: 'load-shedding', label: 'Load Shedding', icon: Shield },
+        { id: 'critical-substations', label: 'Critical Substations', icon: Shield },
     ];
 
     const systemItems = [

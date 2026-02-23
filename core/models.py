@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 from django.core.files.storage import FileSystemStorage
 from django.conf import settings
 import os
@@ -346,6 +347,87 @@ class EquipmentSnapshotState(models.Model):
                 name='equipment_state_master_xor'
             )
         ]
+
+
+class CriticalCategory(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category_name = models.CharField(max_length=120, unique=True)
+    slug = models.SlugField(max_length=140, unique=True, blank=True)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['category_name']
+
+    def save(self, *args, **kwargs):
+        if not self.slug and self.category_name:
+            self.slug = self.category_name.lower().replace(' ', '_')
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.category_name
+
+
+class CriticalSource(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reference = models.CharField(max_length=255)
+    url = models.URLField(max_length=500, blank=True)
+    issued_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-issued_date', 'reference']
+
+    def __str__(self):
+        return self.reference
+
+
+class CriticalAssetTag(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    substation = models.ForeignKey(Substation, on_delete=models.CASCADE, related_name='critical_tags')
+    load_transformer = models.ForeignKey(LoadTransformer, on_delete=models.CASCADE, null=True, blank=True, related_name='critical_tags')
+    category = models.ForeignKey(CriticalCategory, on_delete=models.CASCADE, related_name='tags')
+    severity_rank = models.IntegerField(null=True, blank=True)
+    source = models.ForeignKey(CriticalSource, on_delete=models.SET_NULL, null=True, blank=True, related_name='tags')
+    is_inforce = models.BooleanField(default=True)
+    inforce_from = models.DateField(null=True, blank=True)
+    inforce_to = models.DateField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['substation', 'load_transformer', 'category'],
+                condition=Q(is_inforce=True),
+                name='uniq_active_critical_tag'
+            )
+        ]
+        ordering = ['substation__substation_id', 'load_transformer__bay_id']
+
+    def clean(self):
+        errors = {}
+        if self.is_inforce and not self.inforce_from:
+            errors['inforce_from'] = 'Required when tag is in force.'
+        if not self.is_inforce and not self.inforce_to:
+            errors['inforce_to'] = 'Required when tag is not in force.'
+        if self.inforce_from and self.inforce_to and self.inforce_to < self.inforce_from:
+            errors['inforce_to'] = 'Must be on or after inforce_from.'
+
+        if not self.load_transformer_id:
+            errors['load_transformer'] = 'LoadTransformer is required.'
+        if self.substation_id and self.load_transformer_id:
+            if self.load_transformer.substation_id != self.substation_id:
+                errors['load_transformer'] = 'LoadTransformer must belong to the selected substation.'
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if not kwargs.get('raw'):
+            self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.substation_id} {self.load_transformer.bay_id} {self.category.category_name}"
 
 # ==========================================
 # 3. SNAPSHOT MANAGEMENT

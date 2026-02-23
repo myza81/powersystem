@@ -22,6 +22,9 @@ from .models import (
     AutoTransformer,
     EquipmentTopologyMap,
     EquipmentSnapshotState,
+    CriticalCategory,
+    CriticalSource,
+    CriticalAssetTag,
 )
 
 @admin.register(Substation)
@@ -71,6 +74,24 @@ class EquipmentSnapshotStateAdmin(admin.ModelAdmin):
     list_display = ('equipment_type', 'snapshot', 'load_transformer', 'incoming_branch', 'auto_transformer', 'in_service', 'state_source', 'updated_at')
     list_filter = ('equipment_type', 'snapshot', 'in_service')
     raw_id_fields = ('snapshot', 'load_transformer', 'incoming_branch', 'auto_transformer')
+
+@admin.register(CriticalCategory)
+class CriticalCategoryAdmin(admin.ModelAdmin):
+    list_display = ('category_name',)
+    search_fields = ('category_name',)
+
+@admin.register(CriticalSource)
+class CriticalSourceAdmin(admin.ModelAdmin):
+    list_display = ('reference', 'issued_date', 'url')
+    search_fields = ('reference',)
+    list_filter = ('issued_date',)
+
+@admin.register(CriticalAssetTag)
+class CriticalAssetTagAdmin(admin.ModelAdmin):
+    list_display = ('substation', 'load_transformer', 'category', 'is_inforce', 'inforce_from', 'inforce_to')
+    search_fields = ('substation__substation_id', 'load_transformer__bay_id', 'category__category_name')
+    list_filter = ('is_inforce', 'category')
+    raw_id_fields = ('substation', 'load_transformer', 'category', 'source')
 
 @admin.register(NetworkSnapshot)
 class NetworkSnapshotAdmin(admin.ModelAdmin):
@@ -171,4 +192,3 @@ class NetworkDCLinkAdmin(admin.ModelAdmin):
     list_display = ('name', 'rectifier_bus_number', 'inverter_bus_number', 'setpoint_mw', 'snapshot')
     list_filter = ('snapshot',)
     search_fields = ('name', 'rectifier_bus_number', 'inverter_bus_number')
-
