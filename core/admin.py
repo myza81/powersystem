@@ -82,13 +82,13 @@ class CriticalCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(CriticalSource)
 class CriticalSourceAdmin(admin.ModelAdmin):
-    list_display = ('reference', 'issued_date', 'url')
+    list_display = ('reference', 'issued_date', 'source_file')
     search_fields = ('reference',)
     list_filter = ('issued_date',)
 
 @admin.register(CriticalAssetTag)
 class CriticalAssetTagAdmin(admin.ModelAdmin):
-    list_display = ('substation', 'load_transformer', 'category', 'is_inforce', 'inforce_from', 'inforce_to')
+    list_display = ('substation', 'load_transformer', 'category', 'short_text', 'is_inforce', 'updated_at')
     search_fields = ('substation__substation_id', 'load_transformer__bay_id', 'category__category_name')
     list_filter = ('is_inforce', 'category')
     raw_id_fields = ('substation', 'load_transformer', 'category', 'source')

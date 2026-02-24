@@ -27,6 +27,7 @@ Table: `critical_asset_tag`
 - `category` (fk -> `critical_category`)
 - `severity_rank` (int, optional; 1 = highest)
 - `source` (fk -> `critical_source`, null=true)
+- `short_text` (string, optional) // short note, e.g. "Hospital feeder"
 - `is_inforce` (bool, default true)
 - `inforce_from` (date, null) // set when tag becomes active
 - `inforce_to` (date, null)   // set when tag is deactivated
@@ -42,7 +43,7 @@ Constraints:
 Table: `critical_source`
 - `id` (uuid, pk)
 - `reference` (string) // doc ID, ticket, memo
-- `url` (string, nullable)
+- `source_file` (file, nullable)
 - `issued_date` (date, nullable)
 - `notes` (text, optional)
 
@@ -54,7 +55,7 @@ Table: `critical_source`
 - For a **substation‑level** designation: insert tags for **all LoadTransformers** under the substation (e.g., ABBA132_T1, ABBA132_T2, ...).
 - For **bay‑level** designation (e.g., `ABBA132_T1`): insert one tag for that bay.
 - Multiple categories can coexist (e.g., Hospital + Rail).
-- If a designation is removed, set `is_inforce = false` and set `inforce_to`.
+- If a designation is removed, set `is_inforce = false`.
 
 ## Query patterns
 - Current critical assets: `critical_asset_tag` where `is_inforce = true`.

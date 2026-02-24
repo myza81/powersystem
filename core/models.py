@@ -370,7 +370,7 @@ class CriticalCategory(models.Model):
 class CriticalSource(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     reference = models.CharField(max_length=255)
-    url = models.URLField(max_length=500, blank=True)
+    source_file = models.FileField(upload_to='critical_sources/', blank=True)
     issued_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
@@ -380,6 +380,10 @@ class CriticalSource(models.Model):
     def __str__(self):
         return self.reference
 
+    def clean(self):
+        if self.source_file and not self.source_file.name.lower().endswith('.pdf'):
+            raise ValidationError({'source_file': 'Only PDF files are allowed.'})
+
 
 class CriticalAssetTag(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -388,9 +392,8 @@ class CriticalAssetTag(models.Model):
     category = models.ForeignKey(CriticalCategory, on_delete=models.CASCADE, related_name='tags')
     severity_rank = models.IntegerField(null=True, blank=True)
     source = models.ForeignKey(CriticalSource, on_delete=models.SET_NULL, null=True, blank=True, related_name='tags')
+    short_text = models.CharField(max_length=140, blank=True)
     is_inforce = models.BooleanField(default=True)
-    inforce_from = models.DateField(null=True, blank=True)
-    inforce_to = models.DateField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -405,12 +408,7 @@ class CriticalAssetTag(models.Model):
 
     def clean(self):
         errors = {}
-        if self.is_inforce and not self.inforce_from:
-            errors['inforce_from'] = 'Required when tag is in force.'
-        if not self.is_inforce and not self.inforce_to:
-            errors['inforce_to'] = 'Required when tag is not in force.'
-        if self.inforce_from and self.inforce_to and self.inforce_to < self.inforce_from:
-            errors['inforce_to'] = 'Must be on or after inforce_from.'
+        # is_inforce is a simple live flag; no date bounds enforced
 
         if not self.load_transformer_id:
             errors['load_transformer'] = 'LoadTransformer is required.'
