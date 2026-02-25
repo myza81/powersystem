@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
-import { Filter, RotateCcw, Search, X } from 'lucide-react';
+import { Filter, RotateCcw, Search, X, PlusCircle } from 'lucide-react';
 
-const SubstationFilter = ({ substations, currentFilters, onUpdateFilters }) => {
+const SubstationFilter = ({ substations, currentFilters, onUpdateFilters, onRegister }) => {
     // Destructure current filters
     const { region, grid, state, voltage, ownership, search } = currentFilters;
 
@@ -76,28 +76,37 @@ const SubstationFilter = ({ substations, currentFilters, onUpdateFilters }) => {
                             onChange={(e) => updateFilter('search', e.target.value)}
                             style={{ paddingLeft: '2.2rem', paddingRight: '2rem', width: '100%', height: '36px' }}
                         />
-                        {search && (
+                        {hasActiveFilters && (
                             <X
                                 size={14}
-                                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: 'var(--text-secondary)' }}
-                                onClick={() => updateFilter('search', '')}
+                                title="Reset all filters"
+                                style={{
+                                    position: 'absolute',
+                                    right: '10px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    cursor: 'pointer',
+                                    color: 'var(--text-secondary)',
+                                    transition: 'color 0.2s'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.color = '#f56565'}
+                                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+                                onClick={resetFilters}
                             />
                         )}
                     </div>
 
-                    {hasActiveFilters && (
-                        <button
-                            onClick={resetFilters}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: '6px',
-                                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-                                borderRadius: '6px', padding: '0 12px', color: '#f56565',
-                                fontSize: '0.8rem', cursor: 'pointer', height: '36px'
-                            }}
-                        >
-                            <RotateCcw size={14} /> Reset
-                        </button>
-                    )}
+                    <button
+                        onClick={onRegister}
+                        className="btn-primary"
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            borderRadius: '6px', padding: '0 12px',
+                            fontSize: '0.8rem', height: '36px'
+                        }}
+                    >
+                        <PlusCircle size={14} /> Register New Entry
+                    </button>
                 </div>
             </div>
 

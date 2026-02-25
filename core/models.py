@@ -180,8 +180,22 @@ class LoadTransformer(models.Model):
     def save(self, *args, **kwargs):
         if self.substation_id is not None and self.transformer_no is not None:
             self.bay_id = f"{self.substation_id}_T{self.transformer_no}"
+        
         if self.hv_voltage is None and self.substation_id is not None:
             self.hv_voltage = self.substation.voltage
+            
+        if self.transformer_no is not None:
+            # Auto-populate HV Breaker Number (132kV)
+            if self.hv_voltage == 132 and not self.hv_breaker_number:
+                self.hv_breaker_number = f"{self.transformer_no}10"
+            
+            # Auto-populate LV Breaker Number
+            if self.lv_voltage is not None and not self.lv_breaker_number:
+                if self.lv_voltage in (33, 22):
+                    self.lv_breaker_number = f"{self.transformer_no}T0"
+                elif self.lv_voltage == 11:
+                    self.lv_breaker_number = f"3{self.transformer_no}"
+                    
         super().save(*args, **kwargs)
 
     def __str__(self):

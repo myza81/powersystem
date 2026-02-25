@@ -43,8 +43,13 @@ class IncomingBranchAliasInline(admin.TabularInline):
 
 @admin.register(LoadTransformer)
 class LoadTransformerAdmin(admin.ModelAdmin):
-    list_display = ('bay_id', 'substation', 'transformer_no', 'hv_voltage', 'lv_voltage', 'capacity_mva')
-    search_fields = ('bay_id', 'substation__substation_id')
+    list_display = (
+        'bay_id', 'substation', 'transformer_no', 
+        'hv_voltage', 'hv_breaker_number', 
+        'lv_voltage', 'lv_breaker_number', 
+        'capacity_mva'
+    )
+    search_fields = ('bay_id', 'substation__substation_id', 'hv_breaker_number', 'lv_breaker_number')
     list_filter = ('hv_voltage', 'lv_voltage')
     raw_id_fields = ('substation',)
 
@@ -58,8 +63,13 @@ class IncomingBranchAdmin(admin.ModelAdmin):
 
 @admin.register(AutoTransformer)
 class AutoTransformerAdmin(admin.ModelAdmin):
-    list_display = ('bay_id', 'substation', 'transformer_no', 'hv_voltage', 'lv_voltage', 'capacity_mva')
-    search_fields = ('bay_id', 'substation__substation_id')
+    list_display = (
+        'bay_id', 'substation', 'transformer_no', 
+        'hv_voltage', 'hv_breaker_number', 
+        'lv_voltage', 'lv_breaker_number', 
+        'capacity_mva'
+    )
+    search_fields = ('bay_id', 'substation__substation_id', 'hv_breaker_number', 'lv_breaker_number')
     list_filter = ('hv_voltage', 'lv_voltage')
     raw_id_fields = ('substation',)
 

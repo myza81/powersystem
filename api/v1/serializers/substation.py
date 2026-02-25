@@ -15,12 +15,13 @@ class SubstationSerializer(serializers.ModelSerializer):
     Removed transformers and incoming_bays fields.
     """
     total_pload_mw = serializers.SerializerMethodField()
+    is_critical = serializers.SerializerMethodField()
     
     class Meta:
         model = Substation
         fields = ['substation_id', 'mnemonic', 'name', 'ownership', 'voltage', 
                   'grid', 'state', 'region', 'latitude', 'longitude', 
-                  'commission_date', 'sld', 'sld_file', 'total_pload_mw',
+                  'commission_date', 'sld', 'sld_file', 'total_pload_mw', 'is_critical',
                   'created_at', 'updated_at']
         read_only_fields = ['substation_id', 'sld', 'created_at', 'updated_at', 'region', 'state']
 
@@ -44,6 +45,10 @@ class SubstationSerializer(serializers.ModelSerializer):
         return NetworkLoad.objects.filter(snapshot=snapshot, bus_id__in=bus_ids).aggregate(
             t=Sum('p_mw')
         )['t'] or 0.0
+    
+    def get_is_critical(self, obj):
+        from core.models import CriticalAssetTag
+        return CriticalAssetTag.objects.filter(substation=obj, is_inforce=True).exists()
 
 class TransformerDetailSerializer(serializers.Serializer):
     """

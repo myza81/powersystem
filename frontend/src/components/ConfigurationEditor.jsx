@@ -27,7 +27,6 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
             bay_name: `T${transformers.length + 1}`,
             capacity_mva: '',
             hv_breaker_number: '',
-            lv_breaker_number: '',
             commission_date: ''
         }]);
     };
@@ -71,7 +70,6 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
             hv_voltage: t.hv_voltage === '' ? null : t.hv_voltage,
             lv_voltage: t.lv_voltage === '' ? null : t.lv_voltage,
             hv_breaker_number: t.hv_breaker_number === '' ? null : t.hv_breaker_number,
-            lv_breaker_number: t.lv_breaker_number === '' ? null : t.lv_breaker_number,
             commission_date: t.commission_date === '' ? null : t.commission_date,
             is_active: t.is_active !== undefined ? t.is_active : true,
         }));
@@ -179,7 +177,7 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
-                                style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', display: 'grid', gridTemplateColumns: 'minmax(100px, 1fr) 80px 80px 80px 100px 100px 110px 130px auto', gap: '10px', alignItems: 'end' }}
+                                style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', display: 'grid', gridTemplateColumns: 'minmax(100px, 1fr) 80px 80px 80px 100px 110px 130px auto', gap: '10px', alignItems: 'end' }}
                             >
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Tx Name</label>
@@ -200,10 +198,6 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>HV Breaker</label>
                                     <input className="input-field" value={t.hv_breaker_number || ''} onChange={(e) => updateTransformer(i, 'hv_breaker_number', e.target.value)} placeholder="120" style={{ width: '100%' }} />
-                                </div>
-                                <div>
-                                    <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>LV Breaker</label>
-                                    <input className="input-field" value={t.lv_breaker_number || ''} onChange={(e) => updateTransformer(i, 'lv_breaker_number', e.target.value)} placeholder="310" style={{ width: '100%' }} />
                                 </div>
                                 <div>
                                     <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Type (Auto)</label>

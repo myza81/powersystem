@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { CheckCircle, AlertCircle, X, Loader2, MapPin } from 'lucide-react';
+import { CheckCircle, AlertCircle, X, Loader2, MapPin, PlusCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SubstationForm from './components/SubstationForm';
@@ -17,6 +17,7 @@ import SubstationMap from './components/SubstationMap';
 import SnapshotManager from './components/SnapshotManager';
 import LoadSheddingManager from './components/LoadSheddingManager';
 import CriticalSubstationManager from './components/CriticalSubstationManager';
+import CriticalTagModal from './components/CriticalTagModal';
 import api from './api';
 
 const DEFAULT_FILTERS = {
@@ -45,6 +46,7 @@ const App = () => {
     const [status, setStatus] = useState(null);
     const [viewingSld, setViewingSld] = useState(null);
     const [locatingSubstation, setLocatingSubstation] = useState(null);
+    const [criticalSubId, setCriticalSubId] = useState(null);
 
     // Sync URL with view state
     useEffect(() => {
@@ -257,7 +259,7 @@ const App = () => {
                 )}
 
                 <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <div>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
                         <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
                             {view === 'dashboard' && 'Live Dashboard'}
                             {view === 'list' && 'Substation Assets'}
@@ -278,6 +280,7 @@ const App = () => {
                             substations={substations}
                             currentFilters={filterCriteria}
                             onUpdateFilters={setFilterCriteria}
+                            onRegister={() => { setSelectedSub(null); setView('create'); }}
                         />
 
                         <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
@@ -292,6 +295,7 @@ const App = () => {
                                         processing={loading}
                                         onViewSld={setViewingSld}
                                         onLocate={setLocatingSubstation}
+                                        onCriticalClick={(subId) => setCriticalSubId(subId)}
                                     />
                                 ))}
                             </AnimatePresence>
@@ -450,6 +454,27 @@ const App = () => {
                     <SldViewer
                         substation={viewingSld}
                         onClose={() => setViewingSld(null)}
+                    />
+                )}
+
+                {criticalSubId && (
+                    <CriticalTagModal
+                        substationId={criticalSubId}
+                        substationName={substations.find(s => s.substation_id === criticalSubId)?.name}
+                        onClose={() => setCriticalSubId(null)}
+                        onAdd={(subId) => {
+                            setCriticalSubId(null);
+                            setView('critical-substations');
+                            // We could potentially trigger the add modal automatically here if we passed state down
+                        }}
+                        onEdit={(subId) => {
+                            setCriticalSubId(null);
+                            setView('critical-substations');
+                        }}
+                        onDeactivate={async (subId, tags) => {
+                            await Promise.all(tags.map(tag => api.patch(`/critical-tags/${tag.id}/`, { is_inforce: false })));
+                            setStatus({ type: 'success', msg: `Deactivated tags for ${subId}` });
+                        }}
                     />
                 )}
             </div>

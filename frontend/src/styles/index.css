@@ -79,6 +79,16 @@ button {
   padding: 0.75rem;
   border-radius: 0.5rem;
   width: 100%;
+  color-scheme: dark; /* Ensures native UI elements like scrollbars and pickers use dark mode */
+}
+
+.input-field::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.input-field::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 .substation-grid {

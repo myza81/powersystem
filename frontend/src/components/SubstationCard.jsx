@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Edit2, MapPin, FileText, Upload } from 'lucide-react';
+import { Edit2, MapPin, FileText, Upload, AlertTriangle } from 'lucide-react';
 
-const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate }) => {
+const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate, onCriticalClick }) => {
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (file) onSLDUpload(substation.substation_id, file);
@@ -18,41 +18,67 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate }
             className="glass-card"
             whileHover={{ y: -4, borderColor: 'var(--accent-cyan)', boxShadow: '0 8px 24px rgba(0, 229, 255, 0.15)' }}
             style={{
-                padding: '1rem',
+                padding: '0.75rem',
                 position: 'relative',
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '0.75rem',
-                minHeight: '160px'
+                gap: '1.5rem',
+                cursor: 'pointer'
             }}
+            onClick={onEdit}
         >
-            {/* Header: ID + Voltage Badge + Edit Button */}
+            {/* Header: ID + Name */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                    <span className="mono" style={{ color: substation.voltage >= 500 ? '#ffffff' : (substation.voltage >= 275 ? '#15d5f6ff' : 'var(--accent-cyan)'), fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.5px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span className="mono" style={{ color: substation.voltage >= 500 ? '#ffffff' : (substation.voltage >= 275 ? '#15d5f6ff' : 'var(--accent-cyan)'), fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.5px' }}>
                         {substation.substation_id}
                     </span>
-                    <h3 style={{ fontSize: '1rem', margin: '2px 0', lineHeight: '1.2', fontWeight: 600, color: '#fff' }} title={substation.name}>
+                    <h3 style={{ fontSize: '0.9rem', margin: '2px 0 0 0', lineHeight: '1.2', fontWeight: 600, color: '#fff' }} title={substation.name}>
                         {substation.name.length > 25 ? `${substation.name.substring(0, 25)}...` : substation.name}
                     </h3>
                 </div>
-
+                {substation.is_critical && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onCriticalClick) onCriticalClick(substation.substation_id);
+                        }}
+                        title="View Critical Asset Tags"
+                        style={{
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            border: '1px solid rgba(239, 68, 68, 0.2)',
+                            color: '#ef4444',
+                            padding: '4px',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            marginLeft: '8px'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                            e.currentTarget.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.3)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                            e.currentTarget.style.boxShadow = 'none';
+                        }}
+                    >
+                        <AlertTriangle size={14} />
+                    </button>
+                )}
             </div>
 
-            {/* Body: Pills for Region/Grid */}
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {/* Voltage Badge */}
-                {/* <span style={{
-                    fontSize: '0.65rem',
-                    background: substation.voltage >= 500 ? 'rgba(255,255,255,0.1)' : (substation.voltage >= 275 ? 'rgba(0, 191, 255, 0.08)' : 'rgba(74, 222, 128, 0.1)'),
-                    color: substation.voltage >= 500 ? '#ffffff' : (substation.voltage >= 275 ? '#15d5f6ff' : 'var(--accent-cyan)'),
-                    padding: '2px 6px',
-                    borderRadius: '4px',
-                    fontWeight: 600
-                }}>
-                    {substation.voltage} kV
-                </span> */}
+            {/* Body: Pills for Metadata */}
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: 'auto' }}>
+                {substation.ownership && (
+                    <span style={{ fontSize: '0.65rem', background: 'rgba(255, 159, 67, 0.1)', color: '#ff9f43', padding: '2px 6px', borderRadius: '4px' }}>
+                        {substation.ownership}
+                    </span>
+                )}
                 {substation.region && (
                     <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: '4px' }}>
                         {substation.region}
@@ -103,97 +129,35 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate }
                         {substation.state || 'Locate'}
                     </span>
                 )}
-                {substation.ownership && (
-                    <span style={{ fontSize: '0.65rem', background: 'rgba(255, 159, 67, 0.1)', color: '#ff9f43', padding: '2px 6px', borderRadius: '4px' }}>
-                        {substation.ownership}
-                    </span>
-                )}
-            </div>
-
-            {/* Footer Row: SLD Status + Edit Button */}
-            <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem' }}>
-                {substation.sld_file ? (
-                    <div
-                        onClick={() => onViewSld(substation)}
+                {substation.sld_file && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onViewSld(substation); }}
                         style={{
+                            background: 'rgba(0, 229, 255, 0.1)',
+                            border: '1px solid rgba(0, 229, 255, 0.2)',
+                            color: 'var(--accent-cyan)',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '4px',
-                            fontSize: '0.7rem',
+                            fontSize: '0.65rem',
                             cursor: 'pointer',
-                            transition: 'all 0.2s'
+                            transition: 'all 0.2s',
+                            fontWeight: 400
                         }}
                         onMouseEnter={(e) => {
-                            e.currentTarget.style.color = 'var(--accent-cyan)';
-                            e.currentTarget.style.transform = 'translateX(2px)';
+                            e.currentTarget.style.background = 'rgba(0, 229, 255, 0.2)';
                         }}
                         onMouseLeave={(e) => {
-                            e.currentTarget.style.color = 'var(--text-primary)';
-                            e.currentTarget.style.transform = 'translateX(0)';
+                            e.currentTarget.style.background = 'rgba(0, 229, 255, 0.1)';
                         }}
+                        title="View Single Line Diagram"
                     >
-                        <FileText size={14} color="var(--accent-cyan)" />
-                        <span style={{ color: 'var(--text-primary)', textDecoration: 'underline', textDecorationStyle: 'dotted' }}>
-                            SLD Ready
-                        </span>
-                    </div>
-                ) : (
-                    <div>
-                        <input type="file" id={`sld-upload-${substation.substation_id}`} hidden onChange={handleFileChange} accept=".pdf,.dxf,.svg,image/*" />
-                        <label
-                            htmlFor={`sld-upload-${substation.substation_id}`}
-                            style={{
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.7rem',
-                                color: 'var(--text-secondary)',
-                                transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.color = 'var(--accent-cyan)';
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.color = 'var(--text-secondary)';
-                            }}
-                        >
-                            <Upload size={14} />
-                            Upload SLD
-                        </label>
-                    </div>
+                        <FileText size={10} />
+                        <span>SLD</span>
+                    </button>
                 )}
-
-                {/* Edit Button - Bottom Right */}
-                <button
-                    onClick={(e) => { e.stopPropagation(); onEdit(); }}
-                    style={{
-                        marginLeft: 'auto',
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        transition: 'all 0.2s',
-                        padding: '4px 8px',
-                        borderRadius: '4px'
-                    }}
-                    onMouseEnter={(e) => {
-                        e.target.style.background = 'rgba(255,255,255,0.05)';
-                        e.target.style.color = 'var(--accent-cyan)';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.target.style.background = 'transparent';
-                        e.target.style.color = 'var(--text-secondary)';
-                    }}
-                >
-                    <Edit2 size={14} />
-                    Edit
-                </button>
             </div>
         </motion.div>
     );
