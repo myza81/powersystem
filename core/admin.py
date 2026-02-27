@@ -92,8 +92,8 @@ class CriticalCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(CriticalSource)
 class CriticalSourceAdmin(admin.ModelAdmin):
-    list_display = ('reference', 'issued_date', 'source_file')
-    search_fields = ('reference',)
+    list_display = ('issued_date', 'source_file')
+    search_fields = ('source_file',)
     list_filter = ('issued_date',)
 
 @admin.register(CriticalAsset)

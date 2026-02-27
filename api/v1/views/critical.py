@@ -26,9 +26,9 @@ class CriticalCategoryViewSet(BaseCriticalViewSet):
 
 
 class CriticalSourceViewSet(BaseCriticalViewSet):
-    queryset = CriticalSource.objects.all().order_by('-issued_date', 'reference')
+    queryset = CriticalSource.objects.all().order_by('-issued_date')
     serializer_class = CriticalSourceSerializer
-    search_fields = ['reference']
+    search_fields = ['source_file']
 
 
 class CriticalAssetViewSet(BaseCriticalViewSet):

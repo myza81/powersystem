@@ -14,13 +14,15 @@ const CriticalSubstationCard = ({ substation, tags, onOpen }) => {
         let bayNames = [];
 
         // Find transformer information if it exists in the detailed fetch from API
+        let voltageGroups = {}; // { "11kV": ["T1", "T2"], "33kV": ["T3", "T4"] }
         if (asset.load_transformers_details && asset.load_transformers_details.length > 0) {
             asset.load_transformers_details.forEach(lt => {
-                if (lt.lv_voltage && !voltagePresent) voltagePresent = `${lt.lv_voltage}kV`;
+                const volt = lt.lv_voltage ? `${lt.lv_voltage}kV` : '';
+                if (!voltageGroups[volt]) voltageGroups[volt] = [];
 
                 const match = lt.bay_id.match(/_T(\d+)$/i) || lt.bay_id.match(/T(\d+)/i);
                 const base = match ? `T${match[1]}` : lt.bay_id;
-                bayNames.push(base);
+                voltageGroups[volt].push(base);
             });
         }
 
@@ -30,8 +32,7 @@ const CriticalSubstationCard = ({ substation, tags, onOpen }) => {
 
         return {
             id: asset.id,
-            voltage: voltagePresent,
-            bays: bayNames,
+            voltageGroups: Object.entries(voltageGroups).map(([voltage, bays]) => ({ voltage, bays })),
             categoryAsset: categoryLabels.join(' - ') || 'Unnamed Asset',
             sensitivity: asset.sensitivity_impact || 0,
             sourceFile: asset.source_file || null
@@ -97,18 +98,30 @@ const CriticalSubstationCard = ({ substation, tags, onOpen }) => {
                                 {item.categoryAsset}
                             </span>
 
-                            {(item.voltage || item.bays.length > 0) && (
-                                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                    {item.voltage && (
-                                        <span style={{ fontSize: '0.65rem', color: 'var(--accent-cyan)', fontWeight: 600 }}>
-                                            {item.voltage}
+                            {item.voltageGroups && item.voltageGroups.map((vg, vIdx) => (
+                                <div key={vIdx} style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginTop: vIdx > 0 ? '4px' : '0' }}>
+                                    {vg.voltage && (
+                                        <span style={{
+                                            fontSize: '0.6rem',
+                                            color: 'var(--accent-cyan)',
+                                            fontWeight: 700,
+                                            background: 'rgba(0, 188, 212, 0.12)',
+                                            border: '1px solid rgba(0, 188, 212, 0.25)',
+                                            padding: '1px 0',
+                                            width: '42px',
+                                            display: 'inline-flex',
+                                            justifyContent: 'center',
+                                            alignItems: 'center',
+                                            borderRadius: '4px',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.3px',
+                                            flexShrink: 0
+                                        }}>
+                                            {vg.voltage}
                                         </span>
                                     )}
-                                    {item.voltage && item.bays.length > 0 && (
-                                        <span style={{ color: 'rgba(255,255,255,0.2)' }}>•</span>
-                                    )}
                                     <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                        {item.bays.map((bay, idx) => (
+                                        {vg.bays.map((bay, idx) => (
                                             <span key={idx} className="mono" style={{
                                                 background: 'rgba(255,255,255,0.08)',
                                                 border: '1px solid rgba(255,255,255,0.1)',
@@ -122,7 +135,7 @@ const CriticalSubstationCard = ({ substation, tags, onOpen }) => {
                                         ))}
                                     </div>
                                 </div>
-                            )}
+                            ))}
                         </div>
 
                         <div style={{

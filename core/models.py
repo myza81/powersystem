@@ -386,15 +386,15 @@ class CriticalCategory(models.Model):
 
 class CriticalSource(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    reference = models.CharField(max_length=255)
     source_file = models.FileField(upload_to='critical_sources/', blank=True)
     issued_date = models.DateField(null=True, blank=True)
 
     class Meta:
-        ordering = ['-issued_date', 'reference']
+        ordering = ['-issued_date']
 
     def __str__(self):
-        return self.reference
+        import os
+        return os.path.basename(self.source_file.name) if self.source_file else str(self.id)
 
     def clean(self):
         if self.source_file and not self.source_file.name.lower().endswith('.pdf'):

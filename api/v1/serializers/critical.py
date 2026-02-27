@@ -11,13 +11,13 @@ class CriticalCategorySerializer(serializers.ModelSerializer):
 class CriticalSourceSerializer(serializers.ModelSerializer):
     class Meta:
         model = CriticalSource
-        fields = ['id', 'reference', 'source_file', 'issued_date']
+        fields = ['id', 'source_file', 'issued_date']
 
 
 class CriticalAssetSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.category_name', read_only=True)
     category_slug = serializers.CharField(source='category.slug', read_only=True)
-    source_reference = serializers.CharField(source='source.reference', read_only=True)
+    source_reference = serializers.SerializerMethodField()
     source_file = serializers.FileField(source='source.source_file', read_only=True)
 
     load_transformers_details = serializers.SerializerMethodField()
@@ -38,5 +38,11 @@ class CriticalAssetSerializer(serializers.ModelSerializer):
                 'lv_voltage': lt.lv_voltage,
             } for lt in obj.load_transformers.all()
         ]
+
+    def get_source_reference(self, obj):
+        if not obj.source or not obj.source.source_file:
+            return None
+        import os
+        return os.path.basename(obj.source.source_file.name)
 
 

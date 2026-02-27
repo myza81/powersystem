@@ -88,13 +88,11 @@ const CriticalSubstationManager = () => {
         const fetchLoadTransformers = async () => {
             if (!selectedSubstation) {
                 setLoadTransformers([]);
-                setFormData((prev) => ({ ...prev, load_transformers: [] }));
                 return;
             }
             try {
                 const res = await api.get(`/load-transformers/?substation=${selectedSubstation}`);
                 setLoadTransformers(res.data || []);
-                setFormData((prev) => ({ ...prev, load_transformers: [] }));
             } catch (err) {
                 setStatus({ type: 'error', msg: 'Failed to load load transformers.' });
             }
@@ -119,11 +117,19 @@ const CriticalSubstationManager = () => {
     }, [substations]);
 
     const handleSave = async () => {
+        console.log('--- handleSave triggered ---');
+        console.log('Selected Substation:', selectedSubstation);
+        console.log('Form Data:', formData);
+        console.log('Source Mode:', sourceMode);
+        console.log('Editing Tag ID:', editingTagId);
+
         if (!selectedSubstation) {
+            console.warn('Blocked: No substation selected');
             setStatus({ type: 'error', msg: 'Select a substation.' });
             return;
         }
         if (!formData.load_transformers.length || !formData.categories.length) {
+            console.warn('Blocked: Missing bay or category', { load_transformers: formData.load_transformers.length, categories: formData.categories.length });
             setStatus({ type: 'error', msg: 'Select bay and category.' });
             return;
         }
@@ -131,17 +137,11 @@ const CriticalSubstationManager = () => {
         setLoading(true);
         try {
             let sourceId = formData.source || null;
-            if (sourceMode === 'new') {
-                if (!sourceForm.reference) {
-                    setStatus({ type: 'error', msg: 'Source reference is required for new source.' });
-                    setLoading(false);
-                    return;
-                }
+
+            // If user explicitly chose to upload a new source
+            if (sourceMode === 'new' && sourceForm.source_file) {
                 const sourcePayload = new FormData();
-                sourcePayload.append('reference', sourceForm.reference);
-                if (sourceForm.source_file) {
-                    sourcePayload.append('source_file', sourceForm.source_file);
-                }
+                sourcePayload.append('source_file', sourceForm.source_file);
                 if (sourceForm.issued_date) {
                     sourcePayload.append('issued_date', sourceForm.issued_date);
                 }
@@ -149,7 +149,13 @@ const CriticalSubstationManager = () => {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 sourceId = sourceRes.data.id;
+            } else if (sourceMode === 'new' && !editingTagId && !sourceForm.source_file) {
+                // Block save ONLY if creating a brand new asset AND they chose 'new' but didn't attach a file.
+                setStatus({ type: 'error', msg: 'A supported document (file) is required.' });
+                setLoading(false);
+                return;
             }
+            // If sourceMode is 'existing', sourceId is simply 'formData.source' which is already handled above.
 
             // 1. Create or Update the CriticalAsset with load_transformers array
             const assetPayload = {
@@ -252,7 +258,7 @@ const CriticalSubstationManager = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <h2 style={{ margin: 0 }}>Critical Substations</h2>
                 <button className="btn-primary" onClick={() => { setFormMode('create'); setShowForm(true); }}>
-                    <PlusCircle size={18} style={{ marginRight: '8px' }} /> New Critical Tag
+                    <PlusCircle size={18} style={{ marginRight: '8px' }} /> New Critical Asset
                 </button>
             </div>
 
@@ -296,7 +302,8 @@ const CriticalSubstationManager = () => {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            padding: '2rem'
+                            padding: '1rem',
+                            overflowY: 'auto'
                         }}
                         onClick={() => setShowForm(false)}
                     >
@@ -305,211 +312,297 @@ const CriticalSubstationManager = () => {
                             animate={{ scale: 1, y: 0 }}
                             exit={{ scale: 0.95, y: 10 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="glass-card"
-                            style={{ maxWidth: '720px', width: '100%', padding: '1.5rem' }}
+                            className="glass-card form-container"
+                            style={{
+                                maxWidth: '720px',
+                                width: '100%',
+                                padding: '1.5rem',
+                                maxHeight: '90vh',
+                                display: 'flex',
+                                flexDirection: 'column'
+                            }}
                         >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <h3 style={{ margin: 0 }}>{formMode === 'edit' ? 'Edit Critical Tag' : 'New Critical Tag'}</h3>
-                                <button onClick={() => setShowForm(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)' }}>
-                                    <X />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                <h3 style={{ margin: 0 }}>{formMode === 'edit' ? 'Edit Critical Asset' : 'New Critical Asset'}</h3>
+                                <button onClick={() => setShowForm(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                                    <X size={20} />
                                 </button>
                             </div>
 
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-                                <div style={{ gridColumn: 'span 2' }}>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Substation</label>
-                                    <select className="input-field" value={selectedSubstation} onChange={(e) => setSelectedSubstation(e.target.value)}>
-                                        <option value="">Select...</option>
-                                        {substations.map(s => (
-                                            <option key={s.substation_id} value={s.substation_id}>{s.substation_id} - {s.name}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {formMode === 'edit' && selectedSubstationTags.length > 0 && (
-                                    <div style={{ gridColumn: 'span 2' }}>
-                                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Existing Tags</label>
-                                        <select
-                                            className="input-field"
-                                            value={editingTagId}
-                                            onChange={(e) => {
-                                                const tagId = e.target.value;
-                                                const tag = selectedSubstationTags.find(t => t.id === tagId);
-                                                setEditingTagId(tagId);
-                                                if (tag) {
-                                                    setFormData({
-                                                        load_transformers: tag.load_transformers || [],
-                                                        categories: [tag.category],
-                                                        sensitivity_impact: tag.sensitivity_impact || '',
-                                                        source: tag.source || '',
-                                                        asset: tag.asset || '',
-                                                        asset_id: tag.id || '',
-                                                        notes: tag.notes || '',
-                                                        is_inforce: tag.is_inforce,
-                                                    });
-                                                }
-                                            }}
-                                        >
-                                            {selectedSubstationTags.map(tag => (
-                                                <option key={tag.id} value={tag.id}>
-                                                    {tag.asset || 'Unnamed Asset'} ({tag.load_transformers?.length || 0} Bays)
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-
-                                <div style={{ gridColumn: 'span 2' }}>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Load Transformer Bays</label>
-                                    <div style={{
-                                        maxHeight: '180px',
-                                        overflowY: 'auto',
-                                        padding: '0.5rem',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '8px',
-                                        background: 'rgba(0,0,0,0.2)'
-                                    }}>
-                                        {loadTransformers.map((lt) => {
-                                            const checked = formData.load_transformers.includes(lt.id);
-                                            return (
-                                                <label key={lt.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '0.25rem 0' }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={checked}
-                                                        onChange={(e) => {
-                                                            if (e.target.checked) {
-                                                                setFormData({ ...formData, load_transformers: [...formData.load_transformers, lt.id] });
-                                                            } else {
-                                                                setFormData({ ...formData, load_transformers: formData.load_transformers.filter(id => id !== lt.id) });
-                                                            }
-                                                        }}
-                                                    />
-                                                    <span className="mono" style={{ color: '#fff' }}>{lt.bay_id}</span>
-                                                    <span style={{ opacity: 0.7 }}>{lt.lv_voltage ? `${lt.lv_voltage}kV` : ''}</span>
-                                                </label>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Categories</label>
-                                    <div style={{
-                                        maxHeight: '160px',
-                                        overflowY: 'auto',
-                                        padding: '0.5rem',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '8px',
-                                        background: 'rgba(0,0,0,0.2)'
-                                    }}>
-                                        {categories.map((cat) => {
-                                            const checked = formData.categories.includes(cat.id);
-                                            return (
-                                                <label key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '0.25rem 0' }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={checked}
-                                                        onChange={(e) => {
-                                                            if (e.target.checked) {
-                                                                setFormData({ ...formData, categories: [...formData.categories, cat.id] });
-                                                            } else {
-                                                                setFormData({ ...formData, categories: formData.categories.filter(id => id !== cat.id) });
-                                                            }
-                                                        }}
-                                                    />
-                                                    <span style={{ color: '#fff' }}>{cat.category_name}</span>
-                                                </label>
-                                            );
-                                        })}
-                                    </div>
-                                    {formMode === 'edit' && formData.categories.length > 1 && (
-                                        <div style={{ marginTop: '0.5rem', color: '#ff9f43', fontSize: '0.75rem' }}>
-                                            Edit mode supports one category at a time. Extra selections will be ignored.
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Sensitivity Impact</label>
-                                    <select className="input-field" value={formData.sensitivity_impact} onChange={(e) => setFormData({ ...formData, sensitivity_impact: e.target.value })}>
-                                        <option value="">Select Impact...</option>
-                                        <option value="1">Low (1)</option>
-                                        <option value="2">Medium (2)</option>
-                                        <option value="3">High (3)</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Short Note</label>
-                                    <input className="input-field" value={formData.asset} onChange={(e) => setFormData({ ...formData, asset: e.target.value })} placeholder="e.g. Hospital feeder" />
-                                </div>
-
-                                <div style={{ gridColumn: 'span 2' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Source</label>
-                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                            <button
-                                                type="button"
-                                                className="btn-secondary"
-                                                onClick={() => setSourceMode('existing')}
-                                                style={{ padding: '2px 8px', fontSize: '0.7rem', borderRadius: '999px', opacity: sourceMode === 'existing' ? 1 : 0.6 }}
-                                            >
-                                                Use Existing
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="btn-secondary"
-                                                onClick={() => setSourceMode('new')}
-                                                style={{ padding: '2px 8px', fontSize: '0.7rem', borderRadius: '999px', opacity: sourceMode === 'new' ? 1 : 0.6 }}
-                                            >
-                                                Create New
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {sourceMode === 'existing' && (
-                                        <select className="input-field" value={formData.source} onChange={(e) => setFormData({ ...formData, source: e.target.value })}>
+                            <div style={{
+                                overflowY: 'auto',
+                                paddingRight: '0.5rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '1rem'
+                            }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem' }}>
+                                    <div style={{ gridColumn: 'span 6' }}>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Substation</label>
+                                        <select className="input-field" value={selectedSubstation} onChange={(e) => setSelectedSubstation(e.target.value)}>
                                             <option value="">Select...</option>
-                                            {sources.map(src => (
-                                                <option key={src.id} value={src.id}>{src.reference}</option>
+                                            {substations.map(s => (
+                                                <option key={s.substation_id} value={s.substation_id}>{s.substation_id} - {s.name}</option>
                                             ))}
                                         </select>
+                                    </div>
+
+
+
+                                    <div style={{ gridColumn: 'span 3' }}>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Categories</label>
+                                        <div style={{
+                                            display: 'flex',
+                                            flexWrap: 'wrap',
+                                            gap: '0.4rem',
+                                            maxHeight: '160px',
+                                            overflowY: 'auto',
+                                            padding: '0.4rem',
+                                            border: '1px solid rgba(255,255,255,0.1)',
+                                            borderRadius: '8px',
+                                            background: 'rgba(0,0,0,0.2)',
+                                            alignItems: 'flex-start'
+                                        }}>
+                                            {categories.map((cat) => {
+                                                const checked = formData.categories.includes(cat.id);
+                                                return (
+                                                    <label
+                                                        key={cat.id}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            fontSize: '0.7rem',
+                                                            padding: '0.2rem 0.6rem',
+                                                            borderRadius: '999px',
+                                                            cursor: 'pointer',
+                                                            background: checked ? 'rgba(33, 150, 243, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                                                            border: `1px solid ${checked ? 'rgba(33, 150, 243, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                                            color: checked ? '#fff' : 'var(--text-secondary)',
+                                                            transition: 'all 0.2s',
+                                                            userSelect: 'none'
+                                                        }}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={checked}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setFormData({ ...formData, categories: [...formData.categories, cat.id] });
+                                                                } else {
+                                                                    setFormData({ ...formData, categories: formData.categories.filter(id => id !== cat.id) });
+                                                                }
+                                                            }}
+                                                            style={{ display: 'none' }}
+                                                        />
+                                                        <span>{cat.category_name}</span>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                        {formMode === 'edit' && formData.categories.length > 1 && (
+                                            <div style={{ marginTop: '0.5rem', color: '#ff9f43', fontSize: '0.75rem' }}>
+                                                Edit mode supports one category at a time. Extra selections will be ignored.
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div style={{ gridColumn: 'span 3' }}>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Load Transformer Bays</label>
+                                        <div style={{
+                                            display: 'flex',
+                                            flexWrap: 'wrap',
+                                            gap: '0.4rem',
+                                            maxHeight: '180px',
+                                            overflowY: 'auto',
+                                            padding: '0.4rem',
+                                            border: '1px solid rgba(255,255,255,0.1)',
+                                            borderRadius: '8px',
+                                            background: 'rgba(0,0,0,0.2)',
+                                            alignItems: 'flex-start'
+                                        }}>
+                                            {loadTransformers.length === 0 && (
+                                                <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontStyle: 'italic', width: '100%' }}>No load transformers available for this substation.</div>
+                                            )}
+                                            {loadTransformers.map((lt) => {
+                                                const checked = formData.load_transformers.includes(lt.id);
+                                                return (
+                                                    <label
+                                                        key={lt.id}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: '0.3rem',
+                                                            fontSize: '0.7rem',
+                                                            padding: '0.2rem 0.5rem',
+                                                            borderRadius: '999px',
+                                                            cursor: 'pointer',
+                                                            background: checked ? 'rgba(76, 175, 80, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                                                            border: `1px solid ${checked ? 'rgba(76, 175, 80, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                                            color: checked ? '#fff' : 'var(--text-secondary)',
+                                                            transition: 'all 0.2s',
+                                                            userSelect: 'none'
+                                                        }}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={checked}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setFormData({ ...formData, load_transformers: [...formData.load_transformers, lt.id] });
+                                                                } else {
+                                                                    setFormData({ ...formData, load_transformers: formData.load_transformers.filter(id => id !== lt.id) });
+                                                                }
+                                                            }}
+                                                            style={{ display: 'none' }}
+                                                        />
+                                                        <span className="mono">{lt.bay_id}</span>
+                                                        {lt.lv_voltage && <span style={{ opacity: checked ? 0.9 : 0.6, fontSize: '0.7rem' }}>{lt.lv_voltage}kV</span>}
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div style={{ gridColumn: 'span 2' }}>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Asset Name</label>
+                                        <input className="input-field" value={formData.asset} onChange={(e) => setFormData({ ...formData, asset: e.target.value })} placeholder="e.g. TUDM Kuantan" />
+                                    </div>
+
+                                    <div style={{ gridColumn: 'span 2' }}>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Sensitivity Impact</label>
+                                        <select className="input-field" value={formData.sensitivity_impact} onChange={(e) => setFormData({ ...formData, sensitivity_impact: e.target.value })}>
+                                            <option value="">Select Impact...</option>
+                                            <option value="3">Critical (High Intensity)</option>
+                                            <option value="2">Major (Medium Intensity)</option>
+                                            <option value="1">Minor (Low Intensity)</option>
+                                        </select>
+                                    </div>
+
+                                    <div style={{ gridColumn: 'span 2' }}>
+                                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Status</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', height: '42px', gap: '10px' }}>
+                                            <div
+                                                onClick={() => setFormData({ ...formData, is_inforce: !formData.is_inforce })}
+                                                style={{
+                                                    width: '40px',
+                                                    height: '20px',
+                                                    background: formData.is_inforce ? 'rgba(76, 175, 80, 0.4)' : 'rgba(255,255,255,0.1)',
+                                                    borderRadius: '20px',
+                                                    padding: '2px',
+                                                    cursor: 'pointer',
+                                                    position: 'relative',
+                                                    border: `1px solid ${formData.is_inforce ? 'rgba(76, 175, 80, 0.5)' : 'rgba(255,255,255,0.2)'}`,
+                                                    transition: 'all 0.3s'
+                                                }}
+                                            >
+                                                <motion.div
+                                                    animate={{ x: formData.is_inforce ? 20 : 0 }}
+                                                    transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                                    style={{
+                                                        width: '14px',
+                                                        height: '14px',
+                                                        background: '#fff',
+                                                        borderRadius: '50%',
+                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                                                    }}
+                                                />
+                                            </div>
+                                            <span style={{ fontSize: '0.75rem', color: formData.is_inforce ? '#fff' : 'var(--text-secondary)', fontWeight: 500 }}>
+                                                {formData.is_inforce ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ gridColumn: 'span 6' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', marginBottom: '1rem' }}>
+                                            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Source Documentation</label>
+
+                                            {/* Redesigned Toggle Group */}
+                                            <div style={{
+                                                display: 'flex',
+                                                background: 'rgba(0,0,0,0.3)',
+                                                padding: '4px',
+                                                borderRadius: '8px',
+                                                border: '1px solid rgba(255,255,255,0.05)',
+                                                width: 'fit-content'
+                                            }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSourceMode('existing')}
+                                                    style={{
+                                                        padding: '0.5rem 1rem',
+                                                        fontSize: '0.8rem',
+                                                        borderRadius: '6px',
+                                                        background: sourceMode === 'existing' ? 'rgba(33, 150, 243, 0.2)' : 'transparent',
+                                                        color: sourceMode === 'existing' ? '#fff' : 'var(--text-secondary)',
+                                                        border: `1px solid ${sourceMode === 'existing' ? 'rgba(33, 150, 243, 0.5)' : 'transparent'}`,
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        fontWeight: sourceMode === 'existing' ? 500 : 400
+                                                    }}
+                                                >
+                                                    Select Existing
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSourceMode('new')}
+                                                    style={{
+                                                        padding: '0.5rem 1rem',
+                                                        fontSize: '0.8rem',
+                                                        borderRadius: '6px',
+                                                        background: sourceMode === 'new' ? 'rgba(76, 175, 80, 0.2)' : 'transparent',
+                                                        color: sourceMode === 'new' ? '#fff' : 'var(--text-secondary)',
+                                                        border: `1px solid ${sourceMode === 'new' ? 'rgba(76, 175, 80, 0.5)' : 'transparent'}`,
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        fontWeight: sourceMode === 'new' ? 500 : 400
+                                                    }}
+                                                >
+                                                    Upload New Default
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {sourceMode === 'existing' && (
+                                            <select className="input-field" value={formData.source} onChange={(e) => setFormData({ ...formData, source: e.target.value })}>
+                                                <option value="">Select...</option>
+                                                {sources.map(src => (
+                                                    <option key={src.id} value={src.id}>{src.source_file ? src.source_file.split('/').pop() : 'Unnamed Source'}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+
+
+                                    {sourceMode === 'new' && (
+                                        <>
+                                            <div style={{ gridColumn: 'span 2' }}>
+                                                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Issued Date</label>
+                                                <input className="input-field" type="date" value={sourceForm.issued_date} onChange={(e) => setSourceForm({ ...sourceForm, issued_date: e.target.value })} />
+                                            </div>
+                                            <div style={{ gridColumn: 'span 4' }}>
+                                                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Supported Document</label>
+                                                <input className="input-field" type="file" onChange={(e) => setSourceForm({ ...sourceForm, source_file: e.target.files[0] || null })} style={{ paddingTop: '8px' }} />
+                                            </div>
+                                            <div style={{ gridColumn: 'span 6' }}>
+                                                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Notes</label>
+                                                <textarea
+                                                    className="input-field"
+                                                    value={formData.notes}
+                                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                                    placeholder="Enter additional details or context about this critical asset..."
+                                                    rows={4}
+                                                    style={{ minHeight: '120px', resize: 'vertical' }}
+                                                />
+                                            </div>
+                                        </>
                                     )}
-                                </div>
-
-                                {sourceMode === 'new' && (
-                                    <>
-                                        <div style={{ gridColumn: 'span 2' }}>
-                                            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Reference</label>
-                                            <input className="input-field" value={sourceForm.reference} onChange={(e) => setSourceForm({ ...sourceForm, reference: e.target.value })} placeholder="Doc ID / Memo / Ticket" />
-                                        </div>
-                                        <div style={{ gridColumn: 'span 2' }}>
-                                            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Evidence File</label>
-                                            <input className="input-field" type="file" onChange={(e) => setSourceForm({ ...sourceForm, source_file: e.target.files[0] || null })} />
-                                        </div>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Issued Date</label>
-                                            <input className="input-field" type="date" value={sourceForm.issued_date} onChange={(e) => setSourceForm({ ...sourceForm, issued_date: e.target.value })} />
-                                        </div>
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Notes</label>
-                                            <input className="input-field" value={sourceForm.notes} onChange={(e) => setSourceForm({ ...sourceForm, notes: e.target.value })} />
-                                        </div>
-                                    </>
-                                )}
-
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>In Force</label>
-                                    <select className="input-field" value={formData.is_inforce ? 'true' : 'false'} onChange={(e) => setFormData({ ...formData, is_inforce: e.target.value === 'true' })}>
-                                        <option value="true">Active</option>
-                                        <option value="false">Inactive</option>
-                                    </select>
                                 </div>
                             </div>
 
-                            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', flexShrink: 0 }}>
                                 <button className="btn-primary" onClick={handleSave} disabled={loading} style={{ flex: 1 }}>
-                                    <Save size={16} style={{ marginRight: '6px' }} /> {editingTagId ? 'Update Tag' : 'Save Tag'}
+                                    <Save size={16} style={{ marginRight: '6px' }} /> {editingTagId ? 'Update Asset' : 'Save Asset'}
                                 </button>
                                 <button className="btn-secondary" onClick={() => setShowForm(false)} style={{ flex: 1 }}>
                                     Cancel
