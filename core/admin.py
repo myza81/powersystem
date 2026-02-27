@@ -24,7 +24,7 @@ from .models import (
     EquipmentSnapshotState,
     CriticalCategory,
     CriticalSource,
-    CriticalAssetTag,
+    CriticalAsset,
 )
 
 @admin.register(Substation)
@@ -96,12 +96,17 @@ class CriticalSourceAdmin(admin.ModelAdmin):
     search_fields = ('reference',)
     list_filter = ('issued_date',)
 
-@admin.register(CriticalAssetTag)
-class CriticalAssetTagAdmin(admin.ModelAdmin):
-    list_display = ('substation', 'load_transformer', 'category', 'short_text', 'is_inforce', 'updated_at')
-    search_fields = ('substation__substation_id', 'load_transformer__bay_id', 'category__category_name')
-    list_filter = ('is_inforce', 'category')
-    raw_id_fields = ('substation', 'load_transformer', 'category', 'source')
+@admin.register(CriticalAsset)
+class CriticalAssetAdmin(admin.ModelAdmin):
+    list_display = ('asset', 'substation', 'category', 'sensitivity_impact', 'get_transformers_count', 'is_inforce', 'updated_at', 'notes')
+    search_fields = ('asset', 'substation__substation_id', 'category__category_name', 'notes')
+    list_filter = ('is_inforce', 'category', 'sensitivity_impact', 'substation')
+    raw_id_fields = ('substation', 'category', 'source')
+    filter_horizontal = ('load_transformers',)
+
+    def get_transformers_count(self, obj):
+        return obj.load_transformers.count()
+    get_transformers_count.short_description = 'Transformers'
 
 @admin.register(NetworkSnapshot)
 class NetworkSnapshotAdmin(admin.ModelAdmin):

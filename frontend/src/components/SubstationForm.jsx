@@ -3,6 +3,178 @@ import { X, Save, MapPin, AlertTriangle, Edit2, Upload, Plus, RefreshCw, Databas
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api';
 
+const GRIDS = ['KEDP', 'PPNG', 'PERK', 'SELG', 'KLUM', 'NSEM', 'MLKA', 'JOH2', 'JOH1', 'PHNG', 'TERG', 'KELN'];
+const VOLTAGES = [500, 275, 132];
+const LOAD_LV = [33, 22, 11];
+const AUTO_LV = [275, 132];
+
+const tabButtonStyle = (isActive) => {
+    return {
+        padding: '0.75rem 1rem',
+        borderRadius: '8px',
+        border: 'none',
+        background: isActive ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
+        color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+        fontWeight: isActive ? 600 : 500,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        transition: 'all 0.2s ease',
+        fontSize: '0.85rem',
+        textAlign: 'left'
+    };
+};
+
+const inputLabelStyle = {
+    display: 'block',
+    fontSize: '0.7rem',
+    color: 'var(--text-secondary)',
+    marginBottom: '6px',
+    fontWeight: 500,
+    letterSpacing: '0.5px'
+};
+
+const pillStyle = (type, value) => {
+    let bg = 'rgba(255,255,255,0.05)';
+    let color = 'var(--text-secondary)';
+
+    if (type === 'voltage') {
+        bg = value >= 500 ? 'rgba(255,255,255,0.1)' : (value >= 275 ? 'rgba(0, 191, 255, 0.08)' : 'rgba(74, 222, 128, 0.1)');
+        color = value >= 500 ? '#ffffff' : (value >= 275 ? '#15d5f6ff' : 'var(--accent-cyan)');
+    } else if (type === 'ownership') {
+        bg = 'rgba(255, 159, 67, 0.1)';
+        color = '#ff9f43';
+    }
+
+    return {
+        fontSize: '0.65rem',
+        background: bg,
+        color: color,
+        padding: '2px 8px',
+        borderRadius: '4px',
+        fontWeight: 600,
+        display: 'inline-block'
+    };
+};
+
+const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetForm, setAssetForm, substationOptions, substation }) => {
+    const isBranch = type === 'branch';
+    const title = data?.id ? 'Edit' : 'Add';
+    const typeLabel = type === 'load' ? 'Load Transformer' : type === 'auto' ? 'Auto Transformer' : 'Incoming Branch';
+
+    return (
+        <AnimatePresence>
+            <div style={{
+                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                background: 'rgba(10, 12, 16, 0.6)', zIndex: 2000,
+                display: 'flex', justifyContent: 'center', alignItems: 'center',
+                backdropFilter: 'blur(8px)'
+            }}>
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="glass-card"
+                    style={{
+                        width: '460px', padding: '2rem',
+                        display: 'flex', flexDirection: 'column', gap: '1.5rem'
+                    }}
+                >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#fff' }}>
+                                {title} {typeLabel}
+                            </h3>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                                {substation?.name}
+                            </div>
+                        </div>
+                        <button onClick={onClose} style={{
+                            background: 'rgba(255,255,255,0.05)', border: 'none', color: 'var(--text-secondary)',
+                            cursor: 'pointer', padding: '6px', borderRadius: '6px', transition: 'all 0.2s'
+                        }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#fff'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                        >
+                            <X size={18} />
+                        </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                        {isBranch ? (
+                            <>
+                                <div style={{ gridColumn: 'span 2' }}>
+                                    <label style={inputLabelStyle}>Target Station</label>
+                                    <select className="input-field" value={assetForm.to_substation || ''} onChange={(e) => setAssetForm(f => ({ ...f, to_substation: e.target.value }))}>
+                                        <option value="">-- Select Substation --</option>
+                                        {substationOptions.map((s) => (
+                                            <option key={s.substation_id} value={s.substation_id}>{s.name} ({s.substation_id})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={inputLabelStyle}>Circuit No</label>
+                                    <input className="input-field mono" value={assetForm.ckt_id || ''} onChange={(e) => setAssetForm(f => ({ ...f, ckt_id: e.target.value }))} placeholder="1" />
+                                </div>
+                                <div>
+                                    <label style={inputLabelStyle}>Breaker ID</label>
+                                    <input className="input-field mono" value={assetForm.breaker_number || ''} onChange={(e) => setAssetForm(f => ({ ...f, breaker_number: e.target.value }))} placeholder="Auto-generated if empty" />
+                                </div>
+                                <div>
+                                    <label style={inputLabelStyle}>Commissioning Date <span style={{ color: 'var(--text-secondary)', fontSize: '0.6rem' }}>(Optional)</span></label>
+                                    <input className="input-field mono" type="date" value={assetForm.commissioning_date || ''} onChange={(e) => setAssetForm(f => ({ ...f, commissioning_date: e.target.value }))} />
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div>
+                                    <label style={inputLabelStyle}>Unit Number</label>
+                                    <input className="input-field mono" type="number" value={assetForm.transformer_no || ''} onChange={(e) => setAssetForm(f => ({ ...f, transformer_no: e.target.value }))} placeholder="e.g., 1" />
+                                </div>
+                                <div>
+                                    <label style={inputLabelStyle}>LV (kV)</label>
+                                    <select className="input-field mono" value={assetForm.lv_voltage || ''} onChange={(e) => setAssetForm(f => ({ ...f, lv_voltage: e.target.value }))}>
+                                        <option value="">-- Select --</option>
+                                        {(type === 'load' ? LOAD_LV : AUTO_LV).map(v => <option key={v} value={v}>{v} kV</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={inputLabelStyle}>Capacity (MVA)</label>
+                                    <input className="input-field mono" type="number" value={assetForm.capacity_mva || ''} onChange={(e) => setAssetForm(f => ({ ...f, capacity_mva: e.target.value }))} placeholder="e.g., 30" />
+                                </div>
+                                <div>
+                                    <label style={inputLabelStyle}>Commissioning Date <span style={{ color: 'var(--text-secondary)', fontSize: '0.6rem' }}>(Optional)</span></label>
+                                    <input className="input-field mono" type="date" value={assetForm.commissioning_date || ''} onChange={(e) => setAssetForm(f => ({ ...f, commissioning_date: e.target.value }))} />
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                        <button onClick={onClose}
+                            style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#fff'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={() => onSave(type)}
+                            className="btn-primary"
+                            style={{ flex: 2, padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                            disabled={assetLoading}
+                        >
+                            {assetLoading ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
+                            {assetLoading ? 'Saving...' : 'Save Asset'}
+                        </button>
+                    </div>
+                </motion.div>
+            </div>
+        </AnimatePresence>
+    );
+};
+
 const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload }) => {
     const [formData, setFormData] = useState(substation || {
         mnemonic: '',
@@ -27,10 +199,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload }) => {
     // Form States for Modal
     const [assetForm, setAssetForm] = useState({});
 
-    const GRIDS = ['KEDP', 'PPNG', 'PERK', 'SELG', 'KLUM', 'NSEM', 'MLKA', 'JOH2', 'JOH1', 'PHNG', 'TERG', 'KELN'];
-    const VOLTAGES = [500, 275, 132];
-    const LOAD_LV = [33, 22, 11];
-    const AUTO_LV = [275, 132];
 
     const handleChange = (e) => {
         const value = e.target.name === 'voltage' ? parseInt(e.target.value) : e.target.value;
@@ -129,172 +297,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload }) => {
         setAssetLoading(false);
     };
 
-    const tabButtonStyle = (isActive) => {
-        return {
-            padding: '0.75rem 1rem',
-            borderRadius: '8px',
-            border: 'none',
-            background: isActive ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
-            color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-            fontWeight: isActive ? 600 : 500,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            transition: 'all 0.2s ease',
-            fontSize: '0.85rem',
-            textAlign: 'left'
-        };
-    };
-
-    const inputLabelStyle = {
-        display: 'block',
-        fontSize: '0.7rem',
-        color: 'var(--text-secondary)',
-        marginBottom: '6px',
-        fontWeight: 500,
-        letterSpacing: '0.5px'
-    };
-
-    const pillStyle = (type, value) => {
-        let bg = 'rgba(255,255,255,0.05)';
-        let color = 'var(--text-secondary)';
-
-        if (type === 'voltage') {
-            bg = value >= 500 ? 'rgba(255,255,255,0.1)' : (value >= 275 ? 'rgba(0, 191, 255, 0.08)' : 'rgba(74, 222, 128, 0.1)');
-            color = value >= 500 ? '#ffffff' : (value >= 275 ? '#15d5f6ff' : 'var(--accent-cyan)');
-        } else if (type === 'ownership') {
-            bg = 'rgba(255, 159, 67, 0.1)';
-            color = '#ff9f43';
-        }
-
-        return {
-            fontSize: '0.65rem',
-            background: bg,
-            color: color,
-            padding: '2px 8px',
-            borderRadius: '4px',
-            fontWeight: 600,
-            display: 'inline-block'
-        };
-    };
-
-    const AssetModal = ({ type, data, onClose, onSave }) => {
-        const isBranch = type === 'branch';
-        const title = data?.id ? 'Edit' : 'Add';
-        const typeLabel = type === 'load' ? 'Load Transformer' : type === 'auto' ? 'Auto Transformer' : 'Incoming Branch';
-
-        return (
-            <AnimatePresence>
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    background: 'rgba(10, 12, 16, 0.6)', zIndex: 2000,
-                    display: 'flex', justifyContent: 'center', alignItems: 'center',
-                    backdropFilter: 'blur(8px)'
-                }}>
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="glass-card"
-                        style={{
-                            width: '460px', padding: '2rem',
-                            display: 'flex', flexDirection: 'column', gap: '1.5rem'
-                        }}
-                    >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div>
-                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#fff' }}>
-                                    {title} {typeLabel}
-                                </h3>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                                    {substation?.name}
-                                </div>
-                            </div>
-                            <button onClick={onClose} style={{
-                                background: 'rgba(255,255,255,0.05)', border: 'none', color: 'var(--text-secondary)',
-                                cursor: 'pointer', padding: '6px', borderRadius: '6px', transition: 'all 0.2s'
-                            }}
-                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#fff'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-                            {isBranch ? (
-                                <>
-                                    <div style={{ gridColumn: 'span 2' }}>
-                                        <label style={inputLabelStyle}>Target Station</label>
-                                        <select className="input-field" value={assetForm.to_substation || ''} onChange={(e) => setAssetForm(f => ({ ...f, to_substation: e.target.value }))}>
-                                            <option value="">-- Select Substation --</option>
-                                            {substationOptions.map((s) => (
-                                                <option key={s.substation_id} value={s.substation_id}>{s.name} ({s.substation_id})</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style={inputLabelStyle}>Circuit No</label>
-                                        <input className="input-field mono" value={assetForm.ckt_id || ''} onChange={(e) => setAssetForm(f => ({ ...f, ckt_id: e.target.value }))} placeholder="1" />
-                                    </div>
-                                    <div>
-                                        <label style={inputLabelStyle}>Breaker ID</label>
-                                        <input className="input-field mono" value={assetForm.breaker_number || ''} onChange={(e) => setAssetForm(f => ({ ...f, breaker_number: e.target.value }))} placeholder="Auto-generated if empty" />
-                                    </div>
-                                    <div>
-                                        <label style={inputLabelStyle}>Commissioning Date <span style={{ color: 'var(--text-secondary)', fontSize: '0.6rem' }}>(Optional)</span></label>
-                                        <input className="input-field mono" type="date" value={assetForm.commissioning_date || ''} onChange={(e) => setAssetForm(f => ({ ...f, commissioning_date: e.target.value }))} />
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div>
-                                        <label style={inputLabelStyle}>Unit Number</label>
-                                        <input className="input-field mono" type="number" value={assetForm.transformer_no || ''} onChange={(e) => setAssetForm(f => ({ ...f, transformer_no: e.target.value }))} placeholder="e.g., 1" />
-                                    </div>
-                                    <div>
-                                        <label style={inputLabelStyle}>LV (kV)</label>
-                                        <select className="input-field mono" value={assetForm.lv_voltage || ''} onChange={(e) => setAssetForm(f => ({ ...f, lv_voltage: e.target.value }))}>
-                                            <option value="">-- Select --</option>
-                                            {(type === 'load' ? LOAD_LV : AUTO_LV).map(v => <option key={v} value={v}>{v} kV</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style={inputLabelStyle}>Capacity (MVA)</label>
-                                        <input className="input-field mono" type="number" value={assetForm.capacity_mva || ''} onChange={(e) => setAssetForm(f => ({ ...f, capacity_mva: e.target.value }))} placeholder="e.g., 30" />
-                                    </div>
-                                    <div>
-                                        <label style={inputLabelStyle}>Commissioning Date <span style={{ color: 'var(--text-secondary)', fontSize: '0.6rem' }}>(Optional)</span></label>
-                                        <input className="input-field mono" type="date" value={assetForm.commissioning_date || ''} onChange={(e) => setAssetForm(f => ({ ...f, commissioning_date: e.target.value }))} />
-                                    </div>
-                                </>
-                            )}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                            <button onClick={onClose}
-                                style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
-                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#fff'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => onSave(type)}
-                                className="btn-primary"
-                                style={{ flex: 2, padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
-                                disabled={assetLoading}
-                            >
-                                {assetLoading ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-                                {assetLoading ? 'Saving...' : 'Save Asset'}
-                            </button>
-                        </div>
-                    </motion.div>
-                </div>
-            </AnimatePresence>
-        );
-    };
 
     return (
         <>
@@ -305,6 +307,11 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload }) => {
                         data={editingAsset.data}
                         onClose={resetAssetForm}
                         onSave={handleAssetSave}
+                        assetLoading={assetLoading}
+                        assetForm={assetForm}
+                        setAssetForm={setAssetForm}
+                        substationOptions={substationOptions}
+                        substation={substation}
                     />
                 )}
             </AnimatePresence>

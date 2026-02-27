@@ -2,11 +2,11 @@ from rest_framework import viewsets, permissions, filters
 from django.conf import settings
 import os
 
-from core.models import CriticalCategory, CriticalSource, CriticalAssetTag
+from core.models import CriticalCategory, CriticalSource, CriticalAsset
 from api.v1.serializers.critical import (
     CriticalCategorySerializer,
     CriticalSourceSerializer,
-    CriticalAssetTagSerializer,
+    CriticalAssetSerializer,
 )
 
 
@@ -31,13 +31,14 @@ class CriticalSourceViewSet(BaseCriticalViewSet):
     search_fields = ['reference']
 
 
-class CriticalAssetTagViewSet(BaseCriticalViewSet):
-    queryset = CriticalAssetTag.objects.select_related('substation', 'load_transformer', 'category', 'source')
-    serializer_class = CriticalAssetTagSerializer
-    search_fields = ['substation__substation_id', 'load_transformer__bay_id', 'category__category_name']
+class CriticalAssetViewSet(BaseCriticalViewSet):
+    queryset = CriticalAsset.objects.all().order_by('-created_at')
+    serializer_class = CriticalAssetSerializer
+    search_fields = ['asset', 'category__category_name']
+
 
     def get_queryset(self):
-        queryset = super().get_queryset().order_by('substation__substation_id', 'load_transformer__bay_id')
+        queryset = super().get_queryset()
         substation_id = self.request.query_params.get('substation')
         if substation_id:
             queryset = queryset.filter(substation__substation_id=substation_id)

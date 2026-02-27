@@ -47,8 +47,8 @@ class SubstationSerializer(serializers.ModelSerializer):
         )['t'] or 0.0
     
     def get_is_critical(self, obj):
-        from core.models import CriticalAssetTag
-        return CriticalAssetTag.objects.filter(substation=obj, is_inforce=True).exists()
+        from core.models import CriticalAsset
+        return CriticalAsset.objects.filter(substation=obj, is_inforce=True).exists()
 
 class TransformerDetailSerializer(serializers.Serializer):
     """

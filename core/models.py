@@ -362,12 +362,15 @@ class EquipmentSnapshotState(models.Model):
             )
         ]
 
+# ==========================================
+# 2.2 CRITICAL ASSET MASTER DATA    
+# ==========================================
 
 class CriticalCategory(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    category_name = models.CharField(max_length=120, unique=True)
+    category_name = models.CharField(max_length=50, unique=True)
     slug = models.SlugField(max_length=140, unique=True, blank=True)
-    description = models.TextField(blank=True)
+
 
     class Meta:
         ordering = ['category_name']
@@ -386,7 +389,6 @@ class CriticalSource(models.Model):
     reference = models.CharField(max_length=255)
     source_file = models.FileField(upload_to='critical_sources/', blank=True)
     issued_date = models.DateField(null=True, blank=True)
-    notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ['-issued_date', 'reference']
@@ -399,47 +401,28 @@ class CriticalSource(models.Model):
             raise ValidationError({'source_file': 'Only PDF files are allowed.'})
 
 
-class CriticalAssetTag(models.Model):
+class CriticalAsset(models.Model):
+    SENSITIVITY_CHOICES = [
+        (1, 'Low'),
+        (2, 'Medium'),
+        (3, 'High'),
+    ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    substation = models.ForeignKey(Substation, on_delete=models.CASCADE, related_name='critical_tags')
-    load_transformer = models.ForeignKey(LoadTransformer, on_delete=models.CASCADE, null=True, blank=True, related_name='critical_tags')
-    category = models.ForeignKey(CriticalCategory, on_delete=models.CASCADE, related_name='tags')
-    severity_rank = models.IntegerField(null=True, blank=True)
-    source = models.ForeignKey(CriticalSource, on_delete=models.SET_NULL, null=True, blank=True, related_name='tags')
-    short_text = models.CharField(max_length=140, blank=True)
+    asset = models.CharField(max_length=50)
+    category = models.ForeignKey(CriticalCategory, on_delete=models.CASCADE, related_name='assets')
+    sensitivity_impact = models.IntegerField(choices=SENSITIVITY_CHOICES, null=True, blank=True)
+    source = models.ForeignKey(CriticalSource, on_delete=models.SET_NULL, null=True, blank=True, related_name='assets')
+    notes = models.TextField(blank=True)
     is_inforce = models.BooleanField(default=True)
+    substation = models.ForeignKey(Substation, on_delete=models.CASCADE, related_name='critical_assets', null=True)
+    load_transformers = models.ManyToManyField(LoadTransformer, related_name='critical_assets', blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=['substation', 'load_transformer', 'category'],
-                condition=Q(is_inforce=True),
-                name='uniq_active_critical_tag'
-            )
-        ]
-        ordering = ['substation__substation_id', 'load_transformer__bay_id']
-
-    def clean(self):
-        errors = {}
-        # is_inforce is a simple live flag; no date bounds enforced
-
-        if not self.load_transformer_id:
-            errors['load_transformer'] = 'LoadTransformer is required.'
-        if self.substation_id and self.load_transformer_id:
-            if self.load_transformer.substation_id != self.substation_id:
-                errors['load_transformer'] = 'LoadTransformer must belong to the selected substation.'
-
-        if errors:
-            raise ValidationError(errors)
-
-    def save(self, *args, **kwargs):
-        if not kwargs.get('raw'):
-            self.full_clean()
-        super().save(*args, **kwargs)
-
     def __str__(self):
-        return f"{self.substation_id} {self.load_transformer.bay_id} {self.category.category_name}"
+        return f"{self.asset} ({self.category.category_name})"
+
+
 
 # ==========================================
 # 3. SNAPSHOT MANAGEMENT

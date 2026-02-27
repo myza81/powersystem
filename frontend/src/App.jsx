@@ -17,7 +17,6 @@ import SubstationMap from './components/SubstationMap';
 import SnapshotManager from './components/SnapshotManager';
 import LoadSheddingManager from './components/LoadSheddingManager';
 import CriticalSubstationManager from './components/CriticalSubstationManager';
-import CriticalTagModal from './components/CriticalTagModal';
 import api from './api';
 
 const DEFAULT_FILTERS = {
@@ -46,7 +45,6 @@ const App = () => {
     const [status, setStatus] = useState(null);
     const [viewingSld, setViewingSld] = useState(null);
     const [locatingSubstation, setLocatingSubstation] = useState(null);
-    const [criticalSubId, setCriticalSubId] = useState(null);
 
     // Sync URL with view state
     useEffect(() => {
@@ -295,7 +293,6 @@ const App = () => {
                                         processing={loading}
                                         onViewSld={setViewingSld}
                                         onLocate={setLocatingSubstation}
-                                        onCriticalClick={(subId) => setCriticalSubId(subId)}
                                     />
                                 ))}
                             </AnimatePresence>
@@ -457,26 +454,6 @@ const App = () => {
                     />
                 )}
 
-                {criticalSubId && (
-                    <CriticalTagModal
-                        substationId={criticalSubId}
-                        substationName={substations.find(s => s.substation_id === criticalSubId)?.name}
-                        onClose={() => setCriticalSubId(null)}
-                        onAdd={(subId) => {
-                            setCriticalSubId(null);
-                            setView('critical-substations');
-                            // We could potentially trigger the add modal automatically here if we passed state down
-                        }}
-                        onEdit={(subId) => {
-                            setCriticalSubId(null);
-                            setView('critical-substations');
-                        }}
-                        onDeactivate={async (subId, tags) => {
-                            await Promise.all(tags.map(tag => api.patch(`/critical-tags/${tag.id}/`, { is_inforce: false })));
-                            setStatus({ type: 'success', msg: `Deactivated tags for ${subId}` });
-                        }}
-                    />
-                )}
             </div>
         </MainLayout>
     );

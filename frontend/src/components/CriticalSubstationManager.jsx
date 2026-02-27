@@ -12,7 +12,6 @@ const CriticalSubstationManager = () => {
     const [loadTransformers, setLoadTransformers] = useState([]);
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [detailModal, setDetailModal] = useState(null);
 
     const formatBayTagLabel = (bayId, lvVoltage) => {
         if (!bayId) return '';
@@ -48,9 +47,11 @@ const CriticalSubstationManager = () => {
     const [formData, setFormData] = useState({
         load_transformers: [],
         categories: [],
-        severity_rank: '',
+        sensitivity_impact: '',
         source: '',
-        short_text: '',
+        asset: '',
+        asset_id: '',
+        notes: '',
         is_inforce: true,
     });
 
@@ -58,7 +59,7 @@ const CriticalSubstationManager = () => {
         setLoading(true);
         try {
             const [tagRes, subRes, catRes, srcRes] = await Promise.all([
-                api.get('/critical-tags/'),
+                api.get('/critical-assets/'),
                 api.get('/substations/'),
                 api.get('/critical-categories/'),
                 api.get('/critical-sources/')
@@ -103,10 +104,10 @@ const CriticalSubstationManager = () => {
 
     const grouped = useMemo(() => {
         const map = {};
-        tags.forEach(tag => {
-            if (!tag.substation) return;
-            if (!map[tag.substation]) map[tag.substation] = [];
-            map[tag.substation].push(tag);
+        tags.forEach(asset => {
+            if (!asset.substation) return;
+            if (!map[asset.substation]) map[asset.substation] = [];
+            map[asset.substation].push(asset);
         });
         return map;
     }, [tags]);
@@ -116,24 +117,6 @@ const CriticalSubstationManager = () => {
         substations.forEach(s => { map[s.substation_id] = s; });
         return map;
     }, [substations]);
-
-    const handleDeactivateAll = async (substationId) => {
-        const items = grouped[substationId] || [];
-        if (!items.length) return;
-        if (!confirm(`Deactivate all critical tags for ${substationId}?`)) return;
-
-        setLoading(true);
-        try {
-            await Promise.all(items.map(item => api.patch(`/critical-tags/${item.id}/`, {
-                is_inforce: false
-            })));
-            setStatus({ type: 'success', msg: `Deactivated ${substationId}` });
-            fetchAll();
-        } catch (err) {
-            setStatus({ type: 'error', msg: 'Failed to deactivate tags.' });
-        }
-        setLoading(false);
-    };
 
     const handleSave = async () => {
         if (!selectedSubstation) {
@@ -162,46 +145,38 @@ const CriticalSubstationManager = () => {
                 if (sourceForm.issued_date) {
                     sourcePayload.append('issued_date', sourceForm.issued_date);
                 }
-                if (sourceForm.notes) {
-                    sourcePayload.append('notes', sourceForm.notes);
-                }
                 const sourceRes = await api.post('/critical-sources/', sourcePayload, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 sourceId = sourceRes.data.id;
             }
 
-            const payloadBase = {
+            // 1. Create or Update the CriticalAsset with load_transformers array
+            const assetPayload = {
+                asset: formData.asset || '',
                 substation: selectedSubstation,
-                severity_rank: formData.severity_rank || null,
+                load_transformers: formData.load_transformers,
+                category: formData.categories[0], // primary category
+                sensitivity_impact: formData.sensitivity_impact ? parseInt(formData.sensitivity_impact, 10) : null,
                 source: sourceId,
-                short_text: formData.short_text || '',
+                notes: formData.notes,
                 is_inforce: formData.is_inforce,
             };
 
-            if (editingTagId) {
-                const payload = {
-                    ...payloadBase,
-                    load_transformer: formData.load_transformers[0],
-                    category: formData.categories[0]
-                };
-                await api.patch(`/critical-tags/${editingTagId}/`, payload);
-                setStatus({ type: 'success', msg: 'Critical tag updated.' });
+            if (editingTagId && formData.asset_id) {
+                // If editing an existing asset, patch it
+                await api.patch(`/critical-assets/${formData.asset_id}/`, assetPayload);
+                setStatus({ type: 'success', msg: 'Critical asset updated.' });
             } else {
-                const requests = [];
-                formData.load_transformers.forEach((lt) => {
-                    formData.categories.forEach((cat) => {
-                        requests.push(api.post('/critical-tags/', { ...payloadBase, load_transformer: lt, category: cat }));
-                    });
-                });
-                await Promise.all(requests);
-                setStatus({ type: 'success', msg: 'Critical tags created.' });
+                await api.post('/critical-assets/', assetPayload);
+                setStatus({ type: 'success', msg: 'Critical asset created.' });
             }
+
             setShowForm(false);
             setEditingTagId('');
             setSourceMode(sources.length === 0 ? 'new' : 'existing');
-            setSourceForm({ reference: '', source_file: null, issued_date: '', notes: '' });
-            setFormData({ load_transformers: [], categories: [], severity_rank: '', source: '', short_text: '', is_inforce: true });
+            setSourceForm({ reference: '', source_file: null, issued_date: '' });
+            setFormData({ load_transformers: [], categories: [], sensitivity_impact: '', source: '', asset: '', notes: '', is_inforce: true });
             fetchAll();
         } catch (err) {
             setStatus({ type: 'error', msg: 'Failed to create tag.' });
@@ -216,8 +191,8 @@ const CriticalSubstationManager = () => {
             setEditingTagId('');
             setFormMode('edit');
             setSourceMode(sources.length === 0 ? 'new' : 'existing');
-            setSourceForm({ reference: '', source_file: null, issued_date: '', notes: '' });
-            setFormData({ load_transformers: [], categories: [], severity_rank: '', source: '', short_text: '', is_inforce: true });
+            setSourceForm({ reference: '', source_file: null, issued_date: '' });
+            setFormData({ load_transformers: [], categories: [], sensitivity_impact: '', source: '', asset: '', notes: '', is_inforce: true });
             setShowForm(true);
             return;
         }
@@ -229,11 +204,13 @@ const CriticalSubstationManager = () => {
         setSourceMode(sources.length === 0 ? 'new' : 'existing');
         setSourceForm({ reference: '', source_file: null, issued_date: '', notes: '' });
         setFormData({
-            load_transformers: [first.load_transformer],
+            load_transformers: first.load_transformers || [],
             categories: [first.category],
-            severity_rank: first.severity_rank || '',
+            sensitivity_impact: first.sensitivity_impact || '',
             source: first.source || '',
-            short_text: first.short_text || '',
+            asset: first.asset || '',
+            asset_id: first.id || '',
+            notes: first.notes || '',
             is_inforce: first.is_inforce,
         });
         setShowForm(true);
@@ -245,7 +222,7 @@ const CriticalSubstationManager = () => {
         setFormMode('create');
         setSourceMode(sources.length === 0 ? 'new' : 'existing');
         setSourceForm({ reference: '', source_file: null, issued_date: '', notes: '' });
-        setFormData({ load_transformers: [], categories: [], severity_rank: '', source: '', short_text: '', is_inforce: true });
+        setFormData({ load_transformers: [], categories: [], sensitivity_impact: '', source: '', asset: '', is_inforce: true });
         setShowForm(true);
     };
 
@@ -256,19 +233,19 @@ const CriticalSubstationManager = () => {
         setSourceMode('existing');
         setSourceForm({ reference: '', url: '', issued_date: '', notes: '' });
         setFormData({
-            load_transformers: [tag.load_transformer],
+            load_transformers: tag.load_transformers || [],
             categories: [tag.category],
-            severity_rank: tag.severity_rank || '',
+            sensitivity_impact: tag.sensitivity_impact || '',
             source: tag.source || '',
-            short_text: tag.short_text || '',
+            asset: tag.asset || '',
+            asset_id: tag.id || '',
+            notes: tag.notes || '',
             is_inforce: tag.is_inforce,
         });
         setShowForm(true);
     };
 
     const selectedSubstationTags = selectedSubstation ? (grouped[selectedSubstation] || []) : [];
-
-    const detailTags = detailModal ? (grouped[detailModal] || []) : [];
 
     return (
         <div style={{ padding: '1rem' }}>
@@ -292,7 +269,8 @@ const CriticalSubstationManager = () => {
                             key={subId}
                             substation={substationLookup[subId] || { substation_id: subId, name: subId }}
                             tags={grouped[subId]}
-                            onOpen={() => setDetailModal(subId)}
+                            allTransformers={loadTransformers}
+                            onOpen={() => openEditModal(subId)}
                         />
                     ))}
                 </AnimatePresence>
@@ -360,24 +338,26 @@ const CriticalSubstationManager = () => {
                                                 setEditingTagId(tagId);
                                                 if (tag) {
                                                     setFormData({
-                                                        load_transformers: [tag.load_transformer],
+                                                        load_transformers: tag.load_transformers || [],
                                                         categories: [tag.category],
-                                                        severity_rank: tag.severity_rank || '',
+                                                        sensitivity_impact: tag.sensitivity_impact || '',
                                                         source: tag.source || '',
-                                                        short_text: tag.short_text || '',
+                                                        asset: tag.asset || '',
+                                                        asset_id: tag.id || '',
+                                                        notes: tag.notes || '',
                                                         is_inforce: tag.is_inforce,
                                                     });
                                                 }
                                             }}
                                         >
-                                        {selectedSubstationTags.map(tag => (
-                                            <option key={tag.id} value={tag.id}>
-                                                {formatBayTagLabel(tag.load_transformer_bay_id, tag.load_transformer_lv_voltage)}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
+                                            {selectedSubstationTags.map(tag => (
+                                                <option key={tag.id} value={tag.id}>
+                                                    {tag.asset || 'Unnamed Asset'} ({tag.load_transformers?.length || 0} Bays)
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
 
                                 <div style={{ gridColumn: 'span 2' }}>
                                     <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Load Transformer Bays</label>
@@ -410,11 +390,6 @@ const CriticalSubstationManager = () => {
                                             );
                                         })}
                                     </div>
-                                    {formMode === 'edit' && formData.load_transformers.length > 1 && (
-                                        <div style={{ marginTop: '0.5rem', color: '#ff9f43', fontSize: '0.75rem' }}>
-                                            Edit mode supports one bay at a time. Extra selections will be ignored.
-                                        </div>
-                                    )}
                                 </div>
 
                                 <div>
@@ -455,13 +430,18 @@ const CriticalSubstationManager = () => {
                                 </div>
 
                                 <div>
-                                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Severity Rank</label>
-                                    <input className="input-field" type="number" value={formData.severity_rank} onChange={(e) => setFormData({ ...formData, severity_rank: e.target.value })} />
+                                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Sensitivity Impact</label>
+                                    <select className="input-field" value={formData.sensitivity_impact} onChange={(e) => setFormData({ ...formData, sensitivity_impact: e.target.value })}>
+                                        <option value="">Select Impact...</option>
+                                        <option value="1">Low (1)</option>
+                                        <option value="2">Medium (2)</option>
+                                        <option value="3">High (3)</option>
+                                    </select>
                                 </div>
 
                                 <div>
                                     <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Short Note</label>
-                                    <input className="input-field" value={formData.short_text} onChange={(e) => setFormData({ ...formData, short_text: e.target.value })} placeholder="e.g. Hospital feeder" />
+                                    <input className="input-field" value={formData.asset} onChange={(e) => setFormData({ ...formData, asset: e.target.value })} placeholder="e.g. Hospital feeder" />
                                 </div>
 
                                 <div style={{ gridColumn: 'span 2' }}>
@@ -534,106 +514,6 @@ const CriticalSubstationManager = () => {
                                 <button className="btn-secondary" onClick={() => setShowForm(false)} style={{ flex: 1 }}>
                                     Cancel
                                 </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            <AnimatePresence>
-                {detailModal && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        style={{
-                            position: 'fixed',
-                            inset: 0,
-                            background: 'rgba(0,0,0,0.75)',
-                            zIndex: 2100,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '2rem'
-                        }}
-                        onClick={() => setDetailModal(null)}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.95, y: 10 }}
-                            animate={{ scale: 1, y: 0 }}
-                            exit={{ scale: 0.95, y: 10 }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="glass-card"
-                            style={{ maxWidth: '920px', width: '100%', padding: '1.5rem' }}
-                        >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                <div>
-                                    <h3 style={{ margin: 0 }}>{detailModal} Critical Tags</h3>
-                                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                                        {substationLookup[detailModal]?.name || detailModal}
-                                    </div>
-                                </div>
-                                <button onClick={() => setDetailModal(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)' }}>
-                                    <X />
-                                </button>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
-                                <button className="btn-primary" onClick={() => { setDetailModal(null); openAddModal(detailModal); }}>
-                                    <PlusCircle size={16} style={{ marginRight: '6px' }} /> Add Bay Tag
-                                </button>
-                                <button className="btn-secondary" onClick={() => { setDetailModal(null); openEditModal(detailModal); }}>
-                                    <Edit2 size={16} style={{ marginRight: '6px' }} /> Edit Tags
-                                </button>
-                                <button className="btn-secondary" onClick={() => handleDeactivateAll(detailModal)} style={{ marginLeft: 'auto', color: '#ff3b30', borderColor: 'rgba(255,59,48,0.4)' }}>
-                                    <Trash2 size={16} style={{ marginRight: '6px' }} /> Deactivate All
-                                </button>
-                            </div>
-
-                            <div style={{ maxHeight: '420px', overflowY: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead>
-                                        <tr style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', textAlign: 'left' }}>
-                                            <th style={{ padding: '0.6rem' }}>Bay</th>
-                                            <th style={{ padding: '0.6rem' }}>Category</th>
-                                            <th style={{ padding: '0.6rem' }}>Note</th>
-                                            <th style={{ padding: '0.6rem' }}>Source</th>
-                                            <th style={{ padding: '0.6rem' }}>File</th>
-                                            <th style={{ padding: '0.6rem' }}>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {detailTags.map(tag => (
-                                            <tr key={tag.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                                <td style={{ padding: '0.6rem' }}>
-                                                    <span style={tagPillStyle}>
-                                                        {formatBayTagLabel(tag.load_transformer_bay_id, tag.load_transformer_lv_voltage)}
-                                                    </span>
-                                                </td>
-                                                <td style={{ padding: '0.6rem' }}>
-                                                    <span style={tagPillStyle}>{tag.category_name}</span>
-                                                </td>
-                                                <td style={{ padding: '0.6rem' }}>{tag.short_text || ''}</td>
-                                                <td style={{ padding: '0.6rem' }}>{tag.source_reference || ''}</td>
-                                                <td style={{ padding: '0.6rem' }}>
-                                                    {tag.source ? (
-                                                        <a
-                                                            href={tag.source_file || '#'}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            style={{ color: '#ff9f43', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
-                                                        >
-                                                            <FileText size={14} />
-                                                        </a>
-                                                    ) : ''}
-                                                </td>
-                                                <td style={{ padding: '0.6rem', color: tag.is_inforce ? '#10b981' : '#ef4444' }}>
-                                                    {tag.is_inforce ? 'Active' : 'Inactive'}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
                             </div>
                         </motion.div>
                     </motion.div>
