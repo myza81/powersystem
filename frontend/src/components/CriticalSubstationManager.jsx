@@ -1,8 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PlusCircle, X, Save, FileText, Trash2, Edit2 } from 'lucide-react';
+import { PlusCircle, X, Save, FileText, Trash2, Edit2, LayoutGrid, BarChart2, MapPin } from 'lucide-react';
 import api from '../api';
 import CriticalSubstationCard from './CriticalSubstationCard';
+import SubstationMap from './SubstationMap';
+import SubstationFilter from './SubstationFilter';
+
+const DEFAULT_FILTERS = {
+    region: 'All',
+    grid: 'All',
+    state: 'All',
+    category: 'All',
+    search: ''
+};
 
 const CriticalSubstationManager = () => {
     const [tags, setTags] = useState([]);
@@ -12,6 +22,8 @@ const CriticalSubstationManager = () => {
     const [loadTransformers, setLoadTransformers] = useState([]);
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState('assets');
+    const [filterCriteria, setFilterCriteria] = useState(DEFAULT_FILTERS);
 
     const formatBayTagLabel = (bayId, lvVoltage) => {
         if (!bayId) return '';
@@ -79,6 +91,15 @@ const CriticalSubstationManager = () => {
     }, []);
 
     useEffect(() => {
+        if (status?.type === 'success') {
+            const timer = setTimeout(() => {
+                setStatus(null);
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [status]);
+
+    useEffect(() => {
         if (sources.length === 0) {
             setSourceMode('new');
         }
@@ -116,6 +137,53 @@ const CriticalSubstationManager = () => {
         return map;
     }, [substations]);
 
+    // Apply Filters to substations
+    const filteredSubstations = useMemo(() => {
+        let result = substations;
+        const { region, grid, state, category, search } = filterCriteria;
+
+        if (region !== 'All') result = result.filter(s => s.region === region);
+        if (grid !== 'All') result = result.filter(s => s.grid === grid);
+        if (state !== 'All') result = result.filter(s => s.state === state);
+
+        // Category filter: substation matches if it's "All" 
+        // OR if it has at least one tag in the selected category
+        if (category !== 'All') {
+            result = result.filter(s => {
+                const subTags = grouped[s.substation_id] || [];
+                // Find matching category name in tags
+                return subTags.some(t => {
+                    const cat = categories.find(c => c.id === t.category);
+                    return cat && cat.category_name === category;
+                });
+            });
+        }
+
+        if (search) {
+            const lowSearch = search.toLowerCase();
+            result = result.filter(s =>
+                (s.name || '').toLowerCase().includes(lowSearch) ||
+                (s.mnemonic || '').toLowerCase().includes(lowSearch) ||
+                (s.substation_id || '').toLowerCase().includes(lowSearch)
+            );
+        }
+        return result;
+    }, [substations, filterCriteria, grouped, categories]);
+
+    // Apply filters to grouped critical assets
+    const filteredGrouped = useMemo(() => {
+        const filteredSubIds = new Set(filteredSubstations.map(s => s.substation_id));
+        const map = {};
+
+        Object.keys(grouped).forEach(subId => {
+            if (filteredSubIds.has(subId)) {
+                map[subId] = grouped[subId];
+            }
+        });
+
+        return map;
+    }, [grouped, filteredSubstations]);
+
     const handleSave = async () => {
         console.log('--- handleSave triggered ---');
         console.log('Selected Substation:', selectedSubstation);
@@ -130,7 +198,12 @@ const CriticalSubstationManager = () => {
         }
         if (!formData.load_transformers.length || !formData.categories.length) {
             console.warn('Blocked: Missing bay or category', { load_transformers: formData.load_transformers.length, categories: formData.categories.length });
-            setStatus({ type: 'error', msg: 'Select bay and category.' });
+            setStatus({ type: 'error', msg: 'Please select at least one bay and one category.' });
+            return;
+        }
+        if (!formData.asset || !formData.asset.trim()) {
+            console.warn('Blocked: Empty asset name');
+            setStatus({ type: 'error', msg: 'Please enter an asset name.' });
             return;
         }
 
@@ -149,11 +222,6 @@ const CriticalSubstationManager = () => {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 sourceId = sourceRes.data.id;
-            } else if (sourceMode === 'new' && !editingTagId && !sourceForm.source_file) {
-                // Block save ONLY if creating a brand new asset AND they chose 'new' but didn't attach a file.
-                setStatus({ type: 'error', msg: 'A supported document (file) is required.' });
-                setLoading(false);
-                return;
             }
             // If sourceMode is 'existing', sourceId is simply 'formData.source' which is already handled above.
 
@@ -191,6 +259,7 @@ const CriticalSubstationManager = () => {
     };
 
     const openEditModal = (substationId) => {
+        setStatus(null);
         const items = grouped[substationId] || [];
         if (!items.length) {
             setSelectedSubstation(substationId);
@@ -223,16 +292,27 @@ const CriticalSubstationManager = () => {
     };
 
     const openAddModal = (substationId) => {
+        setStatus(null);
         setSelectedSubstation(substationId);
         setEditingTagId('');
         setFormMode('create');
         setSourceMode(sources.length === 0 ? 'new' : 'existing');
         setSourceForm({ reference: '', source_file: null, issued_date: '', notes: '' });
-        setFormData({ load_transformers: [], categories: [], sensitivity_impact: '', source: '', asset: '', is_inforce: true });
+        setFormData({
+            load_transformers: [],
+            categories: [],
+            sensitivity_impact: '',
+            source: '',
+            asset: '',
+            asset_id: '',
+            notes: '',
+            is_inforce: true
+        });
         setShowForm(true);
     };
 
     const openEditTagModal = (tag) => {
+        setStatus(null);
         setSelectedSubstation(tag.substation);
         setEditingTagId(tag.id);
         setFormMode('edit');
@@ -253,39 +333,134 @@ const CriticalSubstationManager = () => {
 
     const selectedSubstationTags = selectedSubstation ? (grouped[selectedSubstation] || []) : [];
 
+    // Filter substations for the map (only those with critical assets)
+    const criticalSubstationsForMap = useMemo(() => {
+        return Object.keys(grouped).map(subId => {
+            const sub = substationLookup[subId];
+            if (!sub) return null;
+            return {
+                ...sub,
+                load_mw: grouped[subId].reduce((acc, t) => acc + (t.load_data?.pload_mw || 0), 0)
+            };
+        }).filter(Boolean);
+    }, [grouped, substationLookup]);
+
+    const tabList = [
+        { id: 'assets', label: 'Critical Assets', icon: <LayoutGrid size={18} /> },
+        { id: 'analysis', label: 'Analysis', icon: <BarChart2 size={18} /> },
+        { id: 'geo', label: 'Geo Location', icon: <MapPin size={18} /> }
+    ];
+
+    const tabButtonStyle = (isActive) => ({
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '0.75rem 1.5rem',
+        background: isActive ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
+        border: 'none',
+        borderBottom: isActive ? '2px solid var(--accent-blue)' : '2px solid transparent',
+        color: isActive ? 'var(--accent-blue)' : 'var(--text-secondary)',
+        cursor: 'pointer',
+        fontWeight: isActive ? '600' : '400',
+        transition: 'all 0.2s ease',
+        borderRadius: '8px 8px 0 0'
+    });
+
     return (
-        <div style={{ padding: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h2 style={{ margin: 0 }}>Critical Substations</h2>
-                <button className="btn-primary" onClick={() => { setFormMode('create'); setShowForm(true); }}>
-                    <PlusCircle size={18} style={{ marginRight: '8px' }} /> New Critical Asset
-                </button>
+        <div style={{ padding: '2rem' }}>
+            {/* Tab Navigation */}
+            <div style={{
+                display: 'flex',
+                gap: '0.5rem',
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                marginBottom: '2rem'
+            }}>
+                {tabList.map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        style={tabButtonStyle(activeTab === tab.id)}
+                    >
+                        {tab.icon}
+                        {tab.label}
+                    </button>
+                ))}
             </div>
 
             {status && (
-                <div style={{ marginBottom: '1rem', color: status.type === 'success' ? '#10b981' : '#ef4444' }}>
+                <div style={{ marginBottom: '1.5rem', padding: '1rem', borderRadius: '8px', background: status.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: status.type === 'success' ? '#10b981' : '#ef4444', border: `1px solid ${status.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}` }}>
                     {status.msg}
                 </div>
             )}
 
-            <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                <AnimatePresence>
-                    {Object.keys(grouped).map(subId => (
-                        <CriticalSubstationCard
-                            key={subId}
-                            substation={substationLookup[subId] || { substation_id: subId, name: subId }}
-                            tags={grouped[subId]}
-                            allTransformers={loadTransformers}
-                            onOpen={() => openEditModal(subId)}
-                        />
-                    ))}
-                </AnimatePresence>
-            </div>
-
-            {Object.keys(grouped).length === 0 && !loading && (
-                <div style={{ color: 'var(--text-secondary)', textAlign: 'center', marginTop: '2rem' }}>
-                    No critical substations yet.
+            {activeTab === 'assets' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    <SubstationFilter
+                        substations={substations}
+                        currentFilters={filterCriteria}
+                        onUpdateFilters={setFilterCriteria}
+                        onRegister={() => openAddModal('')}
+                        extraLabel="Category"
+                        extraValue={filterCriteria.category}
+                        onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, category: val }))}
+                        extraOptions={['All', ...categories.map(c => c.category_name)].sort()}
+                        showVoltage={false}
+                    />
+                    <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
+                        <AnimatePresence>
+                            {Object.keys(filteredGrouped).map(subId => (
+                                <CriticalSubstationCard
+                                    key={subId}
+                                    substation={substationLookup[subId] || { substation_id: subId, name: subId }}
+                                    tags={filteredGrouped[subId]}
+                                    allTransformers={loadTransformers}
+                                    onEditAsset={openEditTagModal}
+                                    onAddAsset={() => openAddModal(subId)}
+                                />
+                            ))}
+                        </AnimatePresence>
+                        {Object.keys(filteredGrouped).length === 0 && !loading && (
+                            <div style={{ color: 'var(--text-secondary)', textAlign: 'center', gridColumn: '1/-1', padding: '4rem 0' }}>
+                                <div style={{ opacity: 0.5, marginBottom: '1rem' }}><LayoutGrid size={48} style={{ margin: '0 auto' }} /></div>
+                                No critical substations found matching your criteria.
+                            </div>
+                        )}
+                    </div>
                 </div>
+            )}
+
+            {activeTab === 'analysis' && (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="glass-card"
+                    style={{ padding: '2rem' }}
+                >
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem' }}>
+                        <div style={{ textAlign: 'center', padding: '1.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.5rem' }}>Total Critical Substations</div>
+                            <div style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--accent-blue)' }}>{Object.keys(grouped).length}</div>
+                        </div>
+                        <div style={{ textAlign: 'center', padding: '1.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.5rem' }}>Total Critical Assets</div>
+                            <div style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>{tags.length}</div>
+                        </div>
+                        <div style={{ textAlign: 'center', padding: '1.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.5rem' }}>Active Enforcement</div>
+                            <div style={{ fontSize: '2.5rem', fontWeight: 700, color: '#f59e0b' }}>{tags.filter(t => t.is_inforce).length}</div>
+                        </div>
+                    </div>
+                </motion.div>
+            )}
+
+            {activeTab === 'geo' && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    style={{ height: '700px', borderRadius: '16px', overflow: 'hidden' }}
+                >
+                    <SubstationMap data={criticalSubstationsForMap} />
+                </motion.div>
             )}
 
             <AnimatePresence>
@@ -337,7 +512,7 @@ const CriticalSubstationManager = () => {
                                 gap: '1rem'
                             }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem' }}>
-                                    <div style={{ gridColumn: 'span 6' }}>
+                                    <div style={{ gridColumn: 'span 3' }}>
                                         <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Substation</label>
                                         <select className="input-field" value={selectedSubstation} onChange={(e) => setSelectedSubstation(e.target.value)}>
                                             <option value="">Select...</option>
@@ -347,66 +522,21 @@ const CriticalSubstationManager = () => {
                                         </select>
                                     </div>
 
-
-
                                     <div style={{ gridColumn: 'span 3' }}>
-                                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Categories</label>
-                                        <div style={{
-                                            display: 'flex',
-                                            flexWrap: 'wrap',
-                                            gap: '0.4rem',
-                                            maxHeight: '160px',
-                                            overflowY: 'auto',
-                                            padding: '0.4rem',
-                                            border: '1px solid rgba(255,255,255,0.1)',
-                                            borderRadius: '8px',
-                                            background: 'rgba(0,0,0,0.2)',
-                                            alignItems: 'flex-start'
-                                        }}>
-                                            {categories.map((cat) => {
-                                                const checked = formData.categories.includes(cat.id);
-                                                return (
-                                                    <label
-                                                        key={cat.id}
-                                                        style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            fontSize: '0.7rem',
-                                                            padding: '0.2rem 0.6rem',
-                                                            borderRadius: '999px',
-                                                            cursor: 'pointer',
-                                                            background: checked ? 'rgba(33, 150, 243, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                                                            border: `1px solid ${checked ? 'rgba(33, 150, 243, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
-                                                            color: checked ? '#fff' : 'var(--text-secondary)',
-                                                            transition: 'all 0.2s',
-                                                            userSelect: 'none'
-                                                        }}
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={checked}
-                                                            onChange={(e) => {
-                                                                if (e.target.checked) {
-                                                                    setFormData({ ...formData, categories: [...formData.categories, cat.id] });
-                                                                } else {
-                                                                    setFormData({ ...formData, categories: formData.categories.filter(id => id !== cat.id) });
-                                                                }
-                                                            }}
-                                                            style={{ display: 'none' }}
-                                                        />
-                                                        <span>{cat.category_name}</span>
-                                                    </label>
-                                                );
-                                            })}
-                                        </div>
-                                        {formMode === 'edit' && formData.categories.length > 1 && (
-                                            <div style={{ marginTop: '0.5rem', color: '#ff9f43', fontSize: '0.75rem' }}>
-                                                Edit mode supports one category at a time. Extra selections will be ignored.
-                                            </div>
-                                        )}
+                                        <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Category</label>
+                                        <select
+                                            className="input-field"
+                                            value={formData.categories[0] || ''}
+                                            onChange={(e) => setFormData({ ...formData, categories: [e.target.value] })}
+                                        >
+                                            <option value="">Select a Category...</option>
+                                            {categories.map(cat => (
+                                                <option key={cat.id} value={cat.id}>{cat.category_name}</option>
+                                            ))}
+                                        </select>
                                     </div>
 
-                                    <div style={{ gridColumn: 'span 3' }}>
+                                    <div style={{ gridColumn: 'span 6' }}>
                                         <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Load Transformer Bays</label>
                                         <div style={{
                                             display: 'flex',
@@ -601,10 +731,10 @@ const CriticalSubstationManager = () => {
                             </div>
 
                             <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', flexShrink: 0 }}>
-                                <button className="btn-primary" onClick={handleSave} disabled={loading} style={{ flex: 1 }}>
-                                    <Save size={16} style={{ marginRight: '6px' }} /> {editingTagId ? 'Update Asset' : 'Save Asset'}
+                                <button className="btn-primary" onClick={handleSave} disabled={loading} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                    <Save size={16} /> {editingTagId ? 'Update Asset' : 'Save Asset'}
                                 </button>
-                                <button className="btn-secondary" onClick={() => setShowForm(false)} style={{ flex: 1 }}>
+                                <button className="btn-secondary" onClick={() => setShowForm(false)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     Cancel
                                 </button>
                             </div>

@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ShieldAlert, FileText } from 'lucide-react';
+import { ShieldAlert, FileText, Plus } from 'lucide-react';
 
-const CriticalSubstationCard = ({ substation, tags, onOpen }) => {
+const CriticalSubstationCard = ({ substation, tags, onEditAsset, onAddAsset }) => {
     const activeCount = tags.filter(t => t.is_inforce).length;
     const activeTags = tags.filter(t => t.is_inforce);
     const maxSensitivity = activeTags.length > 0
@@ -32,10 +32,12 @@ const CriticalSubstationCard = ({ substation, tags, onOpen }) => {
 
         return {
             id: asset.id,
+            originalAsset: asset,
             voltageGroups: Object.entries(voltageGroups).map(([voltage, bays]) => ({ voltage, bays })),
             categoryAsset: categoryLabels.join(' - ') || 'Unnamed Asset',
             sensitivity: asset.sensitivity_impact || 0,
-            sourceFile: asset.source_file || null
+            sourceFile: asset.source_file || null,
+            isActive: asset.is_inforce
         };
     });
 
@@ -63,11 +65,9 @@ const CriticalSubstationCard = ({ substation, tags, onOpen }) => {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '0.5rem',
-                minHeight: '120px'
+                minHeight: '120px',
+                cursor: 'default'
             }}
-            onClick={onOpen}
-            role="button"
-            tabIndex={0}
         >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -78,21 +78,66 @@ const CriticalSubstationCard = ({ substation, tags, onOpen }) => {
                         {substation.name}
                     </h3>
                 </div>
+
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onAddAsset();
+                    }}
+                    style={{
+                        background: 'rgba(255, 159, 67, 0.1)',
+                        border: '1px solid rgba(255, 159, 67, 0.2)',
+                        borderRadius: '6px',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        color: '#ff9f43',
+                        transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255,159,67,0.2)';
+                        e.currentTarget.style.borderColor = '#ff9f43';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 159, 67, 0.1)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 159, 67, 0.2)';
+                    }}
+                    title="Add Critical Asset to this Substation"
+                >
+                    <Plus size={16} strokeWidth={2.5} />
+                </button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
                 {groupedAssets.slice(0, 4).map(item => (
-                    <div key={item.id} style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        gap: '8px',
-                        padding: '6px 8px',
-                        background: 'rgba(255,255,255,0.03)',
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        borderRadius: '6px',
-                        width: '100%'
-                    }}>
+                    <div
+                        key={item.id}
+                        onClick={() => onEditAsset(item.originalAsset)}
+                        role="button"
+                        style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            gap: '8px',
+                            padding: '6px 8px',
+                            background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid rgba(255,255,255,0.05)',
+                            borderRadius: '6px',
+                            width: '100%',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
+                        }}
+                    >
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
                             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
                                 {item.categoryAsset}
@@ -103,10 +148,10 @@ const CriticalSubstationCard = ({ substation, tags, onOpen }) => {
                                     {vg.voltage && (
                                         <span style={{
                                             fontSize: '0.6rem',
-                                            color: 'var(--accent-cyan)',
+                                            color: item.isActive ? 'var(--accent-cyan)' : '#fff',
                                             fontWeight: 700,
-                                            background: 'rgba(0, 188, 212, 0.12)',
-                                            border: '1px solid rgba(0, 188, 212, 0.25)',
+                                            background: item.isActive ? 'rgba(0, 188, 212, 0.12)' : 'rgba(255,255,255,0.08)',
+                                            border: `1px solid ${item.isActive ? 'rgba(0, 188, 212, 0.25)' : 'rgba(255,255,255,0.1)'}`,
                                             padding: '1px 0',
                                             width: '42px',
                                             display: 'inline-flex',
@@ -123,9 +168,9 @@ const CriticalSubstationCard = ({ substation, tags, onOpen }) => {
                                     <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                         {vg.bays.map((bay, idx) => (
                                             <span key={idx} className="mono" style={{
-                                                background: 'rgba(255,255,255,0.08)',
-                                                border: '1px solid rgba(255,255,255,0.1)',
-                                                color: '#fff',
+                                                background: item.isActive ? 'rgba(0, 188, 212, 0.12)' : 'rgba(255,255,255,0.08)',
+                                                border: `1px solid ${item.isActive ? 'rgba(0, 188, 212, 0.25)' : 'rgba(255,255,255,0.1)'}`,
+                                                color: item.isActive ? 'var(--accent-cyan)' : '#fff',
                                                 fontSize: '0.6rem',
                                                 padding: '1px 5px',
                                                 borderRadius: '4px'
@@ -189,9 +234,9 @@ const CriticalSubstationCard = ({ substation, tags, onOpen }) => {
                                 paddingBottom: '2px'
                             }}>
                                 {[1, 2, 3].map(level => {
-                                    let isActive = level <= item.sensitivity;
+                                    let isActiveImpact = level <= item.sensitivity;
                                     let color = 'rgba(255,255,255,0.15)';
-                                    if (isActive) {
+                                    if (isActiveImpact) {
                                         if (item.sensitivity === 3) color = '#ef4444';
                                         else if (item.sensitivity === 2) color = '#f97316';
                                         else if (item.sensitivity === 1) color = '#eab308';

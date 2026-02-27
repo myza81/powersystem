@@ -256,21 +256,22 @@ const App = () => {
                     </motion.div>
                 )}
 
-                <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
-                            {view === 'dashboard' && 'Live Dashboard'}
-                            {view === 'list' && 'Substation Assets'}
-                            {view === 'create' && 'Register New Entry'}
-                            {view === 'edit' && 'Edit Substation'}
-                            {view === 'config' && 'Configuration Editor'}
-                            {view === 'snapshots' && 'Network Analysis'}
-                            {view === 'dev-tools' && 'Developer Tools'}
-                            {view === 'load-shedding' && 'Load Shedding Module'}
-                            {view === 'critical-substations' && 'Critical Substations'}
-                        </h2>
-                    </div>
-                </header>
+                {view !== 'critical-substations' && (
+                    <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
+                                {view === 'dashboard' && 'Live Dashboard'}
+                                {view === 'list' && 'Substation Assets'}
+                                {view === 'create' && 'Register New Entry'}
+                                {view === 'edit' && 'Edit Substation'}
+                                {view === 'config' && 'Configuration Editor'}
+                                {view === 'snapshots' && 'Network Analysis'}
+                                {view === 'dev-tools' && 'Developer Tools'}
+                                {view === 'load-shedding' && 'Load Shedding Module'}
+                            </h2>
+                        </div>
+                    </header>
+                )}
 
                 {view === 'list' && (
                     <>
