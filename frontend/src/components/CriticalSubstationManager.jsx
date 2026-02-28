@@ -394,7 +394,7 @@ const CriticalSubstationManager = () => {
             )}
 
             {activeTab === 'assets' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <SubstationFilter
                         substations={substations}
                         currentFilters={filterCriteria}

@@ -58,7 +58,7 @@ const pillStyle = (type, value) => {
     };
 };
 
-const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetForm, setAssetForm, substationOptions, substation }) => {
+const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, assetForm, setAssetForm, substationOptions, substation }) => {
     const isBranch = type === 'branch';
     const title = data?.id ? 'Edit' : 'Add';
     const typeLabel = type === 'load' ? 'Load Transformer' : type === 'auto' ? 'Auto Transformer' : 'Incoming Branch';
@@ -101,6 +101,28 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetForm, setA
                         </button>
                     </div>
 
+                    <AnimatePresence>
+                        {assetStatus?.type === 'error' && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                style={{
+                                    padding: '0.75rem',
+                                    borderRadius: '8px',
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}
+                            >
+                                <AlertTriangle size={16} color="#ef4444" />
+                                <span style={{ fontSize: '0.8rem', color: '#ef4444', lineHeight: 1.4 }}>{assetStatus.msg}</span>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                         {isBranch ? (
                             <>
@@ -119,7 +141,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetForm, setA
                                 </div>
                                 <div>
                                     <label style={inputLabelStyle}>Breaker ID</label>
-                                    <input className="input-field mono" value={assetForm.breaker_number || ''} onChange={(e) => setAssetForm(f => ({ ...f, breaker_number: e.target.value }))} placeholder="Auto-generated if empty" />
+                                    <input className="input-field mono" value={assetForm.breaker_number || ''} onChange={(e) => setAssetForm(f => ({ ...f, breaker_number: e.target.value }))} placeholder="e.g., 105" />
                                 </div>
                                 <div>
                                     <label style={inputLabelStyle}>Commissioning Date <span style={{ color: 'var(--text-secondary)', fontSize: '0.6rem' }}>(Optional)</span></label>
@@ -244,10 +266,31 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload }) => {
     const resetAssetForm = () => {
         setEditingAsset(null);
         setAssetForm({});
+        setAssetStatus(null);
     };
 
     const handleAssetSave = async (type) => {
         if (!substation?.substation_id) return;
+
+        // Front-end validation for unique breaker numbers
+        const currentBreaker = assetForm.breaker_number;
+        if (currentBreaker) {
+            let existingAssets = [];
+            if (type === 'load') existingAssets = loadTransformers;
+            else if (type === 'auto') existingAssets = autoTransformers;
+            else if (type === 'branch') existingAssets = incomingBranches;
+
+            const isDuplicate = existingAssets.some(
+                asset => asset.id !== editingAsset?.data?.id &&
+                    (asset.breaker_number === currentBreaker || asset.lv_breaker_number === currentBreaker || asset.hv_breaker_number === currentBreaker)
+            );
+
+            if (isDuplicate) {
+                setAssetStatus({ type: 'error', msg: `Breaker ID '${currentBreaker}' is already in use for this substation.` });
+                return;
+            }
+        }
+
         setAssetLoading(true);
         try {
             const endpointMap = {
@@ -308,6 +351,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload }) => {
                         onClose={resetAssetForm}
                         onSave={handleAssetSave}
                         assetLoading={assetLoading}
+                        assetStatus={assetStatus}
                         assetForm={assetForm}
                         setAssetForm={setAssetForm}
                         substationOptions={substationOptions}
