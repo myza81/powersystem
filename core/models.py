@@ -165,7 +165,7 @@ class LoadTransformer(models.Model):
     transformer_no = models.IntegerField()
     bay_id = models.CharField(max_length=50, unique=True, blank=True)
     hv_voltage = models.IntegerField(null=True, blank=True)
-    hv_breaker_number = models.CharField(max_length=10, null=True, blank=True)
+    hv_breaker_number = models.CharField(max_length=20, null=True, blank=True)
     lv_voltage = models.IntegerField(null=True, blank=True)
     lv_breaker_number = models.CharField(max_length=10, null=True, blank=True)
     capacity_mva = models.IntegerField(null=True, blank=True)
@@ -206,7 +206,7 @@ class IncomingBranch(models.Model):
     substation = models.ForeignKey(Substation, on_delete=models.CASCADE, related_name='incoming_branches')
     to_substation = models.ForeignKey(Substation, on_delete=models.CASCADE, related_name='incoming_from_branches')
     ckt_id = models.CharField(max_length=2)
-    breaker_number = models.CharField(max_length=10, null=True, blank=True)
+    breaker_number = models.CharField(max_length=20, null=True, blank=True)
     bay_id = models.CharField(max_length=80, unique=True, blank=True)
     commissioning_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -269,7 +269,7 @@ class AutoTransformer(models.Model):
     transformer_no = models.IntegerField()
     bay_id = models.CharField(max_length=50, unique=True, blank=True)
     hv_voltage = models.IntegerField(null=True, blank=True)
-    hv_breaker_number = models.CharField(max_length=10, null=True, blank=True)
+    hv_breaker_number = models.CharField(max_length=20, null=True, blank=True)
     lv_voltage = models.IntegerField()
     lv_breaker_number = models.CharField(max_length=10, null=True, blank=True)
     capacity_mva = models.IntegerField(null=True, blank=True)
@@ -749,3 +749,42 @@ class NetworkDCLink(models.Model):
     inverter_bus_number = models.IntegerField()
     
     setpoint_mw = models.FloatField()
+
+# ==========================================
+# 6. LOAD SHEDDING RELAY
+# ==========================================
+
+class LoadSheddingRelay(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    substation = models.ForeignKey(
+        Substation,
+        on_delete=models.CASCADE,
+        related_name='load_shedding_relays',
+    )
+    load_transformers = models.ManyToManyField(
+        LoadTransformer,
+        related_name='load_shedding_relays',
+        blank=True,
+    )
+    incoming_branches = models.ManyToManyField(
+        IncomingBranch,
+        related_name='load_shedding_relays',
+        blank=True,
+    )
+    auto_transformers = models.ManyToManyField(
+        AutoTransformer,
+        related_name='load_shedding_relays',
+        blank=True,
+    )
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['id']
+        indexes = [
+            models.Index(fields=['substation']),
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return str(self.id)

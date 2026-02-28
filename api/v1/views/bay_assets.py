@@ -2,11 +2,12 @@ from rest_framework import viewsets, permissions, filters
 from django.conf import settings
 import os
 
-from core.models import LoadTransformer, AutoTransformer, IncomingBranch
+from core.models import LoadTransformer, AutoTransformer, IncomingBranch, LoadSheddingRelay
 from api.v1.serializers.substation import (
     LoadTransformerSerializer,
     AutoTransformerSerializer,
     IncomingBranchSerializer,
+    LoadSheddingRelaySerializer,
 )
 
 
@@ -56,3 +57,17 @@ class IncomingBranchViewSet(BaseBayAssetViewSet):
         if substation:
             queryset = queryset.filter(substation__substation_id=substation)
         return queryset
+
+
+class LoadSheddingRelayViewSet(BaseBayAssetViewSet):
+    queryset = LoadSheddingRelay.objects.all()
+    serializer_class = LoadSheddingRelaySerializer
+    search_fields = ['id', 'substation__substation_id']
+
+    def get_queryset(self):
+        queryset = super().get_queryset().order_by('substation__substation_id', '-id')
+        substation = self.request.query_params.get('substation')
+        if substation:
+            queryset = queryset.filter(substation__substation_id=substation)
+        return queryset
+

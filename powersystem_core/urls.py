@@ -21,7 +21,7 @@ from django.conf.urls.static import static
 import os
 from rest_framework.routers import DefaultRouter
 from api.v1.views.substation import SubstationViewSet
-from api.v1.views.bay_assets import LoadTransformerViewSet, AutoTransformerViewSet, IncomingBranchViewSet
+from api.v1.views.bay_assets import LoadTransformerViewSet, AutoTransformerViewSet, IncomingBranchViewSet, LoadSheddingRelayViewSet
 from api.v1.views.critical import CriticalCategoryViewSet, CriticalSourceViewSet, CriticalAssetViewSet
 from api.v1.views.load_analytics import LoadAnalyticsViewSet
 from api.v1.views.snapshot import SnapshotViewSet
@@ -43,6 +43,7 @@ router.register(r'critical-assets', CriticalAssetViewSet)
 router.register(r'load-analytics', LoadAnalyticsViewSet, basename='load-analytics')
 router.register(r'snapshots', SnapshotViewSet, basename='snapshot')
 router.register(r'topology', TopologyViewSet, basename='topology')
+router.register(r'load-shedding-relays', LoadSheddingRelayViewSet)
 
 
 urlpatterns = [

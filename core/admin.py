@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django import forms
+from django.core.exceptions import ValidationError
 from .models import (
     Substation,
     NetworkSnapshot,
@@ -25,6 +27,7 @@ from .models import (
     CriticalCategory,
     CriticalSource,
     CriticalAsset,
+    LoadSheddingRelay,
 )
 
 @admin.register(Substation)
@@ -72,6 +75,79 @@ class AutoTransformerAdmin(admin.ModelAdmin):
     search_fields = ('bay_id', 'substation__substation_id', 'hv_breaker_number', 'lv_breaker_number')
     list_filter = ('hv_voltage', 'lv_voltage')
     raw_id_fields = ('substation',)
+
+@admin.register(LoadSheddingRelay)
+class LoadSheddingRelayAdmin(admin.ModelAdmin):
+    class LoadSheddingRelayForm(forms.ModelForm):
+        def clean(self):
+            cleaned_data = super().clean()
+            relay = self.instance
+
+            load_transformers = cleaned_data.get('load_transformers')
+            incoming_branches = cleaned_data.get('incoming_branches')
+            auto_transformers = cleaned_data.get('auto_transformers')
+
+            errors = {}
+
+            if load_transformers:
+                conflicts = load_transformers.exclude(load_shedding_relays=relay).filter(
+                    load_shedding_relays__isnull=False
+                )
+                if conflicts.exists():
+                    errors['load_transformers'] = (
+                        'One or more load transformers are already linked to another relay.'
+                    )
+
+            if incoming_branches:
+                conflicts = incoming_branches.exclude(load_shedding_relays=relay).filter(
+                    load_shedding_relays__isnull=False
+                )
+                if conflicts.exists():
+                    errors['incoming_branches'] = (
+                        'One or more incoming branches are already linked to another relay.'
+                    )
+
+            if auto_transformers:
+                conflicts = auto_transformers.exclude(load_shedding_relays=relay).filter(
+                    load_shedding_relays__isnull=False
+                )
+                if conflicts.exists():
+                    errors['auto_transformers'] = (
+                        'One or more auto transformers are already linked to another relay.'
+                    )
+
+            if errors:
+                raise ValidationError(errors)
+
+            return cleaned_data
+
+    form = LoadSheddingRelayForm
+    list_display = (
+        'substation',
+        'is_active',
+        'load_transformer_bays',
+        'incoming_branch_bays',
+        'auto_transformer_bays',
+    )
+    list_filter = ('is_active', 'substation')
+    search_fields = ('id', 'substation__substation_id')
+    raw_id_fields = ('substation',)
+    filter_horizontal = ('load_transformers', 'incoming_branches', 'auto_transformers')
+
+    def load_transformer_bays(self, obj):
+        bays = obj.load_transformers.values_list('bay_id', flat=True)
+        return ', '.join([bay.split('_')[-1] for bay in bays if bay and '_' in bay])
+    load_transformer_bays.short_description = 'Load Transformers'
+
+    def incoming_branch_bays(self, obj):
+        bays = obj.incoming_branches.values_list('bay_id', flat=True)
+        return ', '.join([bay.split('_')[-1] for bay in bays if bay and '_' in bay])
+    incoming_branch_bays.short_description = 'Circuit (Line/Cable)'
+
+    def auto_transformer_bays(self, obj):
+        bays = obj.auto_transformers.values_list('bay_id', flat=True)
+        return ', '.join([bay.split('_')[-1] for bay in bays if bay and '_' in bay])
+    auto_transformer_bays.short_description = 'Auto Transformers'
 
 @admin.register(EquipmentTopologyMap)
 class EquipmentTopologyMapAdmin(admin.ModelAdmin):

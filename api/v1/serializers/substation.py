@@ -7,6 +7,7 @@ from core.models import (
     AutoTransformer,
     EquipmentTopologyMap,
     EquipmentSnapshotState,
+    LoadSheddingRelay,
 )
 
 class SubstationSerializer(serializers.ModelSerializer):
@@ -192,6 +193,18 @@ class AutoTransformerSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['bay_id', 'created_at', 'updated_at']
+
+
+class LoadSheddingRelaySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoadSheddingRelay
+        fields = [
+            'id', 'substation', 'load_transformers', 'incoming_branches',
+            'auto_transformers', 'is_active', 'notes'
+        ]
+        # The many-to-many fields will implicitly be handled by PrimaryKeyRelatedField 
+        # allowing array lists of IDs.
+
 
 
 class EquipmentTopologyMapSerializer(serializers.ModelSerializer):

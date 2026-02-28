@@ -46,6 +46,16 @@ const App = () => {
     const [viewingSld, setViewingSld] = useState(null);
     const [locatingSubstation, setLocatingSubstation] = useState(null);
 
+    // Auto-clear success messages after 5 seconds
+    useEffect(() => {
+        if (status?.type === 'success') {
+            const timer = setTimeout(() => {
+                setStatus(null);
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [status]);
+
     // Sync URL with view state
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -109,28 +119,29 @@ const App = () => {
     const handleSave = async (data) => {
         console.log("App handleSave received data:", JSON.stringify(data, null, 2));
         setLoading(true);
+        setStatus(null); // Clear previous status
         try {
+            let savedData;
             if (selectedSub) {
                 console.log(`PATCH to /substations/${selectedSub.substation_id}/`);
-                await api.patch(`/substations/${selectedSub.substation_id}/`, data);
-                setStatus({ type: 'success', msg: 'Substation asset updated successfully' });
+                const res = await api.patch(`/substations/${selectedSub.substation_id}/`, data);
+                savedData = res.data;
+                setStatus({ type: 'success', msg: 'Substation metadata updated successfully' });
             } else {
-                await api.post('/substations/', data);
-                setStatus({ type: 'success', msg: 'New substation asset committed' });
+                const res = await api.post('/substations/', data);
+                savedData = res.data;
+                setStatus({ type: 'success', msg: 'New substation created' });
+                setView('edit');
             }
-            setView('list');
-            setSelectedSub(null);
+            setSelectedSub(savedData);
             fetchSubstations();
         } catch (err) {
             console.error("Save error:", err);
-            console.error("Error response:", err.response?.data);
-
             let errMsg = 'Operation failed';
             if (err.response?.data) {
                 if (err.response.data.error) {
                     errMsg = err.response.data.error;
                 } else {
-                    // Flatten field errors
                     errMsg = Object.entries(err.response.data)
                         .map(([key, val]) => `${key}: ${Array.isArray(val) ? val.join(', ') : val}`)
                         .join(' | ');
@@ -401,6 +412,8 @@ const App = () => {
                         onCancel={() => setView('list')}
                         onConfigEdit={() => setView('config')}
                         onSLDUpload={handleSLDUpload}
+                        status={status}
+                        loading={loading}
                     />
                 ) : null}
 
