@@ -28,6 +28,12 @@ from .models import (
     CriticalSource,
     CriticalAsset,
     LoadSheddingRelay,
+    LoadSheddingVersion,
+    LoadSheddingStage,
+    LoadSheddingSetting,
+    LoadSheddingTransformerBay,
+    LoadSheddingSpurBay,
+    LoadSheddingPocketBay,
 )
 
 @admin.register(Substation)
@@ -283,3 +289,59 @@ class NetworkDCLinkAdmin(admin.ModelAdmin):
     list_display = ('name', 'rectifier_bus_number', 'inverter_bus_number', 'setpoint_mw', 'snapshot')
     list_filter = ('snapshot',)
     search_fields = ('name', 'rectifier_bus_number', 'inverter_bus_number')
+
+# ==========================================
+# 7. LOAD SHEDDING (Versioned)
+# ==========================================
+
+class LoadSheddingSettingInline(admin.TabularInline):
+    model = LoadSheddingSetting
+    extra = 1
+
+class LoadSheddingStageInline(admin.TabularInline):
+    model = LoadSheddingStage
+    extra = 1
+
+@admin.register(LoadSheddingVersion)
+class LoadSheddingVersionAdmin(admin.ModelAdmin):
+    list_display = ('scheme_type', 'version_label', 'status', 'is_active', 'published_at', 'created_at')
+    list_filter = ('scheme_type', 'status', 'is_active')
+    search_fields = ('version_label', 'notes')
+    inlines = [LoadSheddingStageInline]
+    readonly_fields = ('published_at', 'created_at', 'updated_at')
+    actions = ['make_published']
+
+    def make_published(self, request, queryset):
+        for version in queryset:
+            version.publish(user=request.user)
+    make_published.short_description = "Publish selected versions (And de-activate older ones)"
+
+@admin.register(LoadSheddingStage)
+class LoadSheddingStageAdmin(admin.ModelAdmin):
+    list_display = ('version', 'stage_number', 'label')
+    list_filter = ('version__scheme_type', 'version')
+    search_fields = ('label', 'version__version_label')
+    inlines = [LoadSheddingSettingInline]
+
+@admin.register(LoadSheddingSetting)
+class LoadSheddingSettingAdmin(admin.ModelAdmin):
+    list_display = ('stage', 'order', 'threshold', 'time_delay')
+    list_filter = ('stage__version__scheme_type',)
+
+@admin.register(LoadSheddingTransformerBay)
+class LoadSheddingTransformerBayAdmin(admin.ModelAdmin):
+    list_display = ('stage', 'relay')
+    filter_horizontal = ('transformers',)
+    raw_id_fields = ('stage', 'relay')
+
+@admin.register(LoadSheddingSpurBay)
+class LoadSheddingSpurBayAdmin(admin.ModelAdmin):
+    list_display = ('stage', 'relay')
+    filter_horizontal = ('branches',)
+    raw_id_fields = ('stage', 'relay')
+
+@admin.register(LoadSheddingPocketBay)
+class LoadSheddingPocketBayAdmin(admin.ModelAdmin):
+    list_display = ('stage', 'topology_valid')
+    filter_horizontal = ('boundary_relays', 'boundary_branches')
+    raw_id_fields = ('stage',)

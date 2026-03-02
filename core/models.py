@@ -788,3 +788,187 @@ class LoadSheddingRelay(models.Model):
 
     def __str__(self):
         return str(self.id)
+
+# ==========================================
+# 7. LOAD SHEDDING SCHEMA (Versioned)
+# ==========================================
+
+class LoadSheddingVersion(models.Model):
+    """
+    Versioned snapshot of a load shedding scheme (UFLS, UVLS, or EMLS).
+    """
+    SCHEME_TYPES = [
+        ('UFLS', 'Under-Frequency Load Shedding'),
+        ('UVLS', 'Under-Voltage Load Shedding'),
+        ('EMLS', 'Emergency Load Shedding'),
+    ]
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('published', 'Published'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    scheme_type = models.CharField(max_length=10, choices=SCHEME_TYPES)
+    version_label = models.CharField(max_length=50, help_text="e.g. '2024-v1', '2025-draft'")
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    is_active = models.BooleanField(default=False, help_text="Whether this is the currently enforced version")
+    
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='published_load_shedding_versions'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    notes = models.TextField(blank=True, help_text="Change notes between versions")
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Load Shedding Version"
+
+    def __str__(self):
+        return f"{self.scheme_type} - {self.version_label} ({self.status})"
+
+    def publish(self, user=None):
+        """
+        Transition to published state, set as active, and deactivate previous versions of same type.
+        """
+        if self.status == 'published':
+            return
+
+        self.status = 'published'
+        self.published_at = timezone.now()
+        if user:
+            self.published_by = user
+        self.is_active = True
+        
+        # Deactivate previous active version of the same type
+        LoadSheddingVersion.objects.filter(
+            scheme_type=self.scheme_type,
+            is_active=True
+        ).exclude(id=self.id).update(is_active=False)
+        
+        self.save()
+
+
+class LoadSheddingStage(models.Model):
+    """
+    Numbered shedding block within a version.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    version = models.ForeignKey(LoadSheddingVersion, on_delete=models.CASCADE, related_name='stages')
+    stage_number = models.IntegerField()
+    label = models.CharField(max_length=100, null=True, blank=True, help_text="e.g. 'Stage 9 — Sustained Underfrequency'")
+
+    class Meta:
+        unique_together = ('version', 'stage_number')
+        ordering = ['stage_number']
+
+    def __str__(self):
+        return f"Stage {self.stage_number} ({self.version.scheme_type})"
+
+    @property
+    def total_mw_estimate(self):
+        """
+        Computed API property: sums bay MW for the currently active snapshot.
+        Note: This requires an active snapshot context, usually handled in serializers.
+        """
+        active_snapshot = NetworkSnapshot.objects.filter(is_active=True).first()
+        if not active_snapshot:
+            return 0.0
+            
+        total = 0.0
+        for bay in self.transformer_bays.all():
+            total += bay.get_mw(active_snapshot)
+        for bay in self.spur_bays.all():
+            total += bay.get_mw(active_snapshot)
+        for bay in self.pocket_bays.all():
+            total += bay.get_mw(active_snapshot)
+        return total
+
+
+class LoadSheddingSetting(models.Model):
+    """
+    Threshold/delay element per stage (UFLS/UVLS only).
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stage = models.ForeignKey(LoadSheddingStage, on_delete=models.CASCADE, related_name='settings')
+    order = models.IntegerField(help_text="Stable sort key for multiple elements on the same stage")
+    
+    threshold = models.FloatField(help_text="Hz for UFLS; p.u. for UVLS")
+    time_delay = models.FloatField(help_text="Seconds")
+
+    class Meta:
+        unique_together = ('stage', 'order')
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.stage} Setting {self.order}: {self.threshold} / {self.time_delay}s"
+
+
+class LoadSheddingTransformerBay(models.Model):
+    """
+    Local load at a substation's transformers.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stage = models.ForeignKey(LoadSheddingStage, on_delete=models.CASCADE, related_name='transformer_bays')
+    relay = models.ForeignKey(LoadSheddingRelay, on_delete=models.CASCADE, related_name='target_transformer_bays')
+    transformers = models.ManyToManyField(LoadTransformer, related_name='load_shedding_transformer_bays')
+    
+    mw_cache = models.JSONField(null=True, blank=True, help_text='{"snapshot_id": "...", "mw": 18.4, "computed_at": "..."}')
+
+    def __str__(self):
+        return f"TX Bay @ {self.relay.substation.substation_id} ({self.stage})"
+
+    def get_mw(self, snapshot):
+        if not self.mw_cache or self.mw_cache.get('snapshot_id') != str(snapshot.id):
+            # Stale or missing cache - logic for recomputing remains in Service layer
+            return 0.0
+        return self.mw_cache.get('mw', 0.0)
+
+
+class LoadSheddingSpurBay(models.Model):
+    """
+    Spur radial branch isolation.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stage = models.ForeignKey(LoadSheddingStage, on_delete=models.CASCADE, related_name='spur_bays')
+    relay = models.ForeignKey(LoadSheddingRelay, on_delete=models.CASCADE, related_name='target_spur_bays')
+    branches = models.ManyToManyField(IncomingBranch, related_name='load_shedding_spur_bays')
+    
+    topology_cache = models.JSONField(null=True, blank=True, help_text='{"snapshot_id": "...", "isolated_substations": [], "mw": 12.1, "computed_at": "..."}')
+
+    def __str__(self):
+        return f"Spur Bay from {self.relay.substation.substation_id} ({self.stage})"
+
+    def get_mw(self, snapshot):
+        if not self.topology_cache or self.topology_cache.get('snapshot_id') != str(snapshot.id):
+            return 0.0
+        return self.topology_cache.get('mw', 0.0)
+
+
+class LoadSheddingPocketBay(models.Model):
+    """
+    Network pocket isolation with boundary validation.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stage = models.ForeignKey(LoadSheddingStage, on_delete=models.CASCADE, related_name='pocket_bays')
+    boundary_relays = models.ManyToManyField(LoadSheddingRelay, related_name='target_pocket_bays')
+    boundary_branches = models.ManyToManyField(IncomingBranch, related_name='load_shedding_pocket_boundary_bays')
+    
+    topology_cache = models.JSONField(null=True, blank=True, help_text='{"snapshot_id": "...", "isolated_substations": [], "mw": 34.7, "computed_at": "..."}')
+    topology_valid = models.BooleanField(default=True)
+    topology_alert = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Pocket Bay ({self.stage})"
+
+    def get_mw(self, snapshot):
+        if not self.topology_cache or self.topology_cache.get('snapshot_id') != str(snapshot.id):
+            return 0.0
+        return self.topology_cache.get('mw', 0.0)

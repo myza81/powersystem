@@ -30,6 +30,14 @@ from api.v1.views.snapshot import SnapshotViewSet
 # from api.v1.views.telemetry import TelemetryViewSet
 from core.views_dev import DatabaseSyncStatusView, DatabaseExportView, DatabaseImportView
 
+from api.v1.views.shedding import (
+    LoadSheddingVersionViewSet,
+    LoadSheddingStageViewSet,
+    LoadSheddingSettingViewSet,
+    LoadSheddingTransformerBayViewSet,
+    LoadSheddingSpurBayViewSet,
+    LoadSheddingPocketBayViewSet
+)
 from api.v1.views.topology import TopologyViewSet
 
 router = DefaultRouter()
@@ -44,6 +52,12 @@ router.register(r'load-analytics', LoadAnalyticsViewSet, basename='load-analytic
 router.register(r'snapshots', SnapshotViewSet, basename='snapshot')
 router.register(r'topology', TopologyViewSet, basename='topology')
 router.register(r'load-shedding-relays', LoadSheddingRelayViewSet)
+router.register(r'load-shedding-versions', LoadSheddingVersionViewSet)
+router.register(r'load-shedding-stages', LoadSheddingStageViewSet)
+router.register(r'load-shedding-settings', LoadSheddingSettingViewSet)
+router.register(r'load-shedding-transformer-bays', LoadSheddingTransformerBayViewSet)
+router.register(r'load-shedding-spur-bays', LoadSheddingSpurBayViewSet)
+router.register(r'load-shedding-pocket-bays', LoadSheddingPocketBayViewSet)
 
 
 urlpatterns = [
