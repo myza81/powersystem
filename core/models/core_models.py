@@ -358,7 +358,13 @@ class LoadSheddingRelay(models.Model):
     notes = models.TextField(blank=True)
 
     class Meta:
-        ordering = ['id']
+        ordering = ['substation__substation_id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['substation'],
+                name='uniq_one_relay_per_substation',
+            ),
+        ]
         indexes = [
             models.Index(fields=['substation']),
             models.Index(fields=['is_active']),
@@ -367,7 +373,7 @@ class LoadSheddingRelay(models.Model):
         verbose_name_plural = "Load Shedding Relays"
 
     def __str__(self):
-        return str(self.id)
+        return f"Relay @ {self.substation.substation_id}"
 
 
 class LoadSheddingSetting(models.Model):
@@ -389,7 +395,12 @@ class LoadSheddingSetting(models.Model):
 
     class Meta:
         ordering = ['scheme_type', 'threshold', 'time_delay']
-        unique_together = ('scheme_type', 'threshold', 'time_delay')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['scheme_type', 'threshold', 'time_delay'],
+                name='uniq_loadshedding_setting_trip',
+            ),
+        ]
         verbose_name = "Load Shedding Setting"
         verbose_name_plural = "Load Shedding Settings"
 
@@ -410,19 +421,60 @@ class LoadSheddingSetting(models.Model):
 
 class LoadSheddingVersion(models.Model):
     """
-    Load shedding version containing stages.
+    Versioned snapshot of a load shedding scheme.
     """
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('published', 'Published'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     scheme_type = models.CharField(max_length=10, choices=LoadSheddingSchemeType.choices)
     version_label = models.CharField(max_length=50, help_text="e.g. '2024-v1', '2025-draft'")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    is_active = models.BooleanField(default=False, help_text="Whether this is the currently enforced version")
+    published_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='published_load_shedding_versions',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    notes = models.TextField(blank=True, help_text="Change notes between versions")
 
     class Meta:
-        ordering = ['version_label']
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['scheme_type', 'version_label'],
+                name='uniq_version_per_scheme_type',
+            ),
+        ]
         verbose_name = "Load Shedding Version"
         verbose_name_plural = "Load Shedding Versions"
 
     def __str__(self):
-        return f"{self.scheme_type} - {self.version_label}"
+        return f"{self.scheme_type} - {self.version_label} ({self.status})"
+
+    def publish(self, user=None):
+        if self.status == 'published':
+            return
+
+        self.status = 'published'
+        self.published_at = timezone.now()
+        if user:
+            self.published_by = user
+        self.is_active = True
+
+        LoadSheddingVersion.objects.filter(
+            scheme_type=self.scheme_type,
+            is_active=True,
+        ).exclude(id=self.id).update(is_active=False)
+
+        self.save()
 
 
 class LoadSheddingStage(models.Model):
@@ -437,7 +489,7 @@ class LoadSheddingStage(models.Model):
         LoadSheddingSetting,
         through='LoadSheddingStageSetting',
         related_name='stages',
-        blank=True,
+        blank=True,  # EMLS stages have no threshold/delay settings
     )
 
     class Meta:
@@ -446,12 +498,29 @@ class LoadSheddingStage(models.Model):
         verbose_name_plural = "Load Shedding Stages"
 
     def __str__(self):
-        return f"{self.label}"
+        return f"{self.label}" if self.label else f"Stage {self.stage_number}"
 
     def save(self, *args, **kwargs):
         if not self.label and self.stage_number is not None:
             self.label = f"Stage {self.stage_number}"
         super().save(*args, **kwargs)
+
+    def clean(self):
+        """
+        Enforce that UFLS/UVLS stages must have at least one setting.
+        EMLS stages are exempt — they use bay mappings without threshold/delay settings.
+        """
+        if not self.pk:
+            return  # M2M can't be queried before pk exists; enforced via admin formset
+        try:
+            scheme_type = self.version.scheme_type
+        except Exception:
+            return
+        if scheme_type != LoadSheddingSchemeType.EMLS:
+            if not self.settings.exists():
+                raise ValidationError(
+                    {"settings": "At least one setting is required for UFLS/UVLS stages."}
+                )
 
 
 class LoadSheddingStageSetting(models.Model):
@@ -461,9 +530,11 @@ class LoadSheddingStageSetting(models.Model):
 
     class Meta:
         unique_together = (
-            ('version', 'setting'),
-            ('stage', 'setting'),
+            ('version', 'setting'),  # A setting can only appear once per version
+            ('stage', 'setting'),    # And only once per stage
         )
+        verbose_name = "Load Shedding Stage Setting"
+        verbose_name_plural = "Load Shedding Stage Settings"
 
     def save(self, *args, **kwargs):
         if self.stage_id and not self.version_id:
@@ -472,3 +543,302 @@ class LoadSheddingStageSetting(models.Model):
 
     def __str__(self):
         return f"{self.setting}"
+
+
+class LoadSheddingTransformerBay(models.Model):
+    """
+    Local load at a substation's transformers.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stage = models.ForeignKey(LoadSheddingStage, on_delete=models.CASCADE, related_name='transformer_bays')
+    relay = models.ForeignKey(LoadSheddingRelay, on_delete=models.CASCADE, related_name='target_transformer_bays')
+    transformers = models.ManyToManyField(LoadTransformer, related_name='load_shedding_transformer_bays')
+    mw_cache = models.JSONField(null=True, blank=True, help_text='{"snapshot_id": "...", "mw": 18.4, "computed_at": "..."}')
+
+    def __str__(self):
+        return f"TX Bay @ {self.relay.substation.substation_id} ({self.stage})"
+
+    def clean(self):
+        """
+        Validates that selected transformers belong to the relay's substation.
+        For new objects (no pk yet), M2M cannot be queried — this is enforced
+        by the admin form's clean() instead.
+        """
+        if not self.relay_id or not self.pk:
+            return
+        allowed_ids = set(self.relay.load_transformers.values_list('id', flat=True))
+        selected_ids = set(self.transformers.values_list('id', flat=True))
+        if selected_ids and not selected_ids.issubset(allowed_ids):
+            raise ValidationError("Selected transformers must belong to the relay's load transformers.")
+
+    def compute_mw(self, snapshot):
+        from services.topology_service import TopologyService
+
+        service = TopologyService(snapshot)
+        load_map = service.get_load_transformers_by_substation()
+        substation_id = self.relay.substation.substation_id
+        loads = load_map.get(substation_id, {}).get("loads", [])
+
+        target_ids = set(self.transformers.values_list('bay_id', flat=True))
+        total_mw = 0.0
+        for load in loads:
+            if load.get("load_id") in target_ids:
+                total_mw += float(load.get("p_mw") or 0.0)
+
+        self.mw_cache = {
+            "snapshot_id": str(snapshot.id),
+            "mw": total_mw,
+            "computed_at": timezone.now().isoformat(),
+        }
+        self.save(update_fields=['mw_cache'])
+        return total_mw
+
+    def get_mw(self, snapshot):
+        if not self.mw_cache or self.mw_cache.get('snapshot_id') != str(snapshot.id):
+            return self.compute_mw(snapshot)
+        return float(self.mw_cache.get('mw', 0.0))
+    
+    class Meta:
+        unique_together = ('stage', 'relay')  # One transformer bay per relay per stage
+        verbose_name = "Load Shedding Transformer Bay"
+        verbose_name_plural = "Load Shedding Transformer Bays"
+
+
+class LoadSheddingSpurBay(models.Model):
+    """
+    Spur (radial) load isolation via incoming branch switching.
+    Used by UFLS, UVLS, and EMLS stages.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stage = models.ForeignKey(LoadSheddingStage, on_delete=models.CASCADE, related_name='spur_bays')
+    relay = models.ForeignKey(LoadSheddingRelay, on_delete=models.CASCADE, related_name='target_spur_bays')
+    branches = models.ManyToManyField(IncomingBranch, related_name='load_shedding_spur_bays')
+    topology_cache = models.JSONField(
+        null=True, blank=True,
+        help_text='{"snapshot_id": "...", "isolated_substations": [], "mw": 12.1, "computed_at": "..."}'
+    )
+
+    class Meta:
+        unique_together = ('stage', 'relay')  # One spur bay per relay per stage
+        verbose_name = "Load Shedding Spur Bay"
+        verbose_name_plural = "Load Shedding Spur Bays"
+
+    def clean(self):
+        """
+        Validate that the chosen branches actually belong to the chosen relay.
+        Note: For new objects, M2M fields aren't saved yet, so this validation
+        is handled by the admin form's clean() instead.
+        """
+        if not self.relay_id or not self.pk:
+            return
+        allowed_ids = set(self.relay.incoming_branches.values_list('id', flat=True))
+        selected_ids = set(self.branches.values_list('id', flat=True))
+        if selected_ids and not selected_ids.issubset(allowed_ids):
+            raise ValidationError("Selected branches must belong to the relay's incoming branches.")
+
+    def __str__(self):
+        return f"Spur Bay @ {self.relay.substation.substation_id} ({self.stage})"
+
+    def _build_cuts(self):
+        """
+        Translate the M2M branches into the cut-dict format expected by
+        TopologyService.compute_island(). Each IncomingBranch represents one
+        circuit between two substations; we group by (from, to) pair and collect
+        all ckt_ids so a single cut covers all selected circuits together.
+        """
+        from collections import defaultdict
+        grouped = defaultdict(list)
+        for branch in self.branches.select_related('substation', 'to_substation').all():
+            key = (branch.substation.substation_id, branch.to_substation.substation_id)
+            grouped[key].append(branch.ckt_id)
+
+        cuts = []
+        for (from_sub, to_sub), ckt_ids in grouped.items():
+            cuts.append({
+                "from_substation_id": from_sub,
+                "to_substation_id": to_sub,
+                "circuit_ids": ckt_ids,
+                "link_type": "branch",
+                "isolation_scope": "between",
+            })
+        return cuts
+
+    def compute_topology(self, snapshot):
+        """
+        1. Builds cut specs from the M2M branches.
+        2. Calls compute_island() to find substations isolated by those cuts.
+        3. Calls compute_load_totals() to sum the shed MW.
+        4. Writes the full result into topology_cache keyed to snapshot_id.
+        """
+        from services.topology_service import TopologyService
+
+        service = TopologyService(snapshot)
+        cuts = self._build_cuts()
+
+        isolated_substations = service.compute_island(cuts) if cuts else []
+        totals = service.compute_load_totals(isolated_substations)
+
+        self.topology_cache = {
+            "snapshot_id": str(snapshot.id),
+            "isolated_substations": isolated_substations,
+            "mw": totals["isolated_total_p_mw"],
+            "computed_at": timezone.now().isoformat(),
+        }
+        self.save(update_fields=['topology_cache'])
+        return self.topology_cache
+
+    def get_mw(self, snapshot):
+        if not self.topology_cache or self.topology_cache.get('snapshot_id') != str(snapshot.id):
+            cache = self.compute_topology(snapshot)
+            return float(cache.get('mw', 0.0))
+        return float(self.topology_cache.get('mw', 0.0))
+
+
+
+class LoadSheddingPocketBay(models.Model):
+    """
+    Network pocket isolation with boundary relay/branch validation.
+    Used by UFLS, UVLS, and EMLS stages.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    stage = models.ForeignKey(LoadSheddingStage, on_delete=models.CASCADE, related_name='pocket_bays')
+    boundary_relays = models.ManyToManyField(LoadSheddingRelay, related_name='target_pocket_bays')
+    boundary_branches = models.ManyToManyField(IncomingBranch, related_name='load_shedding_pocket_boundary_bays')
+    topology_cache = models.JSONField(
+        null=True, blank=True,
+        help_text='{"snapshot_id": "...", "isolated_substations": [], "mw": 34.7, "computed_at": "..."}'
+    )
+    topology_valid = models.BooleanField(default=True)
+    topology_alert = models.TextField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Load Shedding Pocket Bay"
+        verbose_name_plural = "Load Shedding Pocket Bays"
+
+    def clean(self):
+        """
+        Validate that all chosen boundary branches belong to at least one of the
+        chosen boundary relays.
+        Note: For new objects, M2M fields aren't saved yet, so this validation
+        is handled by the admin form's clean() instead.
+        """
+        if not self.pk:
+            return
+        # Collect all allowed branches from all selected relays
+        allowed_ids = set()
+        for relay in self.boundary_relays.prefetch_related('incoming_branches').all():
+            allowed_ids.update(relay.incoming_branches.values_list('id', flat=True))
+        
+        selected_ids = set(self.boundary_branches.values_list('id', flat=True))
+        if selected_ids and not selected_ids.issubset(allowed_ids):
+            raise ValidationError("All selected boundary branches must belong to one of the selected boundary relays.")
+
+    def __str__(self):
+        return f"Pocket Bay ({self.stage})"
+
+    def _build_cuts(self):
+        """
+        Translate M2M boundary_branches into cut-dicts for compute_island().
+        Groups circuits by (from_sub, to_sub) pair so all parallel circuits
+        between the same pair are opened together in one cut.
+        """
+        from collections import defaultdict
+        grouped = defaultdict(list)
+        for branch in self.boundary_branches.select_related('substation', 'to_substation').all():
+            key = (branch.substation.substation_id, branch.to_substation.substation_id)
+            grouped[key].append(branch.ckt_id)
+
+        cuts = []
+        for (from_sub, to_sub), ckt_ids in grouped.items():
+            cuts.append({
+                "from_substation_id": from_sub,
+                "to_substation_id": to_sub,
+                "circuit_ids": ckt_ids,
+                "link_type": "branch",
+                "isolation_scope": "between",
+            })
+        return cuts
+
+    def compute_topology(self, snapshot):
+        """
+        1. Validates each boundary_branch exists in the active TopologyBranch
+           for the snapshot's topology version (by substation→bus pair + ckt_id).
+        2. Calls compute_island(all_cuts) to find the isolated pocket.
+        3. Validates the pocket is non-empty.
+        4. Calls compute_load_totals() to sum the shed MW.
+        5. Writes topology_cache, topology_valid, topology_alert.
+        """
+        from services.topology_service import TopologyService
+        from core.models import TopologyBranch
+
+        alerts = []
+
+        # --- Validation 1: check each boundary branch exists in active topology ---
+        valid_branches = []
+        for branch in self.boundary_branches.select_related('substation', 'to_substation').all():
+            from_sub = branch.substation.substation_id
+            to_sub = branch.to_substation.substation_id
+            ckt_id = branch.ckt_id
+
+            # TopologyBranch connects buses; we match via the bus→substation mapping
+            exists = TopologyBranch.objects.filter(
+                topology_version=snapshot.topology_version,
+                ckt_id=ckt_id,
+                from_bus__substation__substation_id=from_sub,
+                to_bus__substation__substation_id=to_sub,
+            ).union(
+                TopologyBranch.objects.filter(
+                    topology_version=snapshot.topology_version,
+                    ckt_id=ckt_id,
+                    from_bus__substation__substation_id=to_sub,
+                    to_bus__substation__substation_id=from_sub,
+                )
+            ).exists()
+
+            if not exists:
+                alerts.append(
+                    f"Pocket invalid: {from_sub}–{to_sub} Ckt {ckt_id} "
+                    f"no longer present in active topology."
+                )
+            else:
+                valid_branches.append(branch)
+
+        # --- Validation 2: compute island from all cuts (even partial) ---
+        service = TopologyService(snapshot)
+        cuts = self._build_cuts()  # built from all boundary_branches (including missing ones)
+        isolated_substations = service.compute_island(cuts) if cuts else []
+
+        if not isolated_substations:
+            # Identify which branch might be the culprit (first branch pair as hint)
+            hint = ""
+            if valid_branches:
+                b = valid_branches[0]
+                hint = f" Verify boundary branch at {b.substation.substation_id}."
+            elif cuts:
+                hint = f" Verify boundary branch at {cuts[0]['from_substation_id']}."
+            alerts.append(
+                f"Pocket invalid: Boundary cuts are insufficient — "
+                f"no substations isolated.{hint}"
+            )
+
+        totals = service.compute_load_totals(isolated_substations) if isolated_substations else {
+            "isolated_total_p_mw": 0.0,
+        }
+
+        self.topology_cache = {
+            "snapshot_id": str(snapshot.id),
+            "isolated_substations": isolated_substations,
+            "mw": totals["isolated_total_p_mw"],
+            "computed_at": timezone.now().isoformat(),
+        }
+        self.topology_valid = len(alerts) == 0
+        self.topology_alert = "; ".join(alerts) if alerts else None
+        self.save(update_fields=['topology_cache', 'topology_valid', 'topology_alert'])
+        return self.topology_cache
+
+
+    def get_mw(self, snapshot):
+        if not self.topology_cache or self.topology_cache.get('snapshot_id') != str(snapshot.id):
+            cache = self.compute_topology(snapshot)
+            return float(cache.get('mw', 0.0))
+        return float(self.topology_cache.get('mw', 0.0))

@@ -34,6 +34,7 @@ from api.v1.views.shedding import (
     LoadSheddingSettingViewSet,
     LoadSheddingVersionViewSet,
     LoadSheddingStageViewSet,
+    LoadSheddingTransformerBayViewSet,
 )
 from api.v1.views.topology import TopologyViewSet
 
@@ -52,6 +53,7 @@ router.register(r'load-shedding-relays', LoadSheddingRelayViewSet)
 router.register(r'load-shedding-versions', LoadSheddingVersionViewSet)
 router.register(r'load-shedding-stages', LoadSheddingStageViewSet)
 router.register(r'load-shedding-settings', LoadSheddingSettingViewSet)
+router.register(r'load-shedding-transformer-bays', LoadSheddingTransformerBayViewSet)
 
 
 urlpatterns = [

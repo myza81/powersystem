@@ -9,11 +9,13 @@ from core.models import (
     LoadSheddingSetting,
     LoadSheddingVersion,
     LoadSheddingStage,
+    LoadSheddingTransformerBay,
 )
 from api.v1.serializers.shedding import (
     LoadSheddingSettingSerializer,
     LoadSheddingVersionSerializer,
     LoadSheddingStageSerializer,
+    LoadSheddingTransformerBaySerializer,
 )
 
 class BaseSheddingViewSet(viewsets.ModelViewSet):
@@ -34,6 +36,15 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
     serializer_class = LoadSheddingVersionSerializer
     search_fields = ['version_label']
 
+    @action(detail=True, methods=['post'])
+    def publish(self, request, pk=None):
+        version = self.get_object()
+        if not request.user.is_staff:
+            return Response({"error": "Only admins can publish versions."}, status=status.HTTP_403_FOR_CONTENT)
+
+        version.publish(user=request.user)
+        return Response(self.get_serializer(version).data)
+
 
 class LoadSheddingStageViewSet(BaseSheddingViewSet):
     queryset = LoadSheddingStage.objects.all()
@@ -45,4 +56,19 @@ class LoadSheddingStageViewSet(BaseSheddingViewSet):
         version = self.request.query_params.get('version')
         if version:
             queryset = queryset.filter(version_id=version)
+        return queryset
+
+
+class LoadSheddingTransformerBayViewSet(BaseSheddingViewSet):
+    queryset = LoadSheddingTransformerBay.objects.all()
+    serializer_class = LoadSheddingTransformerBaySerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        stage = self.request.query_params.get('stage')
+        relay = self.request.query_params.get('relay')
+        if stage:
+            queryset = queryset.filter(stage_id=stage)
+        if relay:
+            queryset = queryset.filter(relay_id=relay)
         return queryset
