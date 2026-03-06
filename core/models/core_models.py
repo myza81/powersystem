@@ -604,95 +604,6 @@ class LoadSheddingTransformerBay(models.Model):
         verbose_name_plural = "Load Shedding Transformer Bays"
 
 
-class LoadSheddingSpurBay(models.Model):
-    """
-    Spur (radial) load isolation via incoming branch switching.
-    Used by UFLS, UVLS, and EMLS stages.
-    """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    stage = models.ForeignKey(LoadSheddingStage, on_delete=models.CASCADE, related_name='spur_bays')
-    relay = models.ForeignKey(LoadSheddingRelay, on_delete=models.CASCADE, related_name='target_spur_bays')
-    branches = models.ManyToManyField(IncomingBranch, related_name='load_shedding_spur_bays')
-    topology_cache = models.JSONField(
-        null=True, blank=True,
-        help_text='{"snapshot_id": "...", "isolated_substations": [], "mw": 12.1, "computed_at": "..."}'
-    )
-
-    class Meta:
-        unique_together = ('stage', 'relay')  # One spur bay per relay per stage
-        verbose_name = "Load Shedding Spur Bay"
-        verbose_name_plural = "Load Shedding Spur Bays"
-
-    def clean(self):
-        """
-        Validate that the chosen branches actually belong to the chosen relay.
-        Note: For new objects, M2M fields aren't saved yet, so this validation
-        is handled by the admin form's clean() instead.
-        """
-        if not self.relay_id or not self.pk:
-            return
-        allowed_ids = set(self.relay.incoming_branches.values_list('id', flat=True))
-        selected_ids = set(self.branches.values_list('id', flat=True))
-        if selected_ids and not selected_ids.issubset(allowed_ids):
-            raise ValidationError("Selected branches must belong to the relay's incoming branches.")
-
-    def __str__(self):
-        return f"Spur Bay @ {self.relay.substation.substation_id} ({self.stage})"
-
-    def _build_cuts(self):
-        """
-        Translate the M2M branches into the cut-dict format expected by
-        TopologyService.compute_island(). Each IncomingBranch represents one
-        circuit between two substations; we group by (from, to) pair and collect
-        all ckt_ids so a single cut covers all selected circuits together.
-        """
-        from collections import defaultdict
-        grouped = defaultdict(list)
-        for branch in self.branches.select_related('substation', 'to_substation').all():
-            key = (branch.substation.substation_id, branch.to_substation.substation_id)
-            grouped[key].append(branch.ckt_id)
-
-        cuts = []
-        for (from_sub, to_sub), ckt_ids in grouped.items():
-            cuts.append({
-                "from_substation_id": from_sub,
-                "to_substation_id": to_sub,
-                "circuit_ids": ckt_ids,
-                "link_type": "branch",
-                "isolation_scope": "between",
-            })
-        return cuts
-
-    def compute_topology(self, snapshot):
-        """
-        1. Builds cut specs from the M2M branches.
-        2. Calls compute_island() to find substations isolated by those cuts.
-        3. Calls compute_load_totals() to sum the shed MW.
-        4. Writes the full result into topology_cache keyed to snapshot_id.
-        """
-        from services.topology_service import TopologyService
-
-        service = TopologyService(snapshot)
-        cuts = self._build_cuts()
-
-        isolated_substations = service.compute_island(cuts) if cuts else []
-        totals = service.compute_load_totals(isolated_substations)
-
-        self.topology_cache = {
-            "snapshot_id": str(snapshot.id),
-            "isolated_substations": isolated_substations,
-            "mw": totals["isolated_total_p_mw"],
-            "computed_at": timezone.now().isoformat(),
-        }
-        self.save(update_fields=['topology_cache'])
-        return self.topology_cache
-
-    def get_mw(self, snapshot):
-        if not self.topology_cache or self.topology_cache.get('snapshot_id') != str(snapshot.id):
-            cache = self.compute_topology(snapshot)
-            return float(cache.get('mw', 0.0))
-        return float(self.topology_cache.get('mw', 0.0))
-
 
 
 class LoadSheddingPocketBay(models.Model):
@@ -702,8 +613,6 @@ class LoadSheddingPocketBay(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     stage = models.ForeignKey(LoadSheddingStage, on_delete=models.CASCADE, related_name='pocket_bays')
-    boundary_relays = models.ManyToManyField(LoadSheddingRelay, related_name='target_pocket_bays')
-    boundary_branches = models.ManyToManyField(IncomingBranch, related_name='load_shedding_pocket_boundary_bays')
     topology_cache = models.JSONField(
         null=True, blank=True,
         help_text='{"snapshot_id": "...", "isolated_substations": [], "mw": 34.7, "computed_at": "..."}'
@@ -716,37 +625,26 @@ class LoadSheddingPocketBay(models.Model):
         verbose_name_plural = "Load Shedding Pocket Bays"
 
     def clean(self):
-        """
-        Validate that all chosen boundary branches belong to at least one of the
-        chosen boundary relays.
-        Note: For new objects, M2M fields aren't saved yet, so this validation
-        is handled by the admin form's clean() instead.
-        """
-        if not self.pk:
-            return
-        # Collect all allowed branches from all selected relays
-        allowed_ids = set()
-        for relay in self.boundary_relays.prefetch_related('incoming_branches').all():
-            allowed_ids.update(relay.incoming_branches.values_list('id', flat=True))
-        
-        selected_ids = set(self.boundary_branches.values_list('id', flat=True))
-        if selected_ids and not selected_ids.issubset(allowed_ids):
-            raise ValidationError("All selected boundary branches must belong to one of the selected boundary relays.")
+        # Validation is now handled at the boundary level and admin formset level
+        pass
 
     def __str__(self):
         return f"Pocket Bay ({self.stage})"
 
     def _build_cuts(self):
         """
-        Translate M2M boundary_branches into cut-dicts for compute_island().
+        Translate boundary_branches into cut-dicts for compute_island().
         Groups circuits by (from_sub, to_sub) pair so all parallel circuits
         between the same pair are opened together in one cut.
         """
         from collections import defaultdict
         grouped = defaultdict(list)
-        for branch in self.boundary_branches.select_related('substation', 'to_substation').all():
-            key = (branch.substation.substation_id, branch.to_substation.substation_id)
-            grouped[key].append(branch.ckt_id)
+        
+        # Iterate over all branches across all boundaries
+        for boundary in self.boundaries.prefetch_related('branches__substation', 'branches__to_substation').all():
+            for branch in boundary.branches.all():
+                key = (branch.substation.substation_id, branch.to_substation.substation_id)
+                grouped[key].append(branch.ckt_id)
 
         cuts = []
         for (from_sub, to_sub), ckt_ids in grouped.items():
@@ -761,7 +659,7 @@ class LoadSheddingPocketBay(models.Model):
 
     def compute_topology(self, snapshot):
         """
-        1. Validates each boundary_branch exists in the active TopologyBranch
+        1. Validates each boundary branch exists in the active TopologyBranch
            for the snapshot's topology version (by substation→bus pair + ckt_id).
         2. Calls compute_island(all_cuts) to find the isolated pocket.
         3. Validates the pocket is non-empty.
@@ -775,37 +673,38 @@ class LoadSheddingPocketBay(models.Model):
 
         # --- Validation 1: check each boundary branch exists in active topology ---
         valid_branches = []
-        for branch in self.boundary_branches.select_related('substation', 'to_substation').all():
-            from_sub = branch.substation.substation_id
-            to_sub = branch.to_substation.substation_id
-            ckt_id = branch.ckt_id
+        for boundary in self.boundaries.prefetch_related('branches__substation', 'branches__to_substation').all():
+            for branch in boundary.branches.all():
+                from_sub = branch.substation.substation_id
+                to_sub = branch.to_substation.substation_id
+                ckt_id = branch.ckt_id
 
-            # TopologyBranch connects buses; we match via the bus→substation mapping
-            exists = TopologyBranch.objects.filter(
-                topology_version=snapshot.topology_version,
-                ckt_id=ckt_id,
-                from_bus__substation__substation_id=from_sub,
-                to_bus__substation__substation_id=to_sub,
-            ).union(
-                TopologyBranch.objects.filter(
+                # TopologyBranch connects buses; we match via the bus→substation mapping
+                exists = TopologyBranch.objects.filter(
                     topology_version=snapshot.topology_version,
                     ckt_id=ckt_id,
-                    from_bus__substation__substation_id=to_sub,
-                    to_bus__substation__substation_id=from_sub,
-                )
-            ).exists()
+                    from_bus__substation__substation_id=from_sub,
+                    to_bus__substation__substation_id=to_sub,
+                ).union(
+                    TopologyBranch.objects.filter(
+                        topology_version=snapshot.topology_version,
+                        ckt_id=ckt_id,
+                        from_bus__substation__substation_id=to_sub,
+                        to_bus__substation__substation_id=from_sub,
+                    )
+                ).exists()
 
-            if not exists:
-                alerts.append(
-                    f"Pocket invalid: {from_sub}–{to_sub} Ckt {ckt_id} "
-                    f"no longer present in active topology."
-                )
-            else:
-                valid_branches.append(branch)
+                if not exists:
+                    alerts.append(
+                        f"Pocket invalid: {from_sub}–{to_sub} Ckt {ckt_id} "
+                        f"no longer present in active topology."
+                    )
+                else:
+                    valid_branches.append(branch)
 
         # --- Validation 2: compute island from all cuts (even partial) ---
         service = TopologyService(snapshot)
-        cuts = self._build_cuts()  # built from all boundary_branches (including missing ones)
+        cuts = self._build_cuts()  # built from all boundary branches (including missing ones)g ones)
         isolated_substations = service.compute_island(cuts) if cuts else []
 
         if not isolated_substations:
@@ -842,3 +741,34 @@ class LoadSheddingPocketBay(models.Model):
             cache = self.compute_topology(snapshot)
             return float(cache.get('mw', 0.0))
         return float(self.topology_cache.get('mw', 0.0))
+
+
+class LoadSheddingPocketBoundary(models.Model):
+    """
+    Defines one 'edge' of a pocket (a Relay and its corresponding Branches).
+    A Pocket Bay consists of multiple boundaries (e.g., from multiple substations).
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    pocket = models.ForeignKey(LoadSheddingPocketBay, on_delete=models.CASCADE, related_name='boundaries')
+    relay = models.ForeignKey(LoadSheddingRelay, on_delete=models.CASCADE, related_name='target_pocket_boundaries')
+    branches = models.ManyToManyField(IncomingBranch, related_name='load_shedding_pocket_boundaries')
+
+    class Meta:
+        verbose_name = "Load Shedding Pocket Boundary"
+        verbose_name_plural = "Load Shedding Pocket Boundaries"
+
+    def clean(self):
+        """
+        Validate that the chosen branches actually belong to the chosen relay.
+        Note: For new objects, M2M fields aren't saved yet, so this validation
+        is handled by the admin formset's clean() as well.
+        """
+        if not self.relay_id or not self.pk:
+            return
+        allowed_ids = set(self.relay.incoming_branches.values_list('id', flat=True))
+        selected_ids = set(self.branches.values_list('id', flat=True))
+        if selected_ids and not selected_ids.issubset(allowed_ids):
+            raise ValidationError("Selected branches must belong to the relay's incoming branches.")
+
+    def __str__(self):
+        return f"Boundary @ {self.relay.substation.substation_id} for Pocket ({self.pocket})"

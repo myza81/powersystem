@@ -25,6 +25,7 @@ const Sidebar = ({ currentView, onViewChange }) => {
     const [monitoringExpanded, setMonitoringExpanded] = useState(true);
     const [assetsExpanded, setAssetsExpanded] = useState(true);
     const [operationsExpanded, setOperationsExpanded] = useState(true);
+    const [loadSheddingExpanded, setLoadSheddingExpanded] = useState(false);
     const [systemExpanded, setSystemExpanded] = useState(false);
 
     const toggleCollapse = () => setCollapsed(!collapsed);
@@ -39,7 +40,15 @@ const Sidebar = ({ currentView, onViewChange }) => {
     ];
 
     const operationItems = [
-        { id: 'load-shedding', label: 'Load Shedding', icon: Shield },
+        {
+            id: 'load-shedding',
+            label: 'Load Shedding',
+            icon: Shield,
+            children: [
+                { id: 'load-shedding-viewer', label: 'Scheme Viewer' },
+                { id: 'load-shedding-designer', label: 'Scheme Designer' },
+            ]
+        },
         { id: 'critical-substations', label: 'Critical Substations', icon: Shield },
     ];
 
@@ -198,21 +207,65 @@ const Sidebar = ({ currentView, onViewChange }) => {
                                 style={{ overflow: 'hidden' }}
                             >
                                 {operationItems.map(item => (
-                                    <a
-                                        key={item.id}
-                                        href={`?view=${item.id}`}
-                                        className={`nav-item sub-item ${currentView === item.id ? 'active' : ''}`}
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            handleNavigate(item.id);
-                                        }}
-                                        title={collapsed ? item.label : ''}
-                                        style={collapsed ? { padding: '0.75rem 0', justifyContent: 'center' } : {}}
-                                    >
-                                        {!collapsed && <item.icon size={16} style={{ marginRight: '10px' }} />}
-                                        {!collapsed && item.label}
-                                        {collapsed && <item.icon size={18} />}
-                                    </a>
+                                    <div key={item.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <a
+                                            href={`?view=${item.id}`}
+                                            className={`nav-item sub-item ${(currentView === item.id || (item.children && item.children.some(c => c.id === currentView))) ? 'active' : ''}`}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                if (item.children) {
+                                                    setLoadSheddingExpanded(!loadSheddingExpanded);
+                                                } else {
+                                                    handleNavigate(item.id);
+                                                }
+                                            }}
+                                            title={collapsed ? item.label : ''}
+                                            style={collapsed ? { padding: '0.75rem 0', justifyContent: 'center' } : {}}
+                                        >
+                                            {!collapsed && <item.icon size={16} style={{ marginRight: '10px' }} />}
+                                            {!collapsed && item.label}
+                                            {collapsed && <item.icon size={18} />}
+                                            {!collapsed && item.children && (
+                                                <ChevronDown
+                                                    size={14}
+                                                    style={{
+                                                        marginLeft: 'auto',
+                                                        transform: loadSheddingExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                                        transition: 'transform 0.2s',
+                                                        color: 'var(--text-secondary)'
+                                                    }}
+                                                />
+                                            )}
+                                        </a>
+
+                                        {!collapsed && item.children && (
+                                            <AnimatePresence>
+                                                {loadSheddingExpanded && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        style={{ overflow: 'hidden', paddingLeft: '1.5rem' }}
+                                                    >
+                                                        {item.children.map(child => (
+                                                            <a
+                                                                key={child.id}
+                                                                href={`?view=${child.id}`}
+                                                                className={`nav-item sub-item ${currentView === child.id ? 'active' : ''}`}
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    handleNavigate(child.id);
+                                                                }}
+                                                                style={{ fontSize: '0.8rem', opacity: 0.8 }}
+                                                            >
+                                                                {child.label}
+                                                            </a>
+                                                        ))}
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        )}
+                                    </div>
                                 ))}
                             </motion.div>
                         )}

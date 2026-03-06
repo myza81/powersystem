@@ -35,6 +35,8 @@ from api.v1.views.shedding import (
     LoadSheddingVersionViewSet,
     LoadSheddingStageViewSet,
     LoadSheddingTransformerBayViewSet,
+    LoadSheddingPocketBayViewSet,
+    LoadSheddingPocketBoundaryViewSet,
 )
 from api.v1.views.topology import TopologyViewSet
 
@@ -54,6 +56,8 @@ router.register(r'load-shedding-versions', LoadSheddingVersionViewSet)
 router.register(r'load-shedding-stages', LoadSheddingStageViewSet)
 router.register(r'load-shedding-settings', LoadSheddingSettingViewSet)
 router.register(r'load-shedding-transformer-bays', LoadSheddingTransformerBayViewSet)
+router.register(r'load-shedding-pocket-bays', LoadSheddingPocketBayViewSet)
+router.register(r'load-shedding-pocket-boundaries', LoadSheddingPocketBoundaryViewSet)
 
 
 urlpatterns = [

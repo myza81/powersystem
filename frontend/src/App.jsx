@@ -15,7 +15,8 @@ import SubstationFilter from './components/SubstationFilter';
 import SubstationMap from './components/SubstationMap';
 
 import SnapshotManager from './components/SnapshotManager';
-import LoadSheddingManager from './components/LoadSheddingManager';
+import LoadSheddingViewer from './components/LoadSheddingViewer';
+import LoadSheddingDesigner from './components/LoadSheddingDesigner';
 import CriticalSubstationManager from './components/CriticalSubstationManager';
 import api from './api';
 
@@ -278,7 +279,8 @@ const App = () => {
                                 {view === 'config' && 'Configuration Editor'}
                                 {view === 'snapshots' && 'Network Analysis'}
                                 {view === 'dev-tools' && 'Developer Tools'}
-                                {view === 'load-shedding' && 'Load Shedding Module'}
+                                {view === 'load-shedding-viewer' && 'Load Shedding Viewer'}
+                                {view === 'load-shedding-designer' && 'Load Shedding Designer'}
                             </h2>
                         </div>
                     </header>
@@ -453,8 +455,13 @@ const App = () => {
                     <SnapshotManager />
                 )}
 
-                {view === 'load-shedding' && (
-                    <LoadSheddingManager />
+
+                {view === 'load-shedding-viewer' && (
+                    <LoadSheddingViewer />
+                )}
+
+                {view === 'load-shedding-designer' && (
+                    <LoadSheddingDesigner />
                 )}
 
                 {view === 'critical-substations' && (

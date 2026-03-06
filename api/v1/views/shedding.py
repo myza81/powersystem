@@ -10,12 +10,17 @@ from core.models import (
     LoadSheddingVersion,
     LoadSheddingStage,
     LoadSheddingTransformerBay,
+    LoadSheddingPocketBay,
+    LoadSheddingPocketBoundary,
 )
 from api.v1.serializers.shedding import (
     LoadSheddingSettingSerializer,
     LoadSheddingVersionSerializer,
     LoadSheddingStageSerializer,
+    LoadSheddingStageDetailSerializer,
     LoadSheddingTransformerBaySerializer,
+    LoadSheddingPocketBaySerializer,
+    LoadSheddingPocketBoundarySerializer,
 )
 
 class BaseSheddingViewSet(viewsets.ModelViewSet):
@@ -51,6 +56,11 @@ class LoadSheddingStageViewSet(BaseSheddingViewSet):
     serializer_class = LoadSheddingStageSerializer
     search_fields = ['label']
 
+    def get_serializer_class(self):
+        if self.action == 'retrieve' or self.request.query_params.get('include_bays') == 'true':
+            return LoadSheddingStageDetailSerializer
+        return LoadSheddingStageSerializer
+
     def get_queryset(self):
         queryset = super().get_queryset()
         version = self.request.query_params.get('version')
@@ -72,3 +82,20 @@ class LoadSheddingTransformerBayViewSet(BaseSheddingViewSet):
         if relay:
             queryset = queryset.filter(relay_id=relay)
         return queryset
+
+
+class LoadSheddingPocketBayViewSet(BaseSheddingViewSet):
+    queryset = LoadSheddingPocketBay.objects.all()
+    serializer_class = LoadSheddingPocketBaySerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        stage = self.request.query_params.get('stage')
+        if stage:
+            queryset = queryset.filter(stage_id=stage)
+        return queryset
+
+
+class LoadSheddingPocketBoundaryViewSet(BaseSheddingViewSet):
+    queryset = LoadSheddingPocketBoundary.objects.all()
+    serializer_class = LoadSheddingPocketBoundarySerializer

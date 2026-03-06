@@ -33,8 +33,8 @@ from .models import (
     LoadSheddingStage,
     LoadSheddingStageSetting,
     LoadSheddingTransformerBay,
-    LoadSheddingSpurBay,
     LoadSheddingPocketBay,
+    LoadSheddingPocketBoundary,
 )
 
 @admin.register(Substation)
@@ -429,58 +429,69 @@ class LoadSheddingTransformerBayAdmin(admin.ModelAdmin):
         return field
 
 
-@admin.register(LoadSheddingSpurBay)
-class LoadSheddingSpurBayAdmin(admin.ModelAdmin):
-    list_display = ('stage', 'relay', 'branches_summary')
-    filter_horizontal = ('branches',)
-    raw_id_fields = ('stage', 'relay')
 
-    class LoadSheddingSpurBayForm(forms.ModelForm):
-        class Meta:
-            model = LoadSheddingSpurBay
-            fields = '__all__'
-
-        def clean(self):
-            cleaned = super().clean()
-            relay = cleaned.get('relay')
-            branches = cleaned.get('branches')
+class LoadSheddingPocketBoundaryInlineFormSet(forms.BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        for form in self.forms:
+            if not hasattr(form, 'cleaned_data') or form.cleaned_data.get('DELETE'):
+                continue
+            
+            relay = form.cleaned_data.get('relay')
+            branches = form.cleaned_data.get('branches')
+            
             if relay and branches:
                 allowed_ids = set(relay.incoming_branches.values_list('id', flat=True))
                 selected_ids = {b.id for b in branches}
                 if not selected_ids.issubset(allowed_ids):
-                    raise ValidationError("Selected branches must belong to the relay's incoming branches.")
-            return cleaned
+                    raise ValidationError(f"Selected branches must belong to the {relay} incoming branches.")
 
-    form = LoadSheddingSpurBayForm
-
-    def branches_summary(self, obj):
-        return ", ".join(b.bay_id for b in obj.branches.all())
-    branches_summary.short_description = "Branches"
+class LoadSheddingPocketBoundaryInline(admin.TabularInline):
+    model = LoadSheddingPocketBoundary
+    extra = 1
+    raw_id_fields = ('relay',)
+    filter_horizontal = ('branches',)
+    formset = LoadSheddingPocketBoundaryInlineFormSet
 
 
 @admin.register(LoadSheddingPocketBay)
 class LoadSheddingPocketBayAdmin(admin.ModelAdmin):
-    list_display = ('stage', 'topology_valid', 'topology_alert')
-    filter_horizontal = ('boundary_relays', 'boundary_branches')
+    list_display = ('stage', 'boundaries_summary', 'cached_mw', 'topology_valid', 'topology_alert')
     raw_id_fields = ('stage',)
     readonly_fields = ('topology_valid', 'topology_alert')
+    inlines = [LoadSheddingPocketBoundaryInline]
 
-    class LoadSheddingPocketBayForm(forms.ModelForm):
-        class Meta:
-            model = LoadSheddingPocketBay
-            fields = '__all__'
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # Prefetch related to avoid N+1 queries in the list view
+        return qs.prefetch_related('boundaries__relay__substation', 'boundaries__branches')
 
-        def clean(self):
-            cleaned = super().clean()
-            boundary_relays = cleaned.get('boundary_relays')
-            boundary_branches = cleaned.get('boundary_branches')
-            if boundary_relays and boundary_branches:
-                allowed_ids = set()
-                for relay in boundary_relays:
-                    allowed_ids.update(relay.incoming_branches.values_list('id', flat=True))
-                selected_ids = {b.id for b in boundary_branches}
-                if not selected_ids.issubset(allowed_ids):
-                    raise ValidationError("All selected boundary branches must belong to one of the selected boundary relays.")
-            return cleaned
+    def boundaries_summary(self, obj):
+        parts = []
+        for boundary in obj.boundaries.all():
+            if not boundary.relay or not boundary.relay.substation:
+                continue
+            sub_id = boundary.relay.substation.substation_id
+            
+            # Shorten branches (e.g. "OLPT275_MGST275_1" -> "MGST275_1")
+            b_ids = []
+            for b in boundary.branches.all():
+                if b.bay_id and '_' in b.bay_id:
+                    short = "_".join(b.bay_id.split('_')[1:])
+                    b_ids.append(short)
+                else:
+                    b_ids.append(b.bay_id)
+            
+            branch_str = ", ".join(b_ids) if b_ids else "No branches"
+            parts.append(f"{sub_id} ({branch_str})")
+        
+        return " | ".join(parts) if parts else "No boundaries"
+    boundaries_summary.short_description = "Boundaries"
 
-    form = LoadSheddingPocketBayForm
+    def cached_mw(self, obj):
+        if obj.topology_cache and isinstance(obj.topology_cache, dict):
+            mw = obj.topology_cache.get('mw')
+            if mw is not None:
+                return f"{mw:g} MW"
+        return "-"
+    cached_mw.short_description = "Cached MW"

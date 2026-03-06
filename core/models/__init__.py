@@ -14,8 +14,8 @@ from .core_models import (
     LoadSheddingStage,
     LoadSheddingStageSetting,
     LoadSheddingTransformerBay,
-    LoadSheddingSpurBay,
     LoadSheddingPocketBay,
+    LoadSheddingPocketBoundary,
 )
 from .snapshot_models import (
     NetworkSnapshot,
