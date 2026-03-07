@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Filter, RotateCcw, Search, X, PlusCircle } from 'lucide-react';
 
 const SubstationFilter = ({
@@ -12,43 +13,54 @@ const SubstationFilter = ({
     extraOptions = null,
     showVoltage = true
 }) => {
+    const [showAdvanced, setShowAdvanced] = useState(false);
+
     // Destructure current filters
-    const { region, grid, state, voltage, ownership, search } = currentFilters;
+    const { region, grid, state, voltage, ownership, search, hasRelay, commissionYear, transformerYear } = currentFilters;
     const currentExtraValue = extraValue || ownership;
 
     // Extract unique values based on current selection hierarchy
     const uniqueValues = useMemo(() => {
         let filtered = substations;
 
-        // 1. Available Regions (always all)
+        const getDecadeRange = (year) => {
+            if (!year) return null;
+            const startYear = Math.floor((year - 1) / 10) * 10 + 1;
+            const endYear = startYear + 9;
+            return `${startYear}-${endYear}`;
+        };
+
+        // Available Regions (always all)
         const regions = ['All', ...new Set(substations.map(s => s.region).filter(Boolean))].sort();
 
-        // 2. Available Grids (depend on Region)
+        // Available Grids (depend on Region)
         if (region !== 'All') {
             filtered = filtered.filter(s => s.region === region);
         }
-        const grids = ['All', ...new Set(filtered.map(s => s.grid).filter(Boolean))].sort();
+        const grids = ['All', ...new Set(filtered.map(s => s.grid).sort().filter(Boolean))].sort();
 
-        // 3. Available States (depend on Region + Grid)
+        // Available States (depend on Region + Grid)
         if (grid !== 'All') {
             filtered = filtered.filter(s => s.grid === grid);
         }
         const states = ['All', ...new Set(filtered.map(s => s.state).filter(Boolean))].sort();
 
-        // 4. Available Voltages (depend on Region + Grid + State)
+        // Available Voltages (depend on Region + Grid + State)
         if (state !== 'All') {
             filtered = filtered.filter(s => s.state === state);
         }
         const voltages = ['All', ...new Set(filtered.map(s => s.voltage).filter(Boolean))].sort((a, b) => b - a);
 
-        // 5. Available Options for the last filter (depend on Region + Grid + State + Voltage)
-        if (voltage !== 'All') {
-            filtered = filtered.filter(s => s.voltage === parseInt(voltage));
-        }
+        // Ownerships and Decades
+        const ownerships = extraOptions || ['All', ...new Set(substations.map(s => s.ownership).filter(Boolean))].sort();
 
-        const finalOptions = extraOptions || ['All', ...new Set(filtered.map(s => s.ownership).filter(Boolean))].sort();
+        const years = substations.map(s => s.commission_date ? new Date(s.commission_date).getFullYear() : null).filter(Boolean);
+        const decades = ['All', ...new Set(years.map(getDecadeRange))].sort((a, b) => b.localeCompare(a));
 
-        return { regions, grids, states, voltages, ownerships: finalOptions };
+        const txYears = substations.flatMap(s => s.transformer_commissioning_years || []);
+        const txDecades = ['All', ...new Set(txYears.map(getDecadeRange))].sort((a, b) => b.localeCompare(a));
+
+        return { regions, grids, states, voltages, ownerships, decades, txDecades };
     }, [substations, region, grid, state, voltage, extraOptions]);
 
     const updateFilter = (key, value) => {
@@ -62,24 +74,27 @@ const SubstationFilter = ({
             state: 'All',
             voltage: 'All',
             ownership: 'All',
-            search: ''
+            search: '',
+            hasRelay: 'All',
+            commissionYear: 'All',
+            transformerYear: 'All'
         });
     };
 
-    const hasActiveFilters = region !== 'All' || grid !== 'All' || state !== 'All' || voltage !== 'All' || currentExtraValue !== 'All' || search !== '';
+    const hasActiveFilters = region !== 'All' || grid !== 'All' || state !== 'All' || voltage !== 'All' || currentExtraValue !== 'All' || search !== '' || hasRelay !== 'All' || commissionYear !== 'All' || transformerYear !== 'All';
 
     return (
         <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
-            {/* Top Row: Search and Reset */}
+            {/* Top Row: Title, Search, and Actions */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-cyan)' }}>
                     <Filter size={18} />
                     <span style={{ fontWeight: 600 }}>Filter Assets</span>
                 </div>
 
-                <div style={{ display: 'flex', gap: '1rem', flex: 1, justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', flex: 1, justifyContent: 'flex-end', alignItems: 'center' }}>
                     {/* Search Bar */}
-                    <div style={{ position: 'relative', minWidth: '250px', flex: '0 1 400px' }}>
+                    <div style={{ position: 'relative', minWidth: '200px', flex: '0 1 350px' }}>
                         <Search size={16} color="var(--text-secondary)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                         <input
                             className="input-field"
@@ -88,25 +103,30 @@ const SubstationFilter = ({
                             onChange={(e) => updateFilter('search', e.target.value)}
                             style={{ paddingLeft: '2.2rem', paddingRight: '2rem', width: '100%', height: '36px' }}
                         />
-                        {hasActiveFilters && (
+                        {search !== '' && (
                             <X
                                 size={14}
-                                title="Reset all filters"
-                                style={{
-                                    position: 'absolute',
-                                    right: '10px',
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    cursor: 'pointer',
-                                    color: 'var(--text-secondary)',
-                                    transition: 'color 0.2s'
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.color = '#f56565'}
-                                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
-                                onClick={resetFilters}
+                                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                                onClick={() => updateFilter('search', '')}
                             />
                         )}
                     </div>
+
+                    {/* Advanced Toggle */}
+                    <button
+                        onClick={() => setShowAdvanced(!showAdvanced)}
+                        style={{
+                            background: showAdvanced ? 'rgba(0, 229, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                            border: `1px solid ${showAdvanced ? 'var(--accent-blue)' : 'rgba(255, 255, 255, 0.1)'}`,
+                            color: showAdvanced ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                            padding: '0 12px', height: '36px', borderRadius: '6px', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s'
+                        }}
+                    >
+                        <Filter size={14} />
+                        <span style={{ fontSize: '0.8rem' }}>Advanced</span>
+                    </button>
+
 
                     <button
                         onClick={onRegister}
@@ -117,19 +137,40 @@ const SubstationFilter = ({
                             fontSize: '0.8rem', height: '36px'
                         }}
                     >
-                        <PlusCircle size={14} /> Register New Entry
+                        <PlusCircle size={14} /> Register
                     </button>
                 </div>
             </div>
 
-            {/* Filter Dropdowns Grid */}
+            {/* Basic Filters Row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
                 <FilterDropdown label="Region" value={region} options={uniqueValues.regions} onChange={(v) => updateFilter('region', v)} />
-                <FilterDropdown label="Grid" value={grid} options={uniqueValues.grids} onChange={(v) => updateFilter('grid', v)} disabled={region === 'All' && uniqueValues.grids.length <= 2} />
-                <FilterDropdown label="State" value={state} options={uniqueValues.states} onChange={(v) => updateFilter('state', v)} disabled={grid === 'All' && uniqueValues.states.length <= 2} />
+                <FilterDropdown label="Grid" value={grid} options={uniqueValues.grids} onChange={(v) => updateFilter('grid', v)} disabled={region === 'All'} />
+                <FilterDropdown label="State" value={state} options={uniqueValues.states} onChange={(v) => updateFilter('state', v)} disabled={grid === 'All'} />
                 {showVoltage && <FilterDropdown label="Voltage Level" value={voltage} options={uniqueValues.voltages} onChange={(v) => updateFilter('voltage', v)} suffix=" kV" />}
-                <FilterDropdown label={extraLabel} value={currentExtraValue} options={uniqueValues.ownerships} onChange={(v) => onExtraChange ? onExtraChange(v) : updateFilter('ownership', v)} />
+                {!showAdvanced && (
+                    <FilterDropdown label={extraLabel} value={currentExtraValue} options={uniqueValues.ownerships} onChange={(v) => onExtraChange ? onExtraChange(v) : updateFilter('ownership', v)} />
+                )}
             </div>
+
+            {/* Advanced Filters Section */}
+            <AnimatePresence>
+                {showAdvanced && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        style={{ overflow: 'hidden', marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}
+                    >
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
+                            <FilterDropdown label={extraLabel} value={currentExtraValue} options={uniqueValues.ownerships} onChange={(v) => onExtraChange ? onExtraChange(v) : updateFilter('ownership', v)} />
+                            <FilterDropdown label="Load Shedding Relay" value={hasRelay || 'All'} options={['All', 'Active', 'None']} onChange={(v) => updateFilter('hasRelay', v)} />
+                            <FilterDropdown label="Substation Commission" value={commissionYear || 'All'} options={uniqueValues.decades} onChange={(v) => updateFilter('commissionYear', v)} />
+                            <FilterDropdown label="Load Transformer Commission" value={transformerYear || 'All'} options={['All', 'None', ...uniqueValues.txDecades.filter(y => y !== 'All')]} onChange={(v) => updateFilter('transformerYear', v)} />
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

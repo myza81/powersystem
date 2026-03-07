@@ -17,12 +17,15 @@ class SubstationSerializer(serializers.ModelSerializer):
     """
     total_pload_mw = serializers.SerializerMethodField()
     is_critical = serializers.SerializerMethodField()
+    has_active_relay = serializers.SerializerMethodField()
+    transformer_commissioning_years = serializers.SerializerMethodField()
     
     class Meta:
         model = Substation
         fields = ['substation_id', 'mnemonic', 'name', 'ownership', 'voltage', 
                   'grid', 'state', 'region', 'latitude', 'longitude', 
-                  'commission_date', 'sld', 'sld_file', 'total_pload_mw', 'is_critical',
+                  'commission_date', 'sld', 'sld_file', 'total_pload_mw', 
+                  'is_critical', 'has_active_relay', 'transformer_commissioning_years',
                   'created_at', 'updated_at']
         read_only_fields = ['substation_id', 'sld', 'created_at', 'updated_at', 'region', 'state']
 
@@ -50,6 +53,12 @@ class SubstationSerializer(serializers.ModelSerializer):
     def get_is_critical(self, obj):
         from core.models import CriticalAsset
         return CriticalAsset.objects.filter(substation=obj, is_inforce=True).exists()
+
+    def get_has_active_relay(self, obj):
+        return LoadSheddingRelay.objects.filter(substation=obj, is_active=True).exists()
+
+    def get_transformer_commissioning_years(self, obj):
+        return list(obj.load_transformers.filter(commissioning_date__isnull=False).values_list('commissioning_date__year', flat=True).distinct())
 
 class TransformerDetailSerializer(serializers.Serializer):
     """
@@ -199,11 +208,63 @@ class LoadSheddingRelaySerializer(serializers.ModelSerializer):
     class Meta:
         model = LoadSheddingRelay
         fields = [
-            'id', 'substation', 'load_transformers', 'incoming_branches',
+            'id', 'substation', 'relay_name', 'load_transformers', 'incoming_branches',
             'auto_transformers', 'is_active', 'notes'
         ]
-        # The many-to-many fields will implicitly be handled by PrimaryKeyRelatedField 
-        # allowing array lists of IDs.
+
+    def validate(self, attrs):
+        # Overlap check: ensures an asset is assigned only to one relay at a substation.
+        substation = attrs.get('substation') or getattr(self.instance, 'substation', None)
+        if not substation:
+            return attrs
+
+        other_relays = LoadSheddingRelay.objects.filter(substation=substation)
+        if self.instance and self.instance.pk:
+            other_relays = other_relays.exclude(pk=self.instance.pk)
+
+        # Prefetch relations to avoid N+1 in following loop
+        other_relays = other_relays.prefetch_related('load_transformers', 'auto_transformers', 'incoming_branches')
+
+        # Assets in currently being validated data
+        current_lt = set(attrs.get('load_transformers', []))
+        current_at = set(attrs.get('auto_transformers', []))
+        current_ib = set(attrs.get('incoming_branches', []))
+
+        # Handle partial updates
+        if self.instance:
+            if 'load_transformers' not in attrs:
+                current_lt = set(self.instance.load_transformers.all())
+            if 'auto_transformers' not in attrs:
+                current_at = set(self.instance.auto_transformers.all())
+            if 'incoming_branches' not in attrs:
+                current_ib = set(self.instance.incoming_branches.all())
+
+        for relay in other_relays:
+            # Overlap Load Transformers
+            overlap_lt = set(relay.load_transformers.all()) & current_lt
+            if overlap_lt:
+                names = ", ".join([str(lt) for lt in overlap_lt])
+                raise serializers.ValidationError({
+                    "load_transformers": f"Transformers ({names}) are already assigned to relay '{relay.relay_name or relay.id}'"
+                })
+            
+            # Overlap Auto Transformers
+            overlap_at = set(relay.auto_transformers.all()) & current_at
+            if overlap_at:
+                names = ", ".join([str(at) for at in overlap_at])
+                raise serializers.ValidationError({
+                    "auto_transformers": f"Auto Transformers ({names}) are already assigned to relay '{relay.relay_name or relay.id}'"
+                })
+
+            # Overlap Incoming Branches
+            overlap_ib = set(relay.incoming_branches.all()) & current_ib
+            if overlap_ib:
+                names = ", ".join([str(ib) for ib in overlap_ib])
+                raise serializers.ValidationError({
+                    "incoming_branches": f"Branches ({names}) are already assigned to relay '{relay.relay_name or relay.id}'"
+                })
+
+        return attrs
 
 
 

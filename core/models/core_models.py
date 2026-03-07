@@ -354,17 +354,14 @@ class LoadSheddingRelay(models.Model):
         related_name='load_shedding_relays',
         blank=True,
     )
+    relay_name = models.CharField(max_length=100, blank=True, help_text="Optional name to distinguish multiple relays at the same site")
     is_active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['substation__substation_id']
-        constraints = [
-            models.UniqueConstraint(
-                fields=['substation'],
-                name='uniq_one_relay_per_substation',
-            ),
-        ]
         indexes = [
             models.Index(fields=['substation']),
             models.Index(fields=['is_active']),
@@ -373,6 +370,8 @@ class LoadSheddingRelay(models.Model):
         verbose_name_plural = "Load Shedding Relays"
 
     def __str__(self):
+        if self.relay_name:
+            return f"{self.relay_name} @ {self.substation.substation_id}"
         return f"Relay @ {self.substation.substation_id}"
 
 
@@ -392,6 +391,8 @@ class LoadSheddingSetting(models.Model):
     threshold = models.FloatField(help_text="Hz for UFLS; p.u. for UVLS")
     time_delay = models.FloatField(help_text="Seconds")
     label = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['scheme_type', 'threshold', 'time_delay']
@@ -419,18 +420,22 @@ class LoadSheddingSetting(models.Model):
         super().save(*args, **kwargs)
 
 
+from decimal import Decimal
+
 class LoadSheddingVersion(models.Model):
     """
     Versioned snapshot of a load shedding scheme.
     """
     STATUS_CHOICES = [
         ('draft', 'Draft'),
-        ('published', 'Published'),
+        ('active', 'Active'),
+        ('deactivated', 'Deactivated'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     scheme_type = models.CharField(max_length=10, choices=LoadSheddingSchemeType.choices)
-    version_label = models.CharField(max_length=50, help_text="e.g. '2024-v1', '2025-draft'")
+    review_year = models.IntegerField(help_text="The year this version is for (e.g. 2024)")
+    version = models.DecimalField(max_digits=5, decimal_places=1, default=0.0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     is_active = models.BooleanField(default=False, help_text="Whether this is the currently enforced version")
     published_at = models.DateTimeField(null=True, blank=True)
@@ -441,38 +446,63 @@ class LoadSheddingVersion(models.Model):
         blank=True,
         related_name='published_load_shedding_versions',
     )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_load_shedding_versions',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     notes = models.TextField(blank=True, help_text="Change notes between versions")
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ['-review_year', '-version']
         constraints = [
             models.UniqueConstraint(
-                fields=['scheme_type', 'version_label'],
-                name='uniq_version_per_scheme_type',
+                fields=['scheme_type', 'review_year', 'version'],
+                name='uniq_version_per_year_scheme',
             ),
         ]
         verbose_name = "Load Shedding Version"
         verbose_name_plural = "Load Shedding Versions"
 
     def __str__(self):
-        return f"{self.scheme_type} - {self.version_label} ({self.status})"
+        return f"{self.scheme_type} - {self.review_year} v{self.version} ({self.status})"
+
+    def clean(self):
+        if self.review_year and (self.review_year < 2000 or self.review_year > 2100):
+            raise ValidationError({'review_year': 'Please enter a valid 4-digit year.'})
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and not self.version:
+            # Auto-assign version during creation if not already set
+            existing = LoadSheddingVersion.objects.filter(
+                scheme_type=self.scheme_type,
+                review_year=self.review_year
+            ).order_by('-version').first()
+            if existing:
+                self.version = existing.version + Decimal('0.1')
+            else:
+                self.version = Decimal('0.0')
+        super().save(*args, **kwargs)
 
     def publish(self, user=None):
-        if self.status == 'published':
+        if self.status == 'active':
             return
 
-        self.status = 'published'
+        self.status = 'active'
         self.published_at = timezone.now()
         if user:
             self.published_by = user
         self.is_active = True
 
+        # Deactivate any other active versions for the same scheme_type (global rule)
         LoadSheddingVersion.objects.filter(
             scheme_type=self.scheme_type,
             is_active=True,
-        ).exclude(id=self.id).update(is_active=False)
+        ).exclude(id=self.id).update(is_active=False, status='deactivated')
 
         self.save()
 

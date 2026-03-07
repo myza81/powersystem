@@ -11,7 +11,10 @@ const DEFAULT_FILTERS = {
     grid: 'All',
     state: 'All',
     category: 'All',
-    search: ''
+    search: '',
+    hasRelay: 'All',
+    commissionYear: 'All',
+    transformerYear: 'All'
 };
 
 const CriticalSubstationManager = () => {
@@ -140,11 +143,40 @@ const CriticalSubstationManager = () => {
     // Apply Filters to substations
     const filteredSubstations = useMemo(() => {
         let result = substations;
-        const { region, grid, state, category, search } = filterCriteria;
+        const { region, grid, state, category, search, hasRelay, commissionYear, transformerYear } = filterCriteria;
 
         if (region !== 'All') result = result.filter(s => s.region === region);
         if (grid !== 'All') result = result.filter(s => s.grid === grid);
         if (state !== 'All') result = result.filter(s => s.state === state);
+
+        if (hasRelay === 'Active') {
+            result = result.filter(s => s.has_active_relay === true);
+        } else if (hasRelay === 'None') {
+            result = result.filter(s => !s.has_active_relay);
+        }
+
+        if (commissionYear !== 'All') {
+            result = result.filter(s => {
+                if (!s.commission_date) return false;
+                const year = new Date(s.commission_date).getFullYear();
+                const [start, end] = commissionYear.split('-').map(Number);
+                return year >= start && year <= end;
+            });
+        }
+
+        if (transformerYear !== 'All') {
+            if (transformerYear === 'None') {
+                // EXCLUDE 275kV and above, and ONLY TNB ownership for "None" filter list
+                result = result.filter(s =>
+                    (s.transformer_commissioning_years || []).length === 0 &&
+                    (s.voltage < 275 || !s.voltage) &&
+                    s.ownership === 'TNB'
+                );
+            } else {
+                const [start, end] = transformerYear.split('-').map(Number);
+                result = result.filter(s => (s.transformer_commissioning_years || []).some(year => year >= start && year <= end));
+            }
+        }
 
         // Category filter: substation matches if it's "All" 
         // OR if it has at least one tag in the selected category

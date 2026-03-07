@@ -16,6 +16,7 @@ from .core_models import (
     LoadSheddingTransformerBay,
     LoadSheddingPocketBay,
     LoadSheddingPocketBoundary,
+    LoadSheddingSchemeType,
 )
 from .snapshot_models import (
     NetworkSnapshot,
@@ -55,7 +56,8 @@ __all__ = [
     'LoadSheddingStageSetting',
     'LoadSheddingTransformerBay',
     'LoadSheddingSpurBay',
-    'LoadSheddingPocketBay',
+    'LoadSheddingPocketBoundary',
+    'LoadSheddingSchemeType',
     'NetworkSnapshot',
     'NetworkArea',
     'NetworkZone',

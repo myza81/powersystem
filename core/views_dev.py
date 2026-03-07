@@ -24,6 +24,8 @@ DEFAULT_EXPORT_MODELS = [
     'core.IncomingBranch',
     'core.IncomingBranchAlias',
     'core.AutoTransformer',
+    'core.LoadSheddingRelay',
+    'core.LoadSheddingSetting',
 ]
 
 def _get_latest_master_update_ts():
@@ -32,6 +34,9 @@ def _get_latest_master_update_ts():
     candidates.append(LoadTransformer.objects.aggregate(ts=Max('updated_at'))['ts'])
     candidates.append(IncomingBranch.objects.aggregate(ts=Max('updated_at'))['ts'])
     candidates.append(AutoTransformer.objects.aggregate(ts=Max('updated_at'))['ts'])
+    from core.models import LoadSheddingRelay, LoadSheddingSetting
+    candidates.append(LoadSheddingRelay.objects.aggregate(ts=Max('updated_at'))['ts'])
+    candidates.append(LoadSheddingSetting.objects.aggregate(ts=Max('updated_at'))['ts'])
     latest = max([c for c in candidates if c is not None], default=None)
     return latest
 
@@ -158,11 +163,14 @@ class DatabaseImportView(APIView):
             backup_path = _backup_master_fixture()
 
             if reset_master:
+                from core.models import LoadSheddingRelay, LoadSheddingSetting
                 IncomingBranchAlias.objects.all().delete()
                 IncomingBranch.objects.all().delete()
                 LoadTransformer.objects.all().delete()
                 AutoTransformer.objects.all().delete()
                 Substation.objects.all().delete()
+                LoadSheddingRelay.objects.all().delete()
+                LoadSheddingSetting.objects.all().delete()
 
             call_command('loaddata', FIXTURE_PATH)
             recompute_state = request.data.get('recompute_state', True)

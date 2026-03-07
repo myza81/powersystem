@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Edit2, MapPin, FileText, Upload, AlertTriangle } from 'lucide-react';
+import { BsTools } from 'react-icons/bs';
 
 const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate, onCriticalClick }) => {
     const handleFileChange = (e) => {
@@ -38,38 +39,57 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate, 
                         {substation.name.length > 25 ? `${substation.name.substring(0, 25)}...` : substation.name}
                     </h3>
                 </div>
-                {substation.is_critical && (
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (onCriticalClick) onCriticalClick(substation.substation_id);
-                        }}
-                        title="View Critical Asset Tags"
-                        style={{
-                            background: 'rgba(239, 68, 68, 0.1)',
-                            border: '1px solid rgba(239, 68, 68, 0.2)',
-                            color: '#ef4444',
-                            padding: '4px',
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            marginLeft: '8px'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-                            e.currentTarget.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.3)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-                            e.currentTarget.style.boxShadow = 'none';
-                        }}
-                    >
-                        <AlertTriangle size={14} />
-                    </button>
-                )}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                    {substation.has_active_relay && (
+                        <div
+                            title="Active Load Shedding Relay"
+                            style={{
+                                background: 'rgba(255, 183, 77, 0.1)',
+                                border: '1px solid rgba(255, 183, 77, 0.3)',
+                                color: '#ffb74d',
+                                padding: '4px',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 0 12px rgba(255, 183, 77, 0.2)'
+                            }}
+                        >
+                            <BsTools size={12} />
+                        </div>
+                    )}
+                    {substation.is_critical && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onCriticalClick) onCriticalClick(substation.substation_id);
+                            }}
+                            title="View Critical Asset Tags"
+                            style={{
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                color: '#ef4444',
+                                padding: '4px',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                                e.currentTarget.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.3)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                e.currentTarget.style.boxShadow = 'none';
+                            }}
+                        >
+                            <AlertTriangle size={14} />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Body: Pills for Metadata */}

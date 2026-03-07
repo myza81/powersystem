@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ShieldAlert, FileText, Plus } from 'lucide-react';
+import { BsTools } from 'react-icons/bs';
 
 const CriticalSubstationCard = ({ substation, tags, onEditAsset, onAddAsset }) => {
     const activeCount = tags.filter(t => t.is_inforce).length;
@@ -79,35 +80,55 @@ const CriticalSubstationCard = ({ substation, tags, onEditAsset, onAddAsset }) =
                     </h3>
                 </div>
 
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onAddAsset();
-                    }}
-                    style={{
-                        background: 'rgba(255, 159, 67, 0.1)',
-                        border: '1px solid rgba(255, 159, 67, 0.2)',
-                        borderRadius: '6px',
-                        padding: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        color: '#ff9f43',
-                        transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(255,159,67,0.2)';
-                        e.currentTarget.style.borderColor = '#ff9f43';
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(255, 159, 67, 0.1)';
-                        e.currentTarget.style.borderColor = 'rgba(255, 159, 67, 0.2)';
-                    }}
-                    title="Add Critical Asset to this Substation"
-                >
-                    <Plus size={16} strokeWidth={2.5} />
-                </button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {substation.has_active_relay && (
+                        <div
+                            title="Active Load Shedding Relay"
+                            style={{
+                                background: 'rgba(255, 183, 77, 0.1)',
+                                border: '1px solid rgba(255, 183, 77, 0.3)',
+                                color: '#ffb74d',
+                                padding: '4px',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 0 12px rgba(255, 183, 77, 0.2)'
+                            }}
+                        >
+                            <BsTools size={12} />
+                        </div>
+                    )}
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (onAddAsset) onAddAsset();
+                        }}
+                        style={{
+                            background: 'rgba(255, 159, 67, 0.1)',
+                            border: '1px solid rgba(255, 159, 67, 0.2)',
+                            borderRadius: '6px',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            color: '#ff9f43',
+                            transition: 'all 0.2s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(255,159,67,0.2)';
+                            e.currentTarget.style.borderColor = '#ff9f43';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 159, 67, 0.1)';
+                            e.currentTarget.style.borderColor = 'rgba(255, 159, 67, 0.2)';
+                        }}
+                        title="Add Critical Asset to this Substation"
+                    >
+                        <Plus size={16} strokeWidth={2.5} />
+                    </button>
+                </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>

@@ -300,8 +300,17 @@ const LoadSheddingViewer = () => {
                                                 ) : stage.transformer_bays?.map(bay => (
                                                     <div key={bay.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', borderRadius: '4px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', cursor: 'default' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                            <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--accent-cyan)', opacity: 0.6 }}>{bay.relay_substation_id || 'UNK'}</div>
-                                                            <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{bay.relay_substation_name || 'Generic TX Bay'}</div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--accent-cyan)', opacity: 0.6 }}>{bay.relay_substation_id || 'UNK'}</div>
+                                                                    <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{bay.relay_substation_name || 'Generic TX Bay'}</div>
+                                                                </div>
+                                                                {bay.relay_name && (
+                                                                    <div style={{ fontSize: '10px', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.03)', padding: '1px 6px', borderRadius: '4px', width: 'fit-content' }}>
+                                                                        {bay.relay_name}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                                             <div style={{ fontSize: '0.85rem', fontWeight: 'bold' }}>{bay.mw_cache?.mw?.toFixed(1) || '0.0'} MW</div>
@@ -341,7 +350,7 @@ const LoadSheddingViewer = () => {
                                                             {pocket.boundaries?.map(b => (
                                                                 <div key={b.id} style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                                     <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent-blue)' }} />
-                                                                    Boundary: {b.relay_substation_id} ({b.branches?.length} circuits)
+                                                                    Boundary: {b.relay_substation_id} {b.relay_name ? `(${b.relay_name})` : ''} - {b.branches?.length} circuits
                                                                 </div>
                                                             ))}
                                                         </div>

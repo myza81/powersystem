@@ -50,10 +50,11 @@ class LoadSheddingStageSerializer(serializers.ModelSerializer):
 class LoadSheddingPocketBoundarySerializer(serializers.ModelSerializer):
     relay_substation_id = serializers.CharField(source='relay.substation.substation_id', read_only=True)
     relay_substation_name = serializers.CharField(source='relay.substation.name', read_only=True)
+    relay_name = serializers.CharField(source='relay.relay_name', read_only=True)
 
     class Meta:
         model = LoadSheddingPocketBoundary
-        fields = ['id', 'pocket', 'relay', 'relay_substation_id', 'relay_substation_name', 'branches']
+        fields = ['id', 'pocket', 'relay', 'relay_substation_id', 'relay_substation_name', 'relay_name', 'branches']
 
 
 class LoadSheddingPocketBaySerializer(serializers.ModelSerializer):
@@ -71,6 +72,7 @@ class LoadSheddingPocketBaySerializer(serializers.ModelSerializer):
 class LoadSheddingTransformerBaySerializer(serializers.ModelSerializer):
     relay_substation_id = serializers.CharField(source='relay.substation.substation_id', read_only=True)
     relay_substation_name = serializers.CharField(source='relay.substation.name', read_only=True)
+    relay_name = serializers.CharField(source='relay.relay_name', read_only=True)
 
     def validate(self, attrs):
         relay = attrs.get('relay') or getattr(self.instance, 'relay', None)
@@ -86,7 +88,7 @@ class LoadSheddingTransformerBaySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LoadSheddingTransformerBay
-        fields = ['id', 'stage', 'relay', 'relay_substation_id', 'relay_substation_name', 'transformers', 'mw_cache']
+        fields = ['id', 'stage', 'relay', 'relay_substation_id', 'relay_substation_name', 'relay_name', 'transformers', 'mw_cache']
         read_only_fields = ['mw_cache']
 
 
@@ -100,14 +102,20 @@ class LoadSheddingStageDetailSerializer(LoadSheddingStageSerializer):
 
 class LoadSheddingVersionSerializer(serializers.ModelSerializer):
     stages = LoadSheddingStageSerializer(many=True, read_only=True)
+    created_by_name = serializers.CharField(source='created_by.username', read_only=True)
 
     class Meta:
         model = LoadSheddingVersion
         fields = [
-            'id', 'scheme_type', 'version_label', 'status', 'is_active',
-            'published_at', 'published_by', 'created_at', 'updated_at', 'notes',
+            'id', 'scheme_type', 'review_year', 'version', 'status', 'is_active',
+            'published_at', 'published_by', 'created_by', 'created_by_name',
+            'created_at', 'updated_at', 'notes',
             'stages',
         ]
-        read_only_fields = ['published_at', 'published_by', 'created_at', 'updated_at']
+        read_only_fields = ['version', 'published_at', 'published_by', 'created_by', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        validated_data['created_by'] = self.context['request'].user
+        return super().create(validated_data)
 
 

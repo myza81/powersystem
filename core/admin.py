@@ -362,9 +362,9 @@ class LoadSheddingStageInline(admin.TabularInline):
 
 @admin.register(LoadSheddingVersion)
 class LoadSheddingVersionAdmin(admin.ModelAdmin):
-    list_display = ('scheme_type', 'version_label', 'status', 'is_active', 'published_at', 'created_at')
+    list_display = ('scheme_type', 'review_year', 'version', 'status', 'is_active', 'published_at', 'created_at')
     list_filter = ('scheme_type', 'status', 'is_active')
-    search_fields = ('version_label', 'notes')
+    search_fields = ('review_year', 'notes')
     inlines = [LoadSheddingStageInline]
     readonly_fields = ('published_at', 'created_at', 'updated_at')
     actions = ['make_published']

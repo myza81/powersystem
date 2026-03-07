@@ -98,27 +98,36 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
 
                 {isLSR ? (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.25rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div>
-                                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>Relay Status</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div style={{ gridColumn: 'span 1' }}>
+                                <label style={inputLabelStyle}>Relay Name</label>
+                                <input
+                                    className="input-field mono"
+                                    value={assetForm.relay_name || ''}
+                                    onChange={(e) => setAssetForm(f => ({ ...f, relay_name: e.target.value }))}
+                                    placeholder="e.g., 275kV Main"
+                                />
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', height: '32px', gap: '10px' }}>
-                                <div
-                                    onClick={() => setAssetForm(f => ({ ...f, is_active: !f.is_active }))}
-                                    style={{
-                                        width: '40px', height: '20px',
-                                        background: assetForm.is_active !== false ? 'rgba(76, 175, 80, 0.4)' : 'rgba(255,255,255,0.1)',
-                                        borderRadius: '20px', padding: '2px', cursor: 'pointer', position: 'relative',
-                                        border: `1px solid ${assetForm.is_active !== false ? 'rgba(76, 175, 80, 0.5)' : 'rgba(255,255,255,0.2)'}`,
-                                        transition: 'all 0.3s'
-                                    }}
-                                >
-                                    <motion.div animate={{ x: assetForm.is_active !== false ? 20 : 0 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                                        style={{ width: '14px', height: '14px', background: '#fff', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
+                            <div style={{ gridColumn: 'span 1' }}>
+                                <label style={inputLabelStyle}>Status</label>
+                                <div style={{ display: 'flex', alignItems: 'center', height: '36px', gap: '10px' }}>
+                                    <div
+                                        onClick={() => setAssetForm(f => ({ ...f, is_active: !f.is_active }))}
+                                        style={{
+                                            width: '40px', height: '20px',
+                                            background: assetForm.is_active !== false ? 'rgba(76, 175, 80, 0.4)' : 'rgba(255,255,255,0.1)',
+                                            borderRadius: '20px', padding: '2px', cursor: 'pointer', position: 'relative',
+                                            border: `1px solid ${assetForm.is_active !== false ? 'rgba(76, 175, 80, 0.5)' : 'rgba(255,255,255,0.2)'}`,
+                                            transition: 'all 0.3s'
+                                        }}
+                                    >
+                                        <motion.div animate={{ x: assetForm.is_active !== false ? 20 : 0 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                            style={{ width: '14px', height: '14px', background: '#fff', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
+                                    </div>
+                                    <span style={{ fontSize: '0.75rem', color: assetForm.is_active !== false ? '#fff' : 'var(--text-secondary)', fontWeight: 500 }}>
+                                        {assetForm.is_active !== false ? 'Active' : 'Off'}
+                                    </span>
                                 </div>
-                                <span style={{ fontSize: '0.75rem', color: assetForm.is_active !== false ? '#fff' : 'var(--text-secondary)', fontWeight: 500 }}>
-                                    {assetForm.is_active !== false ? 'Active' : 'Inactive'}
-                                </span>
                             </div>
                         </div>
 
@@ -128,13 +137,24 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                 {loadTransformers?.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No load transformers available.</div>}
                                 {loadTransformers?.map((lt) => {
                                     const checked = (assetForm.load_transformers || []).includes(lt.id);
+                                    const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && r.load_transformers.includes(lt.id));
+                                    const isClaimed = !!OWNER;
+
                                     return (
-                                        <label key={lt.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px', cursor: 'pointer', background: checked ? 'rgba(0, 191, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', border: `1px solid ${checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`, color: checked ? '#fff' : 'var(--text-secondary)', transition: 'all 0.2s', userSelect: 'none' }}>
-                                            <input type="checkbox" checked={checked} onChange={(e) => {
+                                        <label key={lt.id} style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px',
+                                            cursor: isClaimed ? 'not-allowed' : 'pointer',
+                                            background: isClaimed ? 'rgba(255,255,255,0.02)' : checked ? 'rgba(0, 191, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                                            border: `1px solid ${isClaimed ? 'rgba(255,255,255,0.05)' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                            color: isClaimed ? 'rgba(255,255,255,0.2)' : checked ? '#fff' : 'var(--text-secondary)',
+                                            transition: 'all 0.2s', userSelect: 'none',
+                                            opacity: isClaimed ? 0.4 : 1
+                                        }}>
+                                            <input type="checkbox" disabled={isClaimed} checked={checked} onChange={(e) => {
                                                 const arr = assetForm.load_transformers || [];
                                                 setAssetForm(f => ({ ...f, load_transformers: e.target.checked ? [...arr, lt.id] : arr.filter(id => id !== lt.id) }));
                                             }} style={{ display: 'none' }} />
-                                            <span className="mono">T{lt.transformer_no} {lt.lv_voltage ? `(${lt.lv_voltage}kV)` : ''}</span>
+                                            <span className="mono">T{lt.transformer_no} {isClaimed ? `(via ${OWNER.relay_name || 'other'})` : lt.lv_voltage ? `(${lt.lv_voltage}kV)` : ''}</span>
                                         </label>
                                     );
                                 })}
@@ -147,13 +167,24 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                 {autoTransformers?.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No auto transformers available.</div>}
                                 {autoTransformers?.map((at) => {
                                     const checked = (assetForm.auto_transformers || []).includes(at.id);
+                                    const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && r.auto_transformers.includes(at.id));
+                                    const isClaimed = !!OWNER;
+
                                     return (
-                                        <label key={at.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px', cursor: 'pointer', background: checked ? 'rgba(0, 191, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', border: `1px solid ${checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`, color: checked ? '#fff' : 'var(--text-secondary)', transition: 'all 0.2s', userSelect: 'none' }}>
-                                            <input type="checkbox" checked={checked} onChange={(e) => {
+                                        <label key={at.id} style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px',
+                                            cursor: isClaimed ? 'not-allowed' : 'pointer',
+                                            background: isClaimed ? 'rgba(255,255,255,0.02)' : checked ? 'rgba(0, 191, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                                            border: `1px solid ${isClaimed ? 'rgba(255,255,255,0.05)' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                            color: isClaimed ? 'rgba(255,255,255,0.2)' : checked ? '#fff' : 'var(--text-secondary)',
+                                            transition: 'all 0.2s', userSelect: 'none',
+                                            opacity: isClaimed ? 0.4 : 1
+                                        }}>
+                                            <input type="checkbox" disabled={isClaimed} checked={checked} onChange={(e) => {
                                                 const arr = assetForm.auto_transformers || [];
                                                 setAssetForm(f => ({ ...f, auto_transformers: e.target.checked ? [...arr, at.id] : arr.filter(id => id !== at.id) }));
                                             }} style={{ display: 'none' }} />
-                                            <span className="mono">T{at.transformer_no} {at.lv_voltage ? `(${at.lv_voltage}kV)` : ''}</span>
+                                            <span className="mono">T{at.transformer_no} {isClaimed ? `(via ${OWNER.relay_name || 'other'})` : at.lv_voltage ? `(${at.lv_voltage}kV)` : ''}</span>
                                         </label>
                                     );
                                 })}
@@ -166,13 +197,24 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                 {incomingBranches?.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No branches available.</div>}
                                 {incomingBranches?.map((ib) => {
                                     const checked = (assetForm.incoming_branches || []).includes(ib.id);
+                                    const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && r.incoming_branches.includes(ib.id));
+                                    const isClaimed = !!OWNER;
+
                                     return (
-                                        <label key={ib.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px', cursor: 'pointer', background: checked ? 'rgba(0, 191, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', border: `1px solid ${checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`, color: checked ? '#fff' : 'var(--text-secondary)', transition: 'all 0.2s', userSelect: 'none' }}>
-                                            <input type="checkbox" checked={checked} onChange={(e) => {
+                                        <label key={ib.id} style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px',
+                                            cursor: isClaimed ? 'not-allowed' : 'pointer',
+                                            background: isClaimed ? 'rgba(255,255,255,0.02)' : checked ? 'rgba(0, 191, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                                            border: `1px solid ${isClaimed ? 'rgba(255,255,255,0.05)' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                            color: isClaimed ? 'rgba(255,255,255,0.2)' : checked ? '#fff' : 'var(--text-secondary)',
+                                            transition: 'all 0.2s', userSelect: 'none',
+                                            opacity: isClaimed ? 0.4 : 1
+                                        }}>
+                                            <input type="checkbox" disabled={isClaimed} checked={checked} onChange={(e) => {
                                                 const arr = assetForm.incoming_branches || [];
                                                 setAssetForm(f => ({ ...f, incoming_branches: e.target.checked ? [...arr, ib.id] : arr.filter(id => id !== ib.id) }));
                                             }} style={{ display: 'none' }} />
-                                            <span className="mono">{ib.to_substation} {ib.ckt_id}</span>
+                                            <span className="mono">{ib.to_substation} {ib.ckt_id} {isClaimed ? `(via ${OWNER.relay_name || 'other'})` : ''}</span>
                                         </label>
                                     );
                                 })}
@@ -250,8 +292,8 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                         {assetLoading ? 'Saving...' : 'Save Asset'}
                     </button>
                 </div>
-            </motion.div>
-        </div>
+            </motion.div >
+        </div >
     );
 };
 const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, status, loading }) => {
@@ -349,22 +391,29 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, status, loa
     const handleAssetSave = async (type) => {
         if (!substation?.substation_id) return;
 
-        // Front-end validation for unique breaker numbers
-        const currentBreaker = assetForm.breaker_number;
+        // Validation for unique breaker numbers (with Tee-off override)
+        const currentBreaker = assetForm.breaker_number || assetForm.hv_breaker_number || assetForm.lv_breaker_number;
         if (currentBreaker) {
             let existingAssets = [];
-            if (type === 'load') existingAssets = loadTransformers;
-            else if (type === 'auto') existingAssets = autoTransformers;
-            else if (type === 'branch') existingAssets = incomingBranches;
+            // Combine all assets to check for cross-type breaker sharing
+            existingAssets = [...loadTransformers, ...autoTransformers, ...incomingBranches];
 
             const isDuplicate = existingAssets.some(
                 asset => asset.id !== editingAsset?.data?.id &&
-                    (asset.breaker_number === currentBreaker || asset.lv_breaker_number === currentBreaker || asset.hv_breaker_number === currentBreaker)
+                    (asset.breaker_number === currentBreaker ||
+                        asset.lv_breaker_number === currentBreaker ||
+                        asset.hv_breaker_number === currentBreaker)
             );
 
             if (isDuplicate) {
-                setAssetStatus({ type: 'error', msg: `Breaker ID '${currentBreaker}' is already in use for this substation.` });
-                return;
+                const confirmTeeOff = window.confirm(
+                    `Breaker ID '${currentBreaker}' is already in use at this substation.\n\n` +
+                    `Is this a "tee-off" configuration sharing the same breaker?`
+                );
+                if (!confirmTeeOff) {
+                    setAssetStatus({ type: 'error', msg: `Breaker ID '${currentBreaker}' is already in use.` });
+                    return;
+                }
             }
         }
 
@@ -886,7 +935,10 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, status, loa
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', flex: 1 }}>
                                                                 {activeTab === 'lsr' ? (
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                                                                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fff', padding: '0 4px' }}>
+                                                                                {asset.relay_name || 'Unnamed Relay'}
+                                                                            </span>
                                                                             <span style={{ fontSize: '0.75rem', background: asset.is_active ? 'rgba(74, 222, 128, 0.1)' : 'rgba(255, 255, 255, 0.05)', color: asset.is_active ? '#4ade80' : 'var(--text-secondary)', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                                                 {asset.is_active ? <CheckCircle2 size={12} /> : <X size={12} />}
                                                                                 {asset.is_active ? 'Active' : 'Inactive'}

@@ -25,7 +25,11 @@ const DEFAULT_FILTERS = {
     grid: 'All',
     state: 'All',
     voltage: 'All',
-    search: ''
+    ownership: 'All',
+    search: '',
+    hasRelay: 'All',
+    commissionYear: 'All',
+    transformerYear: 'All'
 };
 
 const App = () => {
@@ -97,13 +101,42 @@ const App = () => {
     // Apply Filters whenever criteria or substations change
     useEffect(() => {
         let result = substations;
-        const { region, grid, state, voltage, ownership, search } = filterCriteria;
+        const { region, grid, state, voltage, ownership, search, hasRelay, commissionYear, transformerYear } = filterCriteria;
 
         if (region !== 'All') result = result.filter(s => s.region === region);
         if (grid !== 'All') result = result.filter(s => s.grid === grid);
         if (state !== 'All') result = result.filter(s => s.state === state);
         if (voltage !== 'All') result = result.filter(s => s.voltage === parseInt(voltage));
         if (ownership && ownership !== 'All') result = result.filter(s => s.ownership === ownership);
+
+        if (hasRelay === 'Active') {
+            result = result.filter(s => s.has_active_relay === true);
+        } else if (hasRelay === 'None') {
+            result = result.filter(s => !s.has_active_relay);
+        }
+
+        if (commissionYear !== 'All') {
+            result = result.filter(s => {
+                if (!s.commission_date) return false;
+                const year = new Date(s.commission_date).getFullYear();
+                const [start, end] = commissionYear.split('-').map(Number);
+                return year >= start && year <= end;
+            });
+        }
+
+        if (transformerYear !== 'All') {
+            if (transformerYear === 'None') {
+                // EXCLUDE 275kV and above, and ONLY TNB ownership for "None" filter list
+                result = result.filter(s =>
+                    (s.transformer_commissioning_years || []).length === 0 &&
+                    (s.voltage < 275 || !s.voltage) &&
+                    s.ownership === 'TNB'
+                );
+            } else {
+                const [start, end] = transformerYear.split('-').map(Number);
+                result = result.filter(s => (s.transformer_commissioning_years || []).some(year => year >= start && year <= end));
+            }
+        }
 
         if (search) {
             const lowSearch = search.toLowerCase();

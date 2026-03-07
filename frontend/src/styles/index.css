@@ -92,10 +92,26 @@ button {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: white;
-  padding: 0.5rem;
+  padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
   width: 100%;
-  color-scheme: dark; /* Ensures native UI elements like scrollbars and pickers use dark mode */
+  color-scheme: dark;
+  font-family: inherit;
+  font-size: 0.85rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  background: rgba(0, 229, 255, 0.05);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.1);
+}
+
+.input-field::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+  font-family: inherit;
+  font-size: 0.85rem;
 }
 
 .input-field::-webkit-calendar-picker-indicator {
