@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ShieldAlert, FileText, Plus } from 'lucide-react';
-import { BsTools } from 'react-icons/bs';
+import { LuCircuitBoard } from 'react-icons/lu';
 
 const CriticalSubstationCard = ({ substation, tags, onEditAsset, onAddAsset }) => {
     const activeCount = tags.filter(t => t.is_inforce).length;
@@ -96,7 +96,7 @@ const CriticalSubstationCard = ({ substation, tags, onEditAsset, onAddAsset }) =
                                 boxShadow: '0 0 12px rgba(255, 183, 77, 0.2)'
                             }}
                         >
-                            <BsTools size={12} />
+                            <LuCircuitBoard size={14} />
                         </div>
                     )}
                     <button

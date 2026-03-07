@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Edit2, MapPin, FileText, Upload, AlertTriangle } from 'lucide-react';
 import { BsTools } from 'react-icons/bs';
+import { LuCircuitBoard } from 'react-icons/lu';
 
 const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate, onCriticalClick }) => {
     const handleFileChange = (e) => {
@@ -32,7 +33,7 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate, 
             {/* Header: ID + Name */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span className="mono" style={{ color: substation.voltage >= 500 ? '#ffffff' : (substation.voltage >= 275 ? '#15d5f6ff' : 'var(--accent-cyan)'), fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.5px' }}>
+                    <span className="mono" style={{ color: substation.voltage >= 500 ? '#ffffff' : (substation.voltage >= 275 ? '#15d5f6ff' : (substation.voltage >= 230 ? '#ffa500' : 'var(--accent-cyan)')), fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.5px' }}>
                         {substation.substation_id}
                     </span>
                     <h3 style={{ fontSize: '0.9rem', margin: '2px 0 0 0', lineHeight: '1.2', fontWeight: 600, color: '#fff' }} title={substation.name}>
@@ -55,7 +56,7 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate, 
                                 boxShadow: '0 0 12px rgba(255, 183, 77, 0.2)'
                             }}
                         >
-                            <BsTools size={12} />
+                            <LuCircuitBoard size={14} />
                         </div>
                     )}
                     {substation.is_critical && (

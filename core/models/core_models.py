@@ -23,6 +23,7 @@ class Substation(models.Model):
         ('LSS', 'Large Scale Solar (LSS)'),
         ('IPP', 'Independent Power Producer (IPP)'),
         ('LPC', 'Large Power Consumer (LPC)'),
+        ('Tie-Line', 'Tie-Line'),
     ]
 
     GRID_CHOICES = [
@@ -35,6 +36,7 @@ class Substation(models.Model):
     VOLTAGE_CHOICES = [
         (500, '500 kV'),
         (275, '275 kV'),
+        (230, '230 kV'),
         (132, '132 kV'),
     ]
 

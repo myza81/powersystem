@@ -19,10 +19,8 @@ const SubstationFilter = ({
     const { region, grid, state, voltage, ownership, search, hasRelay, commissionYear, transformerYear } = currentFilters;
     const currentExtraValue = extraValue || ownership;
 
-    // Extract unique values based on current selection hierarchy
+    // Extract unique values based on independent filters
     const uniqueValues = useMemo(() => {
-        let filtered = substations;
-
         const getDecadeRange = (year) => {
             if (!year) return null;
             const startYear = Math.floor((year - 1) / 10) * 10 + 1;
@@ -30,28 +28,36 @@ const SubstationFilter = ({
             return `${startYear}-${endYear}`;
         };
 
-        // Available Regions (always all)
-        const regions = ['All', ...new Set(substations.map(s => s.region).filter(Boolean))].sort();
+        // Regions options: filter substations by grid + state
+        const regionFiltered = substations.filter(s =>
+            (grid === 'All' || s.grid === grid) &&
+            (state === 'All' || s.state === state)
+        );
+        const regions = ['All', ...new Set(regionFiltered.map(s => s.region).filter(Boolean))].sort();
 
-        // Available Grids (depend on Region)
-        if (region !== 'All') {
-            filtered = filtered.filter(s => s.region === region);
-        }
-        const grids = ['All', ...new Set(filtered.map(s => s.grid).sort().filter(Boolean))].sort();
+        // Grids options: filter substations by region + state
+        const gridFiltered = substations.filter(s =>
+            (region === 'All' || s.region === region) &&
+            (state === 'All' || s.state === state)
+        );
+        const grids = ['All', ...new Set(gridFiltered.map(s => s.grid).filter(Boolean))].sort();
 
-        // Available States (depend on Region + Grid)
-        if (grid !== 'All') {
-            filtered = filtered.filter(s => s.grid === grid);
-        }
-        const states = ['All', ...new Set(filtered.map(s => s.state).filter(Boolean))].sort();
+        // States options: filter substations by region + grid
+        const stateFiltered = substations.filter(s =>
+            (region === 'All' || s.region === region) &&
+            (grid === 'All' || s.grid === grid)
+        );
+        const states = ['All', ...new Set(stateFiltered.map(s => s.state).filter(Boolean))].sort();
 
-        // Available Voltages (depend on Region + Grid + State)
-        if (state !== 'All') {
-            filtered = filtered.filter(s => s.state === state);
-        }
-        const voltages = ['All', ...new Set(filtered.map(s => s.voltage).filter(Boolean))].sort((a, b) => b - a);
+        // Voltages: show voltages available in the currently filtered set (by R/G/S)
+        const vFiltered = substations.filter(s =>
+            (region === 'All' || s.region === region) &&
+            (grid === 'All' || s.grid === grid) &&
+            (state === 'All' || s.state === state)
+        );
+        const voltages = ['All', ...new Set(vFiltered.map(s => s.voltage).filter(Boolean))].sort((a, b) => b - a);
 
-        // Ownerships and Decades
+        // Ownerships and Decades (mostly global or semi-global)
         const ownerships = extraOptions || ['All', ...new Set(substations.map(s => s.ownership).filter(Boolean))].sort();
 
         const years = substations.map(s => s.commission_date ? new Date(s.commission_date).getFullYear() : null).filter(Boolean);
@@ -145,8 +151,8 @@ const SubstationFilter = ({
             {/* Basic Filters Row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
                 <FilterDropdown label="Region" value={region} options={uniqueValues.regions} onChange={(v) => updateFilter('region', v)} />
-                <FilterDropdown label="Grid" value={grid} options={uniqueValues.grids} onChange={(v) => updateFilter('grid', v)} disabled={region === 'All'} />
-                <FilterDropdown label="State" value={state} options={uniqueValues.states} onChange={(v) => updateFilter('state', v)} disabled={grid === 'All'} />
+                <FilterDropdown label="Grid" value={grid} options={uniqueValues.grids} onChange={(v) => updateFilter('grid', v)} />
+                <FilterDropdown label="State" value={state} options={uniqueValues.states} onChange={(v) => updateFilter('state', v)} />
                 {showVoltage && <FilterDropdown label="Voltage Level" value={voltage} options={uniqueValues.voltages} onChange={(v) => updateFilter('voltage', v)} suffix=" kV" />}
                 {!showAdvanced && (
                     <FilterDropdown label={extraLabel} value={currentExtraValue} options={uniqueValues.ownerships} onChange={(v) => onExtraChange ? onExtraChange(v) : updateFilter('ownership', v)} />

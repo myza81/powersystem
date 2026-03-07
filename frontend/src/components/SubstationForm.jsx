@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api';
 
 const GRIDS = ['KEDP', 'PPNG', 'PERK', 'SELG', 'KLUM', 'NSEM', 'MLKA', 'JOH2', 'JOH1', 'PHNG', 'TERG', 'KELN'];
-const VOLTAGES = [500, 275, 132];
+const VOLTAGES = [500, 275, 230, 132];
 const LOAD_LV = [33, 22, 11];
 const AUTO_LV = [275, 132];
 
@@ -40,8 +40,8 @@ const pillStyle = (type, value) => {
     let color = 'var(--text-secondary)';
 
     if (type === 'voltage') {
-        bg = value >= 500 ? 'rgba(255,255,255,0.1)' : (value >= 275 ? 'rgba(0, 191, 255, 0.08)' : 'rgba(74, 222, 128, 0.1)');
-        color = value >= 500 ? '#ffffff' : (value >= 275 ? '#15d5f6ff' : 'var(--accent-cyan)');
+        bg = value >= 500 ? 'rgba(255,255,255,0.1)' : (value >= 275 ? 'rgba(0, 191, 255, 0.08)' : (value >= 230 ? 'rgba(255, 165, 0, 0.1)' : 'rgba(74, 222, 128, 0.1)'));
+        color = value >= 500 ? '#ffffff' : (value >= 275 ? '#15d5f6ff' : (value >= 230 ? '#ffa500' : 'var(--accent-cyan)'));
     } else if (type === 'ownership') {
         bg = 'rgba(255, 159, 67, 0.1)';
         color = '#ff9f43';
@@ -63,6 +63,43 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
     const isLSR = type === 'lsr';
     const title = data?.id ? 'Edit' : 'Add';
     const typeLabel = isLSR ? 'Load Shedding Relay' : type === 'load' ? 'Load Transformer' : type === 'auto' ? 'Auto Transformer' : 'Incoming Branch';
+
+    // Calculate available voltages at this substation
+    const availableVoltages = React.useMemo(() => {
+        if (!isLSR) return [];
+        const vSet = new Set();
+        loadTransformers?.forEach(lt => { if (lt.lv_voltage) vSet.add(lt.lv_voltage); });
+        autoTransformers?.forEach(at => { if (at.lv_voltage) vSet.add(at.lv_voltage); });
+        // Assuming incoming branches operate at the substation's primary voltage
+        if (incomingBranches?.length > 0 && substation?.voltage) {
+            vSet.add(substation.voltage);
+        }
+        return Array.from(vSet).sort((a, b) => b - a); // Descending order
+    }, [loadTransformers, autoTransformers, incomingBranches, substation, isLSR]);
+
+    // Handle initial state for editing or default selection
+    React.useEffect(() => {
+        if (isLSR && !assetForm.target_voltage && availableVoltages.length > 0) {
+            // If editing, try to infer target_voltage from existing name or assets
+            let v = availableVoltages[0];
+            if (data?.id && data.relay_name) {
+                const match = data.relay_name.match(/(\d+)kV/);
+                if (match) {
+                    const parsedV = parseInt(match[1]);
+                    if (availableVoltages.includes(parsedV)) v = parsedV;
+                }
+            }
+            setAssetForm(f => ({ ...f, target_voltage: v, relay_name: `${v}kV System` }));
+        }
+    }, [isLSR, availableVoltages, data, assetForm.target_voltage, setAssetForm]);
+
+    const targetV = assetForm.target_voltage;
+
+    // Filter assets based on selected voltage
+    const filteredLTs = React.useMemo(() => loadTransformers?.filter(lt => lt.lv_voltage === targetV) || [], [loadTransformers, targetV]);
+    const filteredATs = React.useMemo(() => autoTransformers?.filter(at => at.lv_voltage === targetV) || [], [autoTransformers, targetV]);
+    const filteredIBs = React.useMemo(() => (substation?.voltage === targetV) ? (incomingBranches || []) : [], [incomingBranches, substation, targetV]);
+
 
     return (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '1rem' }}>
@@ -100,13 +137,31 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.25rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                             <div style={{ gridColumn: 'span 1' }}>
-                                <label style={inputLabelStyle}>Relay Name</label>
-                                <input
-                                    className="input-field mono"
-                                    value={assetForm.relay_name || ''}
-                                    onChange={(e) => setAssetForm(f => ({ ...f, relay_name: e.target.value }))}
-                                    placeholder="e.g., 275kV Main"
-                                />
+                                <label style={inputLabelStyle}>Voltage Level</label>
+                                <select
+                                    className="input-field"
+                                    value={assetForm.target_voltage || ''}
+                                    onChange={(e) => {
+                                        const v = parseInt(e.target.value);
+                                        setAssetForm(f => ({
+                                            ...f,
+                                            target_voltage: v,
+                                            relay_name: `${v}kV System`,
+                                            // Reset selections when voltage changes to prevent accidental cross-voltage assignment
+                                            load_transformers: [],
+                                            auto_transformers: [],
+                                            incoming_branches: []
+                                        }));
+                                    }}
+                                    disabled={!!data?.id} // Disable changing voltage on existing relays to prevent chaos
+                                >
+                                    {availableVoltages.map(v => (
+                                        <option key={v} value={v}>{v}kV</option>
+                                    ))}
+                                </select>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                                    Name: <span style={{ color: 'var(--accent-cyan)' }}>{assetForm.relay_name || '...'}</span>
+                                </div>
                             </div>
                             <div style={{ gridColumn: 'span 1' }}>
                                 <label style={inputLabelStyle}>Status</label>
@@ -134,8 +189,8 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                         <div>
                             <label style={inputLabelStyle}>Load Transformers</label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', alignItems: 'flex-start' }}>
-                                {loadTransformers?.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No load transformers available.</div>}
-                                {loadTransformers?.map((lt) => {
+                                {filteredLTs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No load transformers available for {targetV}kV.</div>}
+                                {filteredLTs.map((lt) => {
                                     const checked = (assetForm.load_transformers || []).includes(lt.id);
                                     const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && r.load_transformers.includes(lt.id));
                                     const isClaimed = !!OWNER;
@@ -164,8 +219,8 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                         <div>
                             <label style={inputLabelStyle}>Auto Transformers</label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', alignItems: 'flex-start' }}>
-                                {autoTransformers?.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No auto transformers available.</div>}
-                                {autoTransformers?.map((at) => {
+                                {filteredATs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No auto transformers available for {targetV}kV.</div>}
+                                {filteredATs.map((at) => {
                                     const checked = (assetForm.auto_transformers || []).includes(at.id);
                                     const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && r.auto_transformers.includes(at.id));
                                     const isClaimed = !!OWNER;
@@ -194,8 +249,8 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                         <div>
                             <label style={inputLabelStyle}>Incoming Branches</label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', alignItems: 'flex-start' }}>
-                                {incomingBranches?.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No branches available.</div>}
-                                {incomingBranches?.map((ib) => {
+                                {filteredIBs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No branches available for {targetV}kV.</div>}
+                                {filteredIBs.map((ib) => {
                                     const checked = (assetForm.incoming_branches || []).includes(ib.id);
                                     const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && r.incoming_branches.includes(ib.id));
                                     const isClaimed = !!OWNER;
@@ -416,6 +471,32 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, status, loa
                 }
             }
         }
+
+        // --- NEW: LSR Voltage Duplication Validation ---
+        if (type === 'lsr' && typeof assetForm.target_voltage === 'number') {
+            const isEditing = !!editingAsset?.data?.id;
+
+            // Check if ANY *other* relay has this voltage as its name or target
+            const voltageConflict = loadSheddingRelays.find(relay => {
+                if (isEditing && relay.id === editingAsset.data.id) return false;
+
+                // If it already matches our target name exactly
+                if (relay.relay_name === `${assetForm.target_voltage}kV System`) return true;
+
+                // If we want to be even stricter, we could check the relay's assets 
+                // but checking the name is standard for the new design.
+                return false;
+            });
+
+            if (voltageConflict) {
+                setAssetStatus({
+                    type: 'error',
+                    msg: `A relay for ${assetForm.target_voltage}kV already exists ('${voltageConflict.relay_name}'). Please edit the existing relay instead of creating a duplicate.`
+                });
+                return;
+            }
+        }
+        // --- END LSR Validation ---
 
         setAssetLoading(true);
         try {
@@ -823,6 +904,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, status, loa
                                                         <option value="LSS">Large Scale Solar (LSS)</option>
                                                         <option value="IPP">Independent Power Producer (IPP)</option>
                                                         <option value="LPC">Large Power Consumer (LPC)</option>
+                                                        <option value="Tie-Line">Tie-Line</option>
                                                     </select>
                                                 </div>
 
