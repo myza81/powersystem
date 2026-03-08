@@ -37,12 +37,56 @@ class LoadSheddingStageSerializer(serializers.ModelSerializer):
         model = LoadSheddingStage
         fields = ['id', 'version', 'stage_number', 'label', 'settings', 'setting_ids']
 
+    def validate(self, data):
+        version = data.get('version') or (self.instance.version if self.instance else None)
+        new_settings = data.get('settings', [])
+        
+        if version:
+            # Check for duplicate settings set in this version
+            new_set = set(s.id for s in new_settings)
+            existing_stages = LoadSheddingStage.objects.filter(version=version)
+            if self.instance:
+                existing_stages = existing_stages.exclude(id=self.instance.id)
+            
+            for stage in existing_stages:
+                existing_set = set(stage.settings.values_list('id', flat=True))
+                if existing_set == new_set and new_set: # Only block if non-empty (EMLS is handled separately)
+                    raise serializers.ValidationError({"setting_ids": "A stage with this exact combination of settings already exists in this version."})
+        
+        return data
+    def create(self, validated_data):
+        setting_objects = validated_data.pop('settings', [])
+        stage = LoadSheddingStage.objects.create(**validated_data)
+        
+        for setting in setting_objects:
+            LoadSheddingStageSetting.objects.create(
+                stage=stage,
+                setting=setting,
+                version=stage.version
+            )
+        return stage
+
+    def update(self, instance, validated_data):
+        setting_objects = validated_data.pop('settings', None)
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        if setting_objects is not None:
+            LoadSheddingStageSetting.objects.filter(stage=instance).delete()
+            for setting in setting_objects:
+                LoadSheddingStageSetting.objects.create(
+                    stage=instance,
+                    setting=setting,
+                    version=instance.version
+                )
+        return instance
+
     def validate(self, attrs):
         if self.instance is None:
             setting_ids = attrs.get('settings')
             if not setting_ids:
-                # Optional: EMLS stages skip this check in model clean, 
-                # but serializer can be more strict or check version type
                 pass
         return attrs
 
@@ -114,8 +158,20 @@ class LoadSheddingVersionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['version', 'published_at', 'published_by', 'created_by', 'created_at', 'updated_at']
 
+    def validate(self, attrs):
+        if self.instance:
+            # Check for immutable fields after creation
+            for field in ['scheme_type', 'review_year', 'notes']:
+                if field in attrs and attrs[field] != getattr(self.instance, field):
+                    raise serializers.ValidationError({
+                        field: f"The {field.replace('_', ' ')} cannot be changed once a version is created to maintain data integrity."
+                    })
+        return attrs
+
     def create(self, validated_data):
-        validated_data['created_by'] = self.context['request'].user
+        # Optional: ensure user is set if not provided (though get_queryset usually handles permissions)
+        if 'request' in self.context and self.context['request'].user:
+            validated_data['created_by'] = self.context['request'].user
         return super().create(validated_data)
 
 

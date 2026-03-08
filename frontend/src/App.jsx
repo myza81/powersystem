@@ -301,7 +301,7 @@ const App = () => {
                     </motion.div>
                 )}
 
-                {view !== 'critical-substations' && (
+                {view !== 'critical-substations' && view !== 'load-shedding-designer' && (
                     <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                             <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
@@ -313,7 +313,6 @@ const App = () => {
                                 {view === 'snapshots' && 'Network Analysis'}
                                 {view === 'dev-tools' && 'Developer Tools'}
                                 {view === 'load-shedding-viewer' && 'Load Shedding Viewer'}
-                                {view === 'load-shedding-designer' && 'Load Shedding Designer'}
                             </h2>
                         </div>
                     </header>

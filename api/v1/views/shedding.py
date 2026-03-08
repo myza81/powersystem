@@ -35,6 +35,46 @@ class LoadSheddingSettingViewSet(BaseSheddingViewSet):
     queryset = LoadSheddingSetting.objects.all()
     serializer_class = LoadSheddingSettingSerializer
 
+    def get_permissions(self):
+        # Allow creating for all authenticated (or Any in debug)
+        # But restrict delete/update to staff
+        if self.action in ['destroy', 'update', 'partial_update']:
+            if settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}:
+                return [permissions.AllowAny()]
+            return [permissions.IsAdminUser()]
+        return super().get_permissions()
+
+    def _check_in_use(self, instance):
+        from core.models import LoadSheddingStageSetting
+        in_use = LoadSheddingStageSetting.objects.filter(
+            setting=instance,
+            version__status__in=['active', 'deactivated']
+        ).exists()
+        if in_use:
+            raise Response({"error": "This setting is in use by a published version and cannot be modified or deleted."}, status=status.HTTP_400_BAD_VALUE_BASED_LOGIC)
+        return False
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        from core.models import LoadSheddingStageSetting
+        if LoadSheddingStageSetting.objects.filter(setting=instance, version__status__in=['active', 'deactivated']).exists():
+            return Response({"error": "This setting is in use by a published version and cannot be deleted."}, status=status.HTTP_400_BAD_REQUEST)
+        return super().destroy(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        from core.models import LoadSheddingStageSetting
+        if LoadSheddingStageSetting.objects.filter(setting=instance, version__status__in=['active', 'deactivated']).exists():
+            return Response({"error": "This setting is in use by a published version and cannot be modified."}, status=status.HTTP_400_BAD_REQUEST)
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        from core.models import LoadSheddingStageSetting
+        if LoadSheddingStageSetting.objects.filter(setting=instance, version__status__in=['active', 'deactivated']).exists():
+            return Response({"error": "This setting is in use by a published version and cannot be modified."}, status=status.HTTP_400_BAD_REQUEST)
+        return super().partial_update(request, *args, **kwargs)
+
 
 class LoadSheddingVersionViewSet(BaseSheddingViewSet):
     queryset = LoadSheddingVersion.objects.all()
@@ -43,11 +83,15 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if not user or user.is_anonymous:
+        
+        # For development with DJANGO_PUBLIC_API, act as staff
+        is_dev_admin = settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}
+
+        if (not user or user.is_anonymous) and not is_dev_admin:
             return LoadSheddingVersion.objects.none()
         
         # Admins can see everything
-        if user.is_staff:
+        if getattr(user, 'is_staff', False) or is_dev_admin:
             return LoadSheddingVersion.objects.all()
         
         # Global scope for active/deactivated, user scope for drafts
@@ -98,47 +142,52 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
         )
         
         # Clone nested data
-        for stage in original.stages.all():
-            old_stage_id = stage.id
-            stage.pk = None
-            stage.id = None
-            stage.version = new_version
-            stage.save()
+        for original_stage in original.stages.all():
+            old_stage_id = original_stage.id
+            
+            # Create new stage
+            new_stage = LoadSheddingStage.objects.create(
+                version=new_version,
+                stage_number=original_stage.stage_number,
+                label=original_stage.label
+            )
             
             # Clone Settings
             from core.models import LoadSheddingStageSetting
             for ss in LoadSheddingStageSetting.objects.filter(stage_id=old_stage_id):
                 LoadSheddingStageSetting.objects.create(
-                    stage=stage,
+                    stage=new_stage,
                     setting=ss.setting,
                     version=new_version
                 )
             
             # Clone Transformer Bays
-            for tb in stage.transformer_bays.all():
+            for tb in original_stage.transformer_bays.all():
                 old_tb_transformers = list(tb.transformers.all())
-                tb.pk = None
-                tb.id = None
-                tb.stage = stage
-                tb.save()
-                tb.transformers.set(old_tb_transformers)
+                new_tb = LoadSheddingTransformerBay.objects.create(
+                    stage=new_stage,
+                    relay=tb.relay
+                )
+                new_tb.transformers.set(old_tb_transformers)
             
             # Clone Pocket Bays
-            for pb in stage.pocket_bays.all():
+            for pb in original_stage.pocket_bays.all():
                 old_pb_id = pb.id
-                pb.pk = None
-                pb.id = None
-                pb.stage = stage
-                pb.save()
+                new_pb = LoadSheddingPocketBay.objects.create(
+                    stage=new_stage,
+                    topology_cache=pb.topology_cache,
+                    topology_valid=pb.topology_valid,
+                    topology_alert=pb.topology_alert
+                )
                 
                 from core.models import LoadSheddingPocketBoundary
                 for boundary in LoadSheddingPocketBoundary.objects.filter(pocket_id=old_pb_id):
                     old_branches = list(boundary.branches.all())
-                    boundary.pk = None
-                    boundary.id = None
-                    boundary.pocket = pb
-                    boundary.save()
-                    boundary.branches.set(old_branches)
+                    new_boundary = LoadSheddingPocketBoundary.objects.create(
+                        pocket=new_pb,
+                        relay=boundary.relay
+                    )
+                    new_boundary.branches.set(old_branches)
 
         return Response(self.get_serializer(new_version).data, status=status.HTTP_201_CREATED)
 

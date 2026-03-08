@@ -397,7 +397,7 @@ class LoadSheddingSetting(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['scheme_type', 'threshold', 'time_delay']
+        ordering = ['-threshold', 'time_delay']
         constraints = [
             models.UniqueConstraint(
                 fields=['scheme_type', 'threshold', 'time_delay'],
@@ -526,6 +526,12 @@ class LoadSheddingStage(models.Model):
 
     class Meta:
         ordering = ['version', 'stage_number']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['version', 'stage_number'],
+                name='uniq_stage_per_version'
+            ),
+        ]
         verbose_name = "Load Shedding Stage"
         verbose_name_plural = "Load Shedding Stages"
 
@@ -542,17 +548,15 @@ class LoadSheddingStage(models.Model):
         Enforce that UFLS/UVLS stages must have at least one setting.
         EMLS stages are exempt — they use bay mappings without threshold/delay settings.
         """
-        if not self.pk:
-            return  # M2M can't be queried before pk exists; enforced via admin formset
+        if self._state.adding:
+            return  # M2M can't be queried before the instance is saved; enforced via admin formset
         try:
             scheme_type = self.version.scheme_type
         except Exception:
             return
         if scheme_type != LoadSheddingSchemeType.EMLS:
             if not self.settings.exists():
-                raise ValidationError(
-                    {"settings": "At least one setting is required for UFLS/UVLS stages."}
-                )
+                raise ValidationError("At least one setting is required for UFLS/UVLS stages.")
 
 
 class LoadSheddingStageSetting(models.Model):

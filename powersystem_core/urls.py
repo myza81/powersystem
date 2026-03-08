@@ -39,6 +39,7 @@ from api.v1.views.shedding import (
     LoadSheddingPocketBoundaryViewSet,
 )
 from api.v1.views.topology import TopologyViewSet
+from api.v1.views.users import CurrentUserView
 
 router = DefaultRouter()
 router.register(r'substations', SubstationViewSet)
@@ -62,6 +63,7 @@ router.register(r'load-shedding-pocket-boundaries', LoadSheddingPocketBoundaryVi
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/v1/users/me/', CurrentUserView.as_view(), name='current-user'),
     path('api/v1/', include(router.urls)),
 ]
 
