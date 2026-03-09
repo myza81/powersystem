@@ -16,7 +16,9 @@ import {
     X,
     FolderOpen,
     Play,
-    Lock
+    Lock,
+    Square,
+    CheckSquare
 } from 'lucide-react';
 import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes } from 'react-icons/fa6';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -1039,6 +1041,14 @@ const LoadSheddingDesigner = () => {
                                     const rId = `relay-${relay.id}`;
                                     const isExpanded = expandedNodes.has(rId);
 
+                                    let assignedStageLabel = null;
+                                    for (const stage of stages) {
+                                        if (stage.transformer_bays && stage.transformer_bays.some(bay => String(bay.relay) === String(relay.id))) {
+                                            assignedStageLabel = stage.label || `Stage ${stage.stage_number}`;
+                                            break;
+                                        }
+                                    }
+
                                     // CALCULATE TOTAL MW for this relay
                                     let totalMw = 0;
                                     let isTxDataLoading = false;
@@ -1080,7 +1090,7 @@ const LoadSheddingDesigner = () => {
                                             <div
                                                 onClick={() => handleExpandRelay(relay.id, sub.substation_id)}
                                                 style={{
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                    display: 'flex', flexDirection: 'column', gap: '0.4rem',
                                                     padding: '0.4rem 0.5rem', paddingLeft: `${0.5 + paddingLevel * 1}rem`,
                                                     cursor: 'pointer', borderRadius: '4px',
                                                     background: 'transparent',
@@ -1088,22 +1098,44 @@ const LoadSheddingDesigner = () => {
                                                 }}
                                                 className="hover-glow"
                                             >
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    {isExpanded ? <ChevronDown size={14} color="var(--accent-cyan)" /> : <ChevronRight size={14} color="var(--accent-cyan)" />}
-                                                    <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{(relay.relay_name || 'System Relay').replace(' System', '')}</span>
-                                                </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    {mwBadge}
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); addTransformerToStage(relay); }}
-                                                        style={{
-                                                            background: 'rgba(0, 255, 163, 0.1)', border: 'none', color: 'var(--accent-cyan)',
-                                                            padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer',
-                                                            textTransform: 'uppercase'
-                                                        }}
-                                                    >
-                                                        Add
-                                                    </button>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                                    {/* Row 1: Chevron, Checkbox, Voltage, and MW */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <div
+                                                            style={{ display: 'flex', alignItems: 'center', padding: '0.2rem', marginLeft: '-0.2rem' }}
+                                                        >
+                                                            {isExpanded ? <ChevronDown size={14} color="var(--accent-cyan)" /> : <ChevronRight size={14} color="var(--accent-cyan)" />}
+                                                        </div>
+                                                        <div
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (!assignedStageLabel) addTransformerToStage(relay);
+                                                            }}
+                                                            style={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                cursor: assignedStageLabel ? 'not-allowed' : 'pointer',
+                                                                opacity: assignedStageLabel ? 0.5 : 1
+                                                            }}
+                                                        >
+                                                            {assignedStageLabel ? <CheckSquare size={14} color="var(--text-secondary)" /> : <Square size={14} color="var(--accent-cyan)" />}
+                                                        </div>
+                                                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: assignedStageLabel ? 'var(--text-secondary)' : 'var(--accent-cyan)' }}>
+                                                            {(relay.relay_name || 'System Relay').replace(' System', '')}
+                                                        </span>
+                                                        <div style={{ marginLeft: 'auto' }}>
+                                                            {mwBadge}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Row 2: Stage Label (if assigned) */}
+                                                    {assignedStageLabel && (
+                                                        <div style={{ paddingLeft: '2.5rem' }}>
+                                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                                                Assigned: {assignedStageLabel}
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
 
