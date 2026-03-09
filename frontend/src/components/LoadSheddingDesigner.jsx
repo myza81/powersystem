@@ -18,7 +18,8 @@ import {
     Play,
     Lock,
     Square,
-    CheckSquare
+    CheckSquare,
+    RefreshCw
 } from 'lucide-react';
 import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes } from 'react-icons/fa6';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,7 +34,22 @@ const formatDate = (ds) => {
 const LoadSheddingDesigner = () => {
     // --- Global State ---
     const [currentUser, setCurrentUser] = useState(null);
-    const [view, setView] = useState('manager'); // 'manager' | 'designer'
+
+    const getInitialState = (key, defaultVal) => {
+        try {
+            const stored = sessionStorage.getItem('ls_draft_state');
+            if (stored) {
+                if (key === 'view') return 'designer'; // If a draft exists, force user back into designer
+                const parsed = JSON.parse(stored);
+                if (parsed[key] !== undefined) return parsed[key];
+            }
+        } catch (e) {
+            console.error("Error reading sessionStorage", e);
+        }
+        return defaultVal;
+    };
+
+    const [view, setView] = useState(() => getInitialState('view', 'manager')); // 'manager' | 'designer'
     const [activeTab, setActiveTab] = useState('stages'); // 'stages' | 'settings'
     const [loading, setLoading] = useState(true);
 
@@ -44,14 +60,15 @@ const LoadSheddingDesigner = () => {
 
     // --- Designer Workspace State ---
     const [substations, setSubstations] = useState([]);
-    const [detailedSubstations, setDetailedSubstations] = useState({});
     const [expandedNodes, setExpandedNodes] = useState(new Set());
-    const [activeVersionId, setActiveVersionId] = useState(null); // The ID of the current draft/version
-    const [schemeType, setSchemeType] = useState('UFLS');
-    const [versionLabel, setVersionLabel] = useState(''); // Used as notes/label
-    const [reviewYear, setReviewYear] = useState(new Date().getFullYear());
-    const [stages, setStages] = useState([{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], setting_ids: [] }]);
-    const [activeStageIdx, setActiveStageIdx] = useState(0);
+
+    const [activeVersionId, setActiveVersionId] = useState(() => getInitialState('activeVersionId', null));
+    const [schemeType, setSchemeType] = useState(() => getInitialState('schemeType', 'UFLS'));
+    const [versionLabel, setVersionLabel] = useState(() => getInitialState('versionLabel', ''));
+    const [reviewYear, setReviewYear] = useState(() => getInitialState('reviewYear', new Date().getFullYear()));
+    const [stages, setStages] = useState(() => getInitialState('stages', [{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], setting_ids: [] }]));
+    const [activeStageIdx, setActiveStageIdx] = useState(() => getInitialState('activeStageIdx', 0));
+    const [detailedSubstations, setDetailedSubstations] = useState(() => getInitialState('detailedSubstations', {}));
 
     const [saving, setSaving] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -104,11 +121,22 @@ const LoadSheddingDesigner = () => {
         fetchMasterData();
     }, [view]); // Refresh when going back to manager
 
+    // --- Session Storage Auto-Save ---
+    useEffect(() => {
+        if (view === 'designer') {
+            const draftState = {
+                activeVersionId, schemeType, versionLabel, reviewYear, stages, activeStageIdx, detailedSubstations
+            };
+            sessionStorage.setItem('ls_draft_state', JSON.stringify(draftState));
+        }
+    }, [activeVersionId, schemeType, versionLabel, reviewYear, stages, activeStageIdx, detailedSubstations, view]);
+
     // ==========================================
     // VERSION MANAGER LOGIC
     // ==========================================
 
     const handleCreateNew = () => {
+        sessionStorage.removeItem('ls_draft_state');
         setSchemeType('UFLS');
         setReviewYear(new Date().getFullYear());
         setVersionLabel('');
@@ -298,6 +326,27 @@ const LoadSheddingDesigner = () => {
         }
     };
 
+    const refreshStageData = async (stageIdx) => {
+        const stage = stages[stageIdx];
+        if (!stage || !stage.transformer_bays) return;
+
+        const subIds = [...new Set(stage.transformer_bays.map(b => b.relay_substation_id))];
+
+        for (const subId of subIds) {
+            try {
+                const [res, txRes] = await Promise.all([
+                    api.get(`/substations/${subId}/`),
+                    api.get(`/load-transformers/?substation=${subId}`)
+                ]);
+                const data = res.data;
+                data.db_transformers = txRes.data;
+                setDetailedSubstations(prev => ({ ...prev, [subId]: data }));
+            } catch (err) {
+                console.error(`Failed to refresh sub data mapping for ${subId}`, err);
+            }
+        }
+    };
+
     const handleSaveWorkspace = async () => {
         setSaving(true);
         try {
@@ -346,6 +395,7 @@ const LoadSheddingDesigner = () => {
                     });
                 }
             }
+            sessionStorage.removeItem('ls_draft_state');
             alert("Draft saved successfully!");
         } catch (err) {
             console.error("Failed to save scheme", err);
@@ -821,8 +871,22 @@ const LoadSheddingDesigner = () => {
                                     <h4 style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
                                         <FaBolt size={14} style={{ color: 'var(--accent-cyan)' }} /> Transformer Bays
                                     </h4>
-                                    <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>
-                                        {calculateTotalMW(stages[activeStageIdx])} {calculateTotalMW(stages[activeStageIdx]) === "Loading..." ? "" : "MW"}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>
+                                            {calculateTotalMW(stages[activeStageIdx])} {calculateTotalMW(stages[activeStageIdx]) === "Loading..." ? "" : "MW"}
+                                        </div>
+                                        <button
+                                            title="Fetch detailed bay mapping data"
+                                            onClick={() => refreshStageData(activeStageIdx)}
+                                            style={{
+                                                background: 'rgba(0, 255, 163, 0.1)', border: '1px solid rgba(0, 255, 163, 0.2)', color: 'var(--accent-cyan)',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                padding: '4px', borderRadius: '4px', cursor: 'pointer'
+                                            }}
+                                            className="hover-glow"
+                                        >
+                                            <RefreshCw size={14} />
+                                        </button>
                                     </div>
                                 </div>
 
