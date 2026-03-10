@@ -517,6 +517,7 @@ class LoadSheddingStage(models.Model):
     version = models.ForeignKey(LoadSheddingVersion, on_delete=models.CASCADE, related_name='stages')
     stage_number = models.IntegerField()
     label = models.CharField(max_length=20, blank=True)
+    target_mw = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
     settings = models.ManyToManyField(
         LoadSheddingSetting,
         through='LoadSheddingStageSetting',

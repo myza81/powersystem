@@ -19,8 +19,10 @@ import {
     Lock,
     Square,
     CheckSquare,
-    RefreshCw
+    RefreshCw,
+    BarChart
 } from 'lucide-react';
+import BulletChart from './BulletChart';
 import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes } from 'react-icons/fa6';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api';
@@ -66,15 +68,18 @@ const LoadSheddingDesigner = () => {
     const [schemeType, setSchemeType] = useState(() => getInitialState('schemeType', 'UFLS'));
     const [versionLabel, setVersionLabel] = useState(() => getInitialState('versionLabel', ''));
     const [reviewYear, setReviewYear] = useState(() => getInitialState('reviewYear', new Date().getFullYear()));
-    const [stages, setStages] = useState(() => getInitialState('stages', [{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], setting_ids: [] }]));
+    const [stages, setStages] = useState(() => getInitialState('stages', [{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], setting_ids: [], target_mw: 0.0 }]));
     const [activeStageIdx, setActiveStageIdx] = useState(() => getInitialState('activeStageIdx', 0));
     const [detailedSubstations, setDetailedSubstations] = useState(() => getInitialState('detailedSubstations', {}));
 
     const [saving, setSaving] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [gridData, setGridData] = useState(null);
+    const [fetchingAnalytics, setFetchingAnalytics] = useState(false);
 
     // --- Settings Modal & Tab State ---
     const [showStageSettingsModal, setShowStageSettingsModal] = useState(false);
+    const [activeStageSettingsTab, setActiveStageSettingsTab] = useState('general'); // 'general' | 'metrics'
 
     // Inline add setting form
     const [newSettingThreshold, setNewSettingThreshold] = useState('');
@@ -97,7 +102,17 @@ const LoadSheddingDesigner = () => {
 
     const fetchMasterData = async () => {
         setLoading(true);
+        setFetchingAnalytics(true);
         try {
+            // Fetch load analytics (System Total and Regional Breakdown)
+            api.get('/load-analytics/aggregate/?level=grid').then(res => {
+                setGridData(res.data);
+                setFetchingAnalytics(false);
+            }).catch(err => {
+                console.error("Failed to fetch grid analytics", err);
+                setFetchingAnalytics(false);
+            });
+
             const [userRes, relayRes, versionRes, settingsRes, subsRes] = await Promise.all([
                 api.get('/users/me/'),
                 api.get('/load-shedding-relays/'),
@@ -167,6 +182,7 @@ const LoadSheddingDesigner = () => {
                             id: stageData.id,
                             stage_number: stageData.stage_number,
                             label: stageData.label,
+                            target_mw: stageData.target_mw || 0,
                             setting_ids: (stageData.settings || []).map(stg => stg.id),
                             transformer_bays: stageData.transformer_bays || [],
                             pocket_bays: stageData.pocket_bays || []
@@ -177,7 +193,7 @@ const LoadSheddingDesigner = () => {
                 detailedStages.sort((a, b) => a.stage_number - b.stage_number);
                 setStages(detailedStages);
             } else {
-                setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], setting_ids: [] }]);
+                setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', target_mw: 0.0, transformer_bays: [], pocket_bays: [], setting_ids: [] }]);
             }
             setActiveStageIdx(0);
             setView('designer');
@@ -259,7 +275,8 @@ const LoadSheddingDesigner = () => {
             label: newStageLabel,
             transformer_bays: [],
             pocket_bays: [],
-            setting_ids: newStageSettings
+            setting_ids: newStageSettings,
+            target_mw: 0.0
         };
         setStages([...stages, newStageObj]);
         setActiveStageIdx(stages.length);
@@ -301,12 +318,18 @@ const LoadSheddingDesigner = () => {
             return;
         }
 
-        active.transformer_bays.push({
+        const activeBays = [...active.transformer_bays, {
             id: 'temp_' + Date.now(),
             relay: relay.id,
             relay_substation_id: relay.substation, // <-- BUG FIX: It's relay.substation not substation_id mapped in Relay model
             transformers: (relay.load_transformers || []).map(tId => ({ id: tId })) // Store minimal ref
-        });
+        }];
+
+        currentStages[activeStageIdx] = {
+            ...currentStages[activeStageIdx],
+            transformer_bays: activeBays
+        };
+
         setStages(currentStages);
 
         // Fetch exact substation data if not loaded via tree expansion
@@ -382,6 +405,7 @@ const LoadSheddingDesigner = () => {
                     version: vId,
                     stage_number: stage.stage_number,
                     label: stage.label,
+                    target_mw: stage.target_mw || 0,
                     setting_ids: stage.setting_ids
                 });
                 const stageId = stageRes.data.id;
@@ -512,6 +536,33 @@ const LoadSheddingDesigner = () => {
 
         if (anyLoading && total === 0) return "Loading...";
         return total.toFixed(2);
+    };
+    const calculateRegionalMW = (stage, region) => {
+        if (!stage || !region) return 0;
+        let total = 0;
+
+        stage.transformer_bays?.forEach(bay => {
+            const subId = bay.relay_substation_id;
+            const sub = substations.find(s => s.substation_id === subId);
+            if (!sub || sub.region !== region) return;
+
+            const detail = detailedSubstations[subId];
+            if (!detail || !detail.transformers || !detail.db_transformers) return;
+
+            bay.transformers?.forEach(transformerObj => {
+                const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
+                const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
+                if (dbTx) {
+                    const expectedName = `TX T${dbTx.transformer_no}`;
+                    const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                    if (tx && tx.load_mw != null) {
+                        total += parseFloat(tx.load_mw);
+                    }
+                }
+            });
+        });
+
+        return total;
     };
 
     const isStaff = currentUser?.is_staff || false;
@@ -723,9 +774,9 @@ const LoadSheddingDesigner = () => {
 
             {/* TAB: STAGE DESIGNER */}
             {activeTab === 'stages' && (
-                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '1.5rem', overflow: 'hidden' }}>
+                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(24, 1fr)', gap: '1.5rem', overflow: 'hidden' }}>
                     {/* Left Sidebar: Scheme Settings & Stages */}
-                    <div style={{ gridColumn: 'span 3', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
+                    <div style={{ gridColumn: 'span 5', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
                         <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Profile</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -817,7 +868,7 @@ const LoadSheddingDesigner = () => {
                     </div>
 
                     {/* Middle: Content Builder */}
-                    <div className="glass-card" style={{ gridColumn: 'span 6', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', padding: 0 }}>
+                    <div className="glass-card" style={{ gridColumn: 'span 13', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', padding: 0 }}>
                         <div style={{ padding: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
                                 <div style={{ padding: '0.5rem', background: 'rgba(0, 255, 163, 0.1)', borderRadius: '8px', color: 'var(--accent-cyan)' }}>
@@ -863,6 +914,68 @@ const LoadSheddingDesigner = () => {
                                 )}
                             </div>
                         </div>
+
+                        {/* STAGE METRICS SUMMARY */}
+                        {gridData && stages[activeStageIdx]?.target_mw > 0 && (
+                            <div style={{
+                                padding: '1rem 1.25rem',
+                                background: 'rgba(255,255,255,0.02)',
+                                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                flexDirection: 'column',
+                                gap: '1rem'
+                            }}>
+                                <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                                        <div>
+                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', fontWeight: 600 }}>Fairness Metrics</div>
+                                            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                                                {calculateTotalMW(stages[activeStageIdx])}
+                                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 400, marginLeft: '4px' }}>
+                                                    / {stages[activeStageIdx].target_mw} MW
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        className="btn-secondary"
+                                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.7rem', whiteSpace: 'nowrap' }}
+                                        onClick={() => {
+                                            setActiveStageSettingsTab('metrics');
+                                            setShowStageSettingsModal(true);
+                                        }}
+                                    >
+                                        <BarChart size={12} style={{ marginRight: '4px' }} /> Details
+                                    </button>
+                                </div>
+                                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1.5rem' }}>
+                                    {gridData.regional_breakdown.map(reg => {
+                                        const overallRatio = stages[activeStageIdx].target_mw / gridData.total_pload_mw;
+                                        const regTarget = reg.total_pload_mw * overallRatio;
+                                        const regActual = calculateRegionalMW(stages[activeStageIdx], reg.region);
+                                        const regProgress = regTarget > 0 ? (regActual / regTarget) * 100 : 0;
+
+                                        return (
+                                            <div key={reg.region} style={{ width: '100%' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '4px' }}>
+                                                    <span style={{ color: 'var(--text-secondary)' }}>{reg.region}</span>
+                                                    <span style={{ color: '#fff', fontWeight: 600 }}>{regProgress.toFixed(0)}%</span>
+                                                </div>
+                                                <div style={{ height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden', width: '100%' }}>
+                                                    <div style={{
+                                                        height: '100%',
+                                                        width: `${Math.min(regProgress, 100)}%`,
+                                                        background: regProgress > 105 ? '#EF4444' : (regProgress > 90 ? 'var(--accent-cyan)' : '#3B82F6'),
+                                                        transition: 'width 0.4s ease-out'
+                                                    }} />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '4rem' }}>
                             {/* Transformer Assignment */}
@@ -921,14 +1034,14 @@ const LoadSheddingDesigner = () => {
 
                                         return (
                                             <div key={bay.id} style={{
-                                                display: 'flex', alignItems: 'center', gap: '0.4rem',
-                                                padding: '0.3rem 0.4rem 0.3rem 0.5rem', borderRadius: '16px',
+                                                display: 'flex', alignItems: 'center', gap: '0.3rem',
+                                                padding: '0.1rem 0.2rem 0.1rem 0.3rem', borderRadius: '12px',
                                                 background: 'rgba(0, 255, 163, 0.05)', border: '1px solid rgba(0, 255, 163, 0.2)'
                                             }}>
-                                                <FaBolt size={10} style={{ color: 'var(--accent-cyan)' }} />
-                                                <div style={{ fontSize: '0.75rem', fontWeight: 600, fontFamily: 'monospace', color: '#fff' }}>{subId}</div>
+                                                <FaBolt size={8} style={{ color: 'var(--accent-cyan)' }} />
+                                                <div style={{ fontSize: '0.7rem', fontWeight: 600, fontFamily: 'monospace', color: '#fff' }}>{subId}</div>
                                                 <div style={{
-                                                    fontSize: '0.7rem',
+                                                    fontSize: '0.65rem',
                                                     color: 'var(--accent-cyan)',
                                                     fontWeight: 600,
                                                     paddingLeft: '0.2rem',
@@ -939,7 +1052,12 @@ const LoadSheddingDesigner = () => {
                                                 <button
                                                     onClick={() => {
                                                         const newStages = [...stages];
-                                                        newStages[activeStageIdx].transformer_bays.splice(idx, 1);
+                                                        const newBays = [...newStages[activeStageIdx].transformer_bays];
+                                                        newBays.splice(idx, 1);
+                                                        newStages[activeStageIdx] = {
+                                                            ...newStages[activeStageIdx],
+                                                            transformer_bays: newBays
+                                                        };
                                                         setStages(newStages);
                                                     }}
                                                     style={{
@@ -999,7 +1117,7 @@ const LoadSheddingDesigner = () => {
                     </div>
 
                     {/* Right: Asset Library */}
-                    <div className="glass-card" style={{ gridColumn: 'span 3', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+                    <div className="glass-card" style={{ gridColumn: 'span 6', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
                         <div style={{ padding: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                             <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.75rem' }}>Asset Library</div>
                             <div style={{ position: 'relative' }}>
@@ -1021,7 +1139,7 @@ const LoadSheddingDesigner = () => {
                                 const term = searchTerm.toLowerCase();
 
                                 relays.forEach(relay => {
-                                    const sub = substations.find(s => s.substation_id === relay.substation);
+                                    const sub = substations.find(s => s.substation_id === (relay.substation_id || relay.substation));
                                     if (!sub) return;
 
                                     const region = sub.region || 'Unknown Region';
@@ -1055,7 +1173,6 @@ const LoadSheddingDesigner = () => {
                                     const rId = `relay-${relayId}`;
                                     toggleNode(rId);
 
-                                    // If already fetching or fetched, return
                                     if (detailedSubstations[subId]) return;
 
                                     try {
@@ -1113,16 +1230,10 @@ const LoadSheddingDesigner = () => {
                                         }
                                     }
 
-                                    // CALCULATE TOTAL MW for this relay
                                     let totalMw = 0;
-                                    let isTxDataLoading = false;
-                                    let isTxDataAvailable = false;
-                                    let txCount = 0;
-
                                     const detail = detailedSubstations[sub.substation_id];
 
                                     (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).forEach(transformerId => {
-                                        txCount++;
                                         if (detail && detail.transformers && detail.db_transformers) {
                                             const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
                                             if (dbTx) {
@@ -1130,167 +1241,109 @@ const LoadSheddingDesigner = () => {
                                                 const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
                                                 if (tx && tx.load_mw != null) {
                                                     totalMw += parseFloat(tx.load_mw);
-                                                    isTxDataAvailable = true;
                                                 }
                                             }
-                                        } else if (expandedNodes.has(rId) && !detail) {
-                                            isTxDataLoading = true;
                                         }
                                     });
-
-                                    let mwBadge = null;
-                                    if (txCount > 0) {
-                                        if (isTxDataAvailable) {
-                                            mwBadge = <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', background: 'rgba(0, 255, 163, 0.1)', padding: '2px 6px', borderRadius: '4px', color: 'var(--accent-cyan)', fontWeight: 'bold' }}>{totalMw.toFixed(2)} MW</span>;
-                                        } else if (isTxDataLoading) {
-                                            mwBadge = <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.05)', padding: '2px 6px', borderRadius: '4px', color: 'var(--text-secondary)' }}>Loading...</span>;
-                                        } else if (!detail) {
-                                            mwBadge = <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.05)', padding: '2px 6px', borderRadius: '4px', color: 'var(--text-secondary)' }}>-- MW</span>;
-                                        }
-                                    }
 
                                     return (
                                         <div key={relay.id} style={{ display: 'flex', flexDirection: 'column' }}>
                                             <div
                                                 onClick={() => handleExpandRelay(relay.id, sub.substation_id)}
                                                 style={{
-                                                    display: 'flex', flexDirection: 'column', gap: '0.4rem',
                                                     padding: '0.4rem 0.5rem', paddingLeft: `${0.5 + paddingLevel * 1}rem`,
-                                                    cursor: 'pointer', borderRadius: '4px',
-                                                    background: 'transparent',
-                                                    transition: 'background 0.2s'
+                                                    cursor: 'pointer', borderRadius: '4px', transition: 'background 0.2s'
                                                 }}
                                                 className="hover-glow"
                                             >
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                                                    {/* Row 1: Chevron, Checkbox, Voltage, and MW */}
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                        <div
-                                                            style={{ display: 'flex', alignItems: 'center', padding: '0.2rem', marginLeft: '-0.2rem' }}
-                                                        >
-                                                            {isExpanded ? <ChevronDown size={14} color="var(--accent-cyan)" /> : <ChevronRight size={14} color="var(--accent-cyan)" />}
-                                                        </div>
-                                                        <div
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (!assignedStageLabel) addTransformerToStage(relay);
-                                                            }}
-                                                            style={{
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                cursor: assignedStageLabel ? 'not-allowed' : 'pointer',
-                                                                opacity: assignedStageLabel ? 0.5 : 1
-                                                            }}
-                                                        >
-                                                            {assignedStageLabel ? <CheckSquare size={14} color="var(--text-secondary)" /> : <Square size={14} color="var(--accent-cyan)" />}
-                                                        </div>
-                                                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: assignedStageLabel ? 'var(--text-secondary)' : 'var(--accent-cyan)' }}>
-                                                            {(relay.relay_name || 'System Relay').replace(' System', '')}
-                                                        </span>
-                                                        <div style={{ marginLeft: 'auto' }}>
-                                                            {mwBadge}
-                                                        </div>
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                                                    <div style={{ height: '18px', display: 'flex', alignItems: 'center' }}>
+                                                        {isExpanded ? <ChevronDown size={14} color="var(--accent-cyan)" /> : <ChevronRight size={14} color="var(--accent-cyan)" />}
                                                     </div>
-
-                                                    {/* Row 2: Stage Label (if assigned) */}
-                                                    {assignedStageLabel && (
-                                                        <div style={{ paddingLeft: '2.5rem' }}>
-                                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                                                Assigned: {assignedStageLabel}
+                                                    <div
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (!assignedStageLabel) addTransformerToStage(relay);
+                                                        }}
+                                                        style={{ height: '18px', display: 'flex', alignItems: 'center' }}
+                                                    >
+                                                        {assignedStageLabel ? <CheckSquare size={14} color="var(--text-secondary)" /> : <Square size={14} color="var(--accent-cyan)" />}
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                            <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: assignedStageLabel ? 'var(--text-secondary)' : 'var(--accent-cyan)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                {relay.relay_name?.replace(' System', '') || 'Relay'}
+                                                            </span>
+                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--accent-cyan)', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>
+                                                                {totalMw.toFixed(2)} MW
                                                             </span>
                                                         </div>
-                                                    )}
+                                                        {assignedStageLabel && (
+                                                            <div style={{
+                                                                fontSize: '0.6rem',
+                                                                color: '#FFAB00',
+                                                                fontStyle: 'italic',
+                                                                marginTop: '2px',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'flex-start'
+                                                            }}>
+                                                                <span style={{ lineHeight: '1.2' }}>Assigned: {assignedStageLabel}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-
                                             {isExpanded && (
-                                                <div style={{ display: 'flex', flexDirection: 'column', paddingTop: '4px', paddingBottom: '8px' }}>
+                                                <div style={{ paddingBottom: '8px' }}>
                                                     {(Array.isArray(relay.load_transformers) ? relay.load_transformers : []).map(transformerId => {
-                                                        const detail = detailedSubstations[sub.substation_id];
-                                                        let mwDisplay = "Loading...";
-                                                        let labelDisplay = `TRF ID: ${transformerId}`;
+                                                        let txLabel = `T-Bay ${transformerId}`;
+                                                        let txMw = 0;
 
-                                                        let dbTx = null;
                                                         if (detail && detail.db_transformers) {
-                                                            dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                                                            if (dbTx) labelDisplay = `T${dbTx.transformer_no} (ID: ${transformerId})`;
-                                                        }
-
-                                                        if (detail && detail.transformers) {
-                                                            let tx = null;
+                                                            const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
                                                             if (dbTx) {
+                                                                txLabel = `T${dbTx.transformer_no}`;
                                                                 const expectedName = `TX T${dbTx.transformer_no}`;
-                                                                tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                                                                const tx = detail.transformers?.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                                                                if (tx && tx.load_mw != null) txMw = parseFloat(tx.load_mw);
                                                             }
-                                                            if (tx) {
-                                                                mwDisplay = `${tx.load_mw} MW`;
-                                                                labelDisplay = `T${dbTx.transformer_no}`;
-                                                            } else {
-                                                                mwDisplay = "N/A";
-                                                            }
-                                                        } else if (expandedNodes.has(`relay-${relay.id}`) && !detailedSubstations[sub.substation_id]) {
-                                                            mwDisplay = "Loading...";
-                                                        } else {
-                                                            mwDisplay = "N/A";
                                                         }
 
                                                         return (
-                                                            <div key={`tx-${transformerId}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.3rem 0.5rem', paddingLeft: `${1.5 + paddingLevel * 1}rem`, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                    <FaBolt size={10} color="#FFAB00" />
-                                                                    <span>{labelDisplay}</span>
-                                                                </div>
-                                                                <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', background: 'rgba(255,255,255,0.05)', padding: '2px 4px', borderRadius: '2px', color: mwDisplay.includes('MW') ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>{mwDisplay}</span>
+                                                            <div key={transformerId} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0.5rem', paddingLeft: `${1.5 + paddingLevel * 1}rem`, fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                                                                <span>{txLabel}</span>
+                                                                <span style={{ fontFamily: 'monospace' }}>{txMw.toFixed(2)} MW</span>
                                                             </div>
                                                         );
                                                     })}
-                                                    {(!Array.isArray(relay.load_transformers) || relay.load_transformers.length === 0) && (
-                                                        <div style={{ paddingLeft: `${1.5 + paddingLevel * 1}rem`, fontSize: '0.7rem', color: 'var(--text-secondary)', fontStyle: 'italic', paddingBottom: '4px' }}>No Transformers</div>
-                                                    )}
-
-                                                    {(Array.isArray(relay.auto_transformers) ? relay.auto_transformers : []).map(atId => (
-                                                        <div key={`at-${atId}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0.5rem', paddingLeft: `${1.5 + paddingLevel * 1}rem`, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                                            <FaBolt size={10} color="#FFAB00" />
-                                                            <span>AutoTRF: {atId}</span>
-                                                        </div>
-                                                    ))}
-
-                                                    {(Array.isArray(relay.incoming_branches) ? relay.incoming_branches : []).map(ibId => (
-                                                        <div key={`ib-${ibId}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0.5rem', paddingLeft: `${1.5 + paddingLevel * 1}rem`, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                                            <FaCircleNodes size={10} color="var(--accent-blue)" />
-                                                            <span>Branch: {ibId}</span>
-                                                        </div>
-                                                    ))}
                                                 </div>
                                             )}
                                         </div>
                                     );
                                 };
 
-                                return Object.keys(tree || {}).sort().map(region => {
+                                return Object.keys(tree).sort().map(region => {
                                     const rId = `region-${region}`;
-                                    const grids = tree[region] || {};
+                                    const grids = tree[region];
                                     return (
                                         <div key={region}>
                                             {renderNodeHeader(rId, region, 0)}
                                             {expandedNodes.has(rId) && Object.keys(grids).sort().map(grid => {
                                                 const gId = `grid-${region}-${grid}`;
-                                                const subs = grids[grid] || {};
+                                                const subs = grids[grid];
                                                 return (
                                                     <div key={grid} style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', marginLeft: '12px' }}>
                                                         {renderNodeHeader(gId, grid, 1)}
                                                         {expandedNodes.has(gId) && Object.keys(subs).sort().map(subId => {
                                                             const sId = `sub-${region}-${grid}-${subId}`;
                                                             const nodeData = subs[subId];
-                                                            if (!nodeData) return null;
-                                                            const substation = nodeData.substation || { name: 'Unknown' };
-                                                            const nodeRelays = nodeData.relays || [];
+                                                            const substation = nodeData.substation;
                                                             return (
                                                                 <div key={subId} style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', marginLeft: '12px' }}>
                                                                     {renderNodeHeader(sId, `${substation.name} (${subId})`, 2)}
                                                                     {expandedNodes.has(sId) && (
                                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
-                                                                            {nodeRelays.map(relay => renderRelayNode(relay, substation, 3))}
+                                                                            {nodeData.relays.map(relay => renderRelayNode(relay, substation, 3))}
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -1315,86 +1368,88 @@ const LoadSheddingDesigner = () => {
             )}
 
             {/* TAB: SCHEME SETTINGS */}
-            {activeTab === 'settings' && (
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                    <div className="glass-card" style={{ padding: '2rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
-                            <div>
-                                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Global Stage Settings</h3>
-                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Manage Trip Settings for UFLS and UVLS schemes. Settings are shared globally.</p>
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '2rem' }}>
-                            {/* Left: Datatable */}
-                            <div style={{ gridColumn: 'span 8' }}>
-                                <div style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', overflow: 'hidden' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                                        <thead>
-                                            <tr style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                                <th style={{ padding: '1rem', fontWeight: 600 }}>Label</th>
-                                                <th style={{ padding: '1rem', fontWeight: 600 }}>Type</th>
-                                                <th style={{ padding: '1rem', fontWeight: 600 }}>Threshold</th>
-                                                <th style={{ padding: '1rem', fontWeight: 600 }}>Time Delay</th>
-                                                {isStaff && <th style={{ padding: '1rem', fontWeight: 600, textAlign: 'right' }}>Actions</th>}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {getSortedSettings(globalSettings.filter(s => s.scheme_type === schemeType)).map(s => (
-                                                <tr key={s.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }}>
-                                                    <td style={{ padding: '1rem', fontWeight: 500 }}>{s.label}</td>
-                                                    <td style={{ padding: '1rem' }}>
-                                                        <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 500 }}>{s.scheme_type}</span>
-                                                    </td>
-                                                    <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{s.threshold} {s.scheme_type === 'UVLS' ? 'p.u.' : 'Hz'}</td>
-                                                    <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{s.time_delay} s</td>
-                                                    {isStaff && (
-                                                        <td style={{ padding: '1rem', textAlign: 'right' }}>
-                                                            <button onClick={() => handleDeleteSetting(s.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px', borderRadius: '4px' }}>
-                                                                <Trash2 size={16} />
-                                                            </button>
-                                                        </td>
-                                                    )}
-                                                </tr>
-                                            ))}
-                                            {globalSettings.length === 0 && (
-                                                <tr>
-                                                    <td colSpan="5" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No settings defined.</td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
+            {
+                activeTab === 'settings' && (
+                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                        <div className="glass-card" style={{ padding: '2rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
+                                <div>
+                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Global Stage Settings</h3>
+                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Manage Trip Settings for UFLS and UVLS schemes. Settings are shared globally.</p>
                                 </div>
                             </div>
 
-                            {/* Right: Add Form */}
-                            <div style={{ gridColumn: 'span 4' }}>
-                                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '1.5rem', position: 'sticky', top: 0 }}>
-                                    <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: '0 0 1rem 0' }}>Add New Setting</h4>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                        <div>
-                                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold ({schemeType === 'UVLS' ? 'p.u.' : 'Hz'})</label>
-                                            <input type="number" step="0.01" className="dark-input" style={{ width: '100%' }} value={newSettingThreshold} onChange={e => setNewSettingThreshold(e.target.value)} placeholder="e.g. 49.2" />
-                                        </div>
-                                        <div>
-                                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Time Delay (Seconds)</label>
-                                            <input type="number" step="0.1" className="dark-input" style={{ width: '100%' }} value={newSettingTimeDelay} onChange={e => setNewSettingTimeDelay(e.target.value)} placeholder="e.g. 0.2" />
-                                        </div>
-                                        <button className="btn-primary" onClick={handleAddNewSetting} style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
-                                            <Plus size={16} /> Create Setting
-                                        </button>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '2rem' }}>
+                                {/* Left: Datatable */}
+                                <div style={{ gridColumn: 'span 8' }}>
+                                    <div style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', overflow: 'hidden' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                            <thead>
+                                                <tr style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                                    <th style={{ padding: '1rem', fontWeight: 600 }}>Label</th>
+                                                    <th style={{ padding: '1rem', fontWeight: 600 }}>Type</th>
+                                                    <th style={{ padding: '1rem', fontWeight: 600 }}>Threshold</th>
+                                                    <th style={{ padding: '1rem', fontWeight: 600 }}>Time Delay</th>
+                                                    {isStaff && <th style={{ padding: '1rem', fontWeight: 600, textAlign: 'right' }}>Actions</th>}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {getSortedSettings(globalSettings.filter(s => s.scheme_type === schemeType)).map(s => (
+                                                    <tr key={s.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }}>
+                                                        <td style={{ padding: '1rem', fontWeight: 500 }}>{s.label}</td>
+                                                        <td style={{ padding: '1rem' }}>
+                                                            <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 500 }}>{s.scheme_type}</span>
+                                                        </td>
+                                                        <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{s.threshold} {s.scheme_type === 'UVLS' ? 'p.u.' : 'Hz'}</td>
+                                                        <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{s.time_delay} s</td>
+                                                        {isStaff && (
+                                                            <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                                                <button onClick={() => handleDeleteSetting(s.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px', borderRadius: '4px' }}>
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                ))}
+                                                {globalSettings.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan="5" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No settings defined.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
                                     </div>
-                                    {!isStaff && (
-                                        <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(255, 171, 0, 0.05)', borderLeft: '3px solid #FFAB00', borderRadius: '4px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                            <strong>Note:</strong> As a standard user, you can add new settings but only administrators can delete them.
+                                </div>
+
+                                {/* Right: Add Form */}
+                                <div style={{ gridColumn: 'span 4' }}>
+                                    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '1.5rem', position: 'sticky', top: 0 }}>
+                                        <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: '0 0 1rem 0' }}>Add New Setting</h4>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                            <div>
+                                                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold ({schemeType === 'UVLS' ? 'p.u.' : 'Hz'})</label>
+                                                <input type="number" step="0.01" className="dark-input" style={{ width: '100%' }} value={newSettingThreshold} onChange={e => setNewSettingThreshold(e.target.value)} placeholder="e.g. 49.2" />
+                                            </div>
+                                            <div>
+                                                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Time Delay (Seconds)</label>
+                                                <input type="number" step="0.1" className="dark-input" style={{ width: '100%' }} value={newSettingTimeDelay} onChange={e => setNewSettingTimeDelay(e.target.value)} placeholder="e.g. 0.2" />
+                                            </div>
+                                            <button className="btn-primary" onClick={handleAddNewSetting} style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
+                                                <Plus size={16} /> Create Setting
+                                            </button>
                                         </div>
-                                    )}
+                                        {!isStaff && (
+                                            <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(255, 171, 0, 0.05)', borderLeft: '3px solid #FFAB00', borderRadius: '4px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                                <strong>Note:</strong> As a standard user, you can add new settings but only administrators can delete them.
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* STAGE SETTINGS MODAL */}
             <AnimatePresence>
@@ -1421,70 +1476,176 @@ const LoadSheddingDesigner = () => {
                         >
                             <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
-                                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Assign Trip Settings</h3>
-                                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Choose which globally defined settings dictate this stage.</p>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Stage Configuration</h3>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Configure settings and targets for {stages[activeStageIdx]?.label || `Stage ${stages[activeStageIdx]?.stage_number}`}</p>
                                 </div>
                                 <button onClick={() => setShowStageSettingsModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}>
                                     <X size={20} />
                                 </button>
                             </div>
 
+                            {/* TABS HEADER */}
+                            <div style={{ display: 'flex', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                <div
+                                    onClick={() => setActiveStageSettingsTab('general')}
+                                    style={{
+                                        padding: '0.75rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                                        color: activeStageSettingsTab === 'general' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                        borderBottom: activeStageSettingsTab === 'general' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    Trip Settings
+                                </div>
+                                <div
+                                    onClick={() => setActiveStageSettingsTab('metrics')}
+                                    style={{
+                                        padding: '0.75rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                                        color: activeStageSettingsTab === 'metrics' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                        borderBottom: activeStageSettingsTab === 'metrics' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    Regional Targets
+                                </div>
+                            </div>
+
                             <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-                                {/* Left list of existing settings */}
-                                <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <h4 style={{ fontSize: '0.85rem', color: 'var(--accent-cyan)', marginBottom: '1rem', marginTop: 0 }}>Available {schemeType} Settings</h4>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                        {getSortedSettings(globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS'))).map(s => {
-                                            const isSelected = (stages[activeStageIdx]?.setting_ids || []).includes(s.id);
-                                            return (
-                                                <div
-                                                    key={s.id}
-                                                    onClick={() => toggleStageSetting(s.id)}
-                                                    style={{
-                                                        padding: '1rem',
-                                                        borderRadius: '8px',
-                                                        border: isSelected ? '1px solid var(--accent-cyan)' : '1px solid rgba(255,255,255,0.1)',
-                                                        background: isSelected ? 'rgba(0, 255, 163, 0.05)' : 'rgba(255,255,255,0.02)',
-                                                        cursor: 'pointer',
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                        transition: 'all 0.2s'
-                                                    }}
-                                                >
-                                                    <div>
-                                                        <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{s.label}</div>
-                                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'monospace', marginTop: '4px' }}>{s.threshold} {s.scheme_type === 'UFLS' ? 'Hz' : 'pu'} • {s.time_delay}s</div>
+                                {activeStageSettingsTab === 'general' ? (
+                                    <>
+                                        {/* Left list of existing settings */}
+                                        <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                                            <h4 style={{ fontSize: '0.85rem', color: 'var(--accent-cyan)', marginBottom: '1rem', marginTop: 0 }}>Available {schemeType} Settings</h4>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                {getSortedSettings(globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS'))).map(s => {
+                                                    const isSelected = (stages[activeStageIdx]?.setting_ids || []).includes(s.id);
+                                                    return (
+                                                        <div
+                                                            key={s.id}
+                                                            onClick={() => toggleStageSetting(s.id)}
+                                                            style={{
+                                                                padding: '1rem',
+                                                                borderRadius: '8px',
+                                                                border: isSelected ? '1px solid var(--accent-cyan)' : '1px solid rgba(255,255,255,0.1)',
+                                                                background: isSelected ? 'rgba(0, 255, 163, 0.05)' : 'rgba(255,255,255,0.02)',
+                                                                cursor: 'pointer',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                        >
+                                                            <div>
+                                                                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{s.label}</div>
+                                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'monospace', marginTop: '4px' }}>{s.threshold} {s.scheme_type === 'UFLS' ? 'Hz' : 'pu'} • {s.time_delay}s</div>
+                                                            </div>
+                                                            <div style={{ width: '20px', height: '20px', borderRadius: '4px', border: isSelected ? 'none' : '1px solid var(--text-secondary)', background: isSelected ? 'var(--accent-cyan)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                                {globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS')).length === 0 && (
+                                                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px' }}>
+                                                        No existing settings found for {schemeType}. Add one to the right.
                                                     </div>
-                                                    <div style={{ width: '20px', height: '20px', borderRadius: '4px', border: isSelected ? 'none' : '1px solid var(--text-secondary)', background: isSelected ? 'var(--accent-cyan)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Right quick-add form */}
+                                        <div style={{ width: '250px', padding: '1.5rem', background: 'rgba(0,0,0,0.2)' }}>
+                                            <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', marginTop: 0 }}>Quick Add New Setting</h4>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold ({schemeType === 'UVLS' ? 'pu' : 'Hz'})</label>
+                                                    <input type="number" step="0.01" className="dark-input" style={{ width: '100%' }} value={newSettingThreshold} onChange={e => setNewSettingThreshold(e.target.value)} />
+                                                </div>
+                                                <div>
+                                                    <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Delay (s)</label>
+                                                    <input type="number" step="0.1" className="dark-input" style={{ width: '100%' }} value={newSettingTimeDelay} onChange={e => setNewSettingTimeDelay(e.target.value)} />
+                                                </div>
+                                                <button className="btn-secondary" onClick={handleAddNewSetting} style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)' }}>
+                                                    <Plus size={14} /> Add & Assign
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    /* METRICS TAB */
+                                    <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem', overflowY: 'auto' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                                            <div>
+                                                <h4 style={{ fontSize: '0.9rem', color: '#fff', marginBottom: '1rem' }}>Configuration</h4>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                                    <div>
+                                                        <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Target Load Shedding (MW)</label>
+                                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                            <input
+                                                                type="number"
+                                                                className="dark-input"
+                                                                style={{ flex: 1, fontSize: '1rem', fontWeight: 600, color: 'var(--accent-cyan)' }}
+                                                                value={stages[activeStageIdx]?.target_mw || 0}
+                                                                onChange={(e) => {
+                                                                    const newStages = [...stages];
+                                                                    newStages[activeStageIdx].target_mw = parseFloat(e.target.value) || 0;
+                                                                    setStages(newStages);
+                                                                }}
+                                                            />
+                                                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '0 1rem', display: 'flex', alignItems: 'center', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                                                MW
+                                                            </div>
+                                                        </div>
+                                                        {gridData?.total_pload_mw > 0 && (
+                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                                                                Equivalent to <strong>{((stages[activeStageIdx]?.target_mw || 0) / gridData.total_pload_mw * 100).toFixed(2)}%</strong> of total system demand ({gridData.total_pload_mw.toFixed(1)} MW)
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div style={{ padding: '1rem', background: 'rgba(0, 229, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(0, 229, 255, 0.1)' }}>
+                                                        <div style={{ fontSize: '0.75rem', color: '#fff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '4px' }}>
+                                                            <Shield size={14} color="var(--accent-cyan)" /> Fairness Calculation
+                                                        </div>
+                                                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: 0 }}>
+                                                            Regional targets are automatically calculated based on the regional share of total demand.
+                                                            Each region should ideally contribute the same percentage as the overall target.
+                                                        </p>
                                                     </div>
                                                 </div>
-                                            )
-                                        })}
-                                        {globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS')).length === 0 && (
-                                            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px' }}>
-                                                No existing settings found for {schemeType}. Add one to the right.
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
 
-                                {/* Right quick-add form */}
-                                <div style={{ width: '250px', padding: '1.5rem', background: 'rgba(0,0,0,0.2)' }}>
-                                    <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', marginTop: 0 }}>Quick Add New Setting</h4>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                        <div>
-                                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold ({schemeType === 'UVLS' ? 'pu' : 'Hz'})</label>
-                                            <input type="number" step="0.01" className="dark-input" style={{ width: '100%' }} value={newSettingThreshold} onChange={e => setNewSettingThreshold(e.target.value)} />
+                                            <div>
+                                                <h4 style={{ fontSize: '0.9rem', color: '#fff', marginBottom: '1.25rem' }}>Regional Distribution</h4>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                    {gridData?.regional_breakdown?.map(reg => {
+                                                        const overallRatio = (stages[activeStageIdx]?.target_mw || 0) / (gridData.total_pload_mw || 1);
+                                                        const regionalTarget = reg.total_pload_mw * overallRatio;
+                                                        const regionalActual = calculateRegionalMW(stages[activeStageIdx], reg.region);
+
+                                                        return (
+                                                            <BulletChart
+                                                                key={reg.region}
+                                                                label={reg.region}
+                                                                actual={regionalActual}
+                                                                target={regionalTarget}
+                                                                max={Math.max(reg.total_pload_mw * 0.4, regionalTarget * 1.5)} // Scale slightly larger than target
+                                                                color={
+                                                                    reg.region === 'North' ? '#F43F5E' :
+                                                                        reg.region === 'Central' ? '#3B82F6' :
+                                                                            reg.region === 'South' ? '#10B981' : '#F59E0B'
+                                                                }
+                                                            />
+                                                        );
+                                                    })}
+                                                    {!gridData && (
+                                                        <div style={{ opacity: 0.5, fontSize: '0.8rem', textAlign: 'center', padding: '2rem' }}>
+                                                            {fetchingAnalytics ? "Fetching analytics..." : "Load analysis data unavailable."}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Delay (s)</label>
-                                            <input type="number" step="0.1" className="dark-input" style={{ width: '100%' }} value={newSettingTimeDelay} onChange={e => setNewSettingTimeDelay(e.target.value)} />
-                                        </div>
-                                        <button className="btn-secondary" onClick={handleAddNewSetting} style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)' }}>
-                                            <Plus size={14} /> Add & Assign
-                                        </button>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </motion.div>
                     </motion.div>
@@ -1586,7 +1747,7 @@ const LoadSheddingDesigner = () => {
                 )}
             </AnimatePresence>
 
-        </div>
+        </div >
     );
 };
 

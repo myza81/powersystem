@@ -205,10 +205,12 @@ class AutoTransformerSerializer(serializers.ModelSerializer):
 
 
 class LoadSheddingRelaySerializer(serializers.ModelSerializer):
+    substation_id = serializers.CharField(source='substation.substation_id', read_only=True)
+
     class Meta:
         model = LoadSheddingRelay
         fields = [
-            'id', 'substation', 'relay_name', 'load_transformers', 'incoming_branches',
+            'id', 'substation', 'substation_id', 'relay_name', 'load_transformers', 'incoming_branches',
             'auto_transformers', 'is_active', 'notes'
         ]
 

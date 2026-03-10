@@ -35,7 +35,7 @@ class LoadSheddingStageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LoadSheddingStage
-        fields = ['id', 'version', 'stage_number', 'label', 'settings', 'setting_ids']
+        fields = ['id', 'version', 'stage_number', 'label', 'target_mw', 'settings', 'setting_ids']
 
     def validate(self, data):
         version = data.get('version') or (self.instance.version if self.instance else None)
