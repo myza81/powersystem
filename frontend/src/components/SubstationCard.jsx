@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Edit2, MapPin, FileText, Upload, AlertTriangle } from 'lucide-react';
+import { Edit2, MapPin, FileText, Upload } from 'lucide-react';
 import { BsTools } from 'react-icons/bs';
 import { LuCircuitBoard } from 'react-icons/lu';
+import { FiAlertCircle } from 'react-icons/fi';
 
 const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate, onCriticalClick }) => {
     const handleFileChange = (e) => {
@@ -87,7 +88,7 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate, 
                                 e.currentTarget.style.boxShadow = 'none';
                             }}
                         >
-                            <AlertTriangle size={14} />
+                            <FiAlertCircle size={14} />
                         </button>
                     )}
                 </div>

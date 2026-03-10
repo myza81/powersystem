@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import BulletChart from './BulletChart';
 import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes } from 'react-icons/fa6';
+import { FiAlertCircle } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api';
 
@@ -59,10 +60,12 @@ const LoadSheddingDesigner = () => {
     const [relays, setRelays] = useState([]);
     const [versions, setVersions] = useState([]);
     const [globalSettings, setGlobalSettings] = useState([]);
+    const [criticalAssets, setCriticalAssets] = useState([]);
 
     // --- Designer Workspace State ---
     const [substations, setSubstations] = useState([]);
     const [expandedNodes, setExpandedNodes] = useState(new Set());
+    const [assetLibraryTab, setAssetLibraryTab] = useState('library'); // 'library' | 'alerts'
 
     const [activeVersionId, setActiveVersionId] = useState(() => getInitialState('activeVersionId', null));
     const [schemeType, setSchemeType] = useState(() => getInitialState('schemeType', 'UFLS'));
@@ -113,18 +116,20 @@ const LoadSheddingDesigner = () => {
                 setFetchingAnalytics(false);
             });
 
-            const [userRes, relayRes, versionRes, settingsRes, subsRes] = await Promise.all([
+            const [userRes, relayRes, versionRes, settingsRes, subsRes, criticalRes] = await Promise.all([
                 api.get('/users/me/'),
                 api.get('/load-shedding-relays/'),
                 api.get('/load-shedding-versions/'),
                 api.get('/load-shedding-settings/'),
-                api.get('/substations/')
+                api.get('/substations/'),
+                api.get('/critical-assets/')
             ]);
             setCurrentUser(userRes.data);
             setRelays(relayRes.data);
             setVersions(versionRes.data);
             setGlobalSettings(settingsRes.data);
             setSubstations(subsRes.data);
+            setCriticalAssets(criticalRes.data);
         } catch (err) {
             console.error("Failed to fetch designer data", err);
         } finally {
@@ -1030,6 +1035,13 @@ const LoadSheddingDesigner = () => {
                                                 }
                                                 infoDisplay = `${voltageLabel ? voltageLabel + ' | ' : ''}${labels.join(', ')}`;
                                             }
+
+                                            // Check if any of these transformers is a critical asset
+                                            const hasCriticalAsset = bay.transformers?.some(txObj => {
+                                                const tId = typeof txObj === 'object' ? txObj.id : txObj;
+                                                return criticalAssets.some(ca => ca.load_transformers && ca.load_transformers.includes(Number(tId)));
+                                            });
+
                                         }
 
                                         return (
@@ -1042,12 +1054,18 @@ const LoadSheddingDesigner = () => {
                                                 <div style={{ fontSize: '0.7rem', fontWeight: 600, fontFamily: 'monospace', color: '#fff' }}>{subId}</div>
                                                 <div style={{
                                                     fontSize: '0.65rem',
-                                                    color: 'var(--accent-cyan)',
+                                                    color: hasCriticalAsset ? '#EF4444' : 'var(--accent-cyan)',
                                                     fontWeight: 600,
                                                     paddingLeft: '0.2rem',
-                                                    borderLeft: '1px solid rgba(0, 255, 163, 0.2)'
+                                                    borderLeft: '1px solid rgba(0, 255, 163, 0.2)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
                                                 }}>
                                                     {infoDisplay}
+                                                    {hasCriticalAsset && (
+                                                        <FiAlertCircle size={10} style={{ color: '#EF4444' }} title="Contains Critical Asset" />
+                                                    )}
                                                 </div>
                                                 <button
                                                     onClick={() => {
@@ -1118,251 +1136,298 @@ const LoadSheddingDesigner = () => {
 
                     {/* Right: Asset Library */}
                     <div className="glass-card" style={{ gridColumn: 'span 6', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
-                        <div style={{ padding: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.75rem' }}>Asset Library</div>
-                            <div style={{ position: 'relative' }}>
-                                <Search style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} size={14} />
-                                <input
-                                    type="text"
-                                    placeholder="Search Relay / Substation..."
-                                    className="dark-input"
-                                    style={{ paddingLeft: '2.25rem', fontSize: '0.85rem', width: '100%' }}
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
+                        <div style={{ display: 'flex', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div
+                                onClick={() => setAssetLibraryTab('library')}
+                                style={{
+                                    flex: 1, textAlign: 'center', padding: '0.75rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                                    color: assetLibraryTab === 'library' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                    borderBottom: assetLibraryTab === 'library' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Asset Library
+                            </div>
+                            <div
+                                onClick={() => setAssetLibraryTab('alerts')}
+                                style={{
+                                    flex: 1, textAlign: 'center', padding: '0.75rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                                    color: assetLibraryTab === 'alerts' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                    borderBottom: assetLibraryTab === 'alerts' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                Alert Message
                             </div>
                         </div>
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                            {(() => {
-                                // 1. Group relays by Region -> Grid -> Substation
-                                const tree = {};
-                                const term = searchTerm.toLowerCase();
 
-                                relays.forEach(relay => {
-                                    const sub = substations.find(s => s.substation_id === (relay.substation_id || relay.substation));
-                                    if (!sub) return;
+                        {assetLibraryTab === 'library' ? (
+                            <>
+                                <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <div style={{ position: 'relative' }}>
+                                        <Search style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} size={14} />
+                                        <input
+                                            type="text"
+                                            placeholder="Search Relay / Substation..."
+                                            className="dark-input"
+                                            style={{ paddingLeft: '2.25rem', fontSize: '0.85rem', width: '100%' }}
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                    {(() => {
+                                        // 1. Group relays by Region -> Grid -> Substation
+                                        const tree = {};
+                                        const term = searchTerm.toLowerCase();
 
-                                    const region = sub.region || 'Unknown Region';
-                                    const grid = sub.grid || 'Unknown Grid';
-                                    const subId = sub.substation_id;
+                                        relays.forEach(relay => {
+                                            const sub = substations.find(s => s.substation_id === (relay.substation_id || relay.substation));
+                                            if (!sub) return;
 
-                                    if (term && !subId.toLowerCase().includes(term) && !(relay.relay_name || "").toLowerCase().includes(term)) {
-                                        return;
-                                    }
+                                            const region = sub.region || 'Unknown Region';
+                                            const grid = sub.grid || 'Unknown Grid';
+                                            const subId = sub.substation_id;
 
-                                    if (!tree[region]) tree[region] = {};
-                                    if (!tree[region][grid]) tree[region][grid] = {};
-                                    if (!tree[region][grid][subId]) tree[region][grid][subId] = { substation: sub, relays: [] };
+                                            if (term && !subId.toLowerCase().includes(term) && !(relay.relay_name || "").toLowerCase().includes(term)) {
+                                                return;
+                                            }
 
-                                    tree[region][grid][subId].relays.push(relay);
-                                });
+                                            if (!tree[region]) tree[region] = {};
+                                            if (!tree[region][grid]) tree[region][grid] = {};
+                                            if (!tree[region][grid][subId]) tree[region][grid][subId] = { substation: sub, relays: [] };
 
-                                const toggleNode = (nodeId) => {
-                                    setExpandedNodes(prev => {
-                                        const newSet = new Set(prev);
-                                        if (newSet.has(nodeId)) {
-                                            newSet.delete(nodeId);
-                                        } else {
-                                            newSet.add(nodeId);
-                                        }
-                                        return newSet;
-                                    });
-                                };
+                                            tree[region][grid][subId].relays.push(relay);
+                                        });
 
-                                const handleExpandRelay = async (relayId, subId) => {
-                                    const rId = `relay-${relayId}`;
-                                    toggleNode(rId);
+                                        const toggleNode = (nodeId) => {
+                                            setExpandedNodes(prev => {
+                                                const newSet = new Set(prev);
+                                                if (newSet.has(nodeId)) {
+                                                    newSet.delete(nodeId);
+                                                } else {
+                                                    newSet.add(nodeId);
+                                                }
+                                                return newSet;
+                                            });
+                                        };
 
-                                    if (detailedSubstations[subId]) return;
+                                        const handleExpandRelay = async (relayId, subId) => {
+                                            const rId = `relay-${relayId}`;
+                                            toggleNode(rId);
 
-                                    try {
-                                        const [res, txRes] = await Promise.all([
-                                            api.get(`/substations/${subId}/`),
-                                            api.get(`/load-transformers/?substation=${subId}`)
-                                        ]);
+                                            if (detailedSubstations[subId]) return;
 
-                                        const data = res.data;
-                                        data.db_transformers = txRes.data;
+                                            try {
+                                                const [res, txRes] = await Promise.all([
+                                                    api.get(`/substations/${subId}/`),
+                                                    api.get(`/load-transformers/?substation=${subId}`)
+                                                ]);
 
-                                        setDetailedSubstations(prev => ({
-                                            ...prev,
-                                            [subId]: data
-                                        }));
-                                    } catch (err) {
-                                        console.error("Failed to fetch substation details for expansion", err);
-                                        setDetailedSubstations(prev => ({
-                                            ...prev,
-                                            [subId]: { transformers: [], db_transformers: [] }
-                                        }));
-                                    }
-                                };
+                                                const data = res.data;
+                                                data.db_transformers = txRes.data;
 
-                                const renderNodeHeader = (id, label, level, icon) => {
-                                    const isExpanded = expandedNodes.has(id);
-                                    return (
-                                        <div
-                                            onClick={() => toggleNode(id)}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                                padding: '0.5rem', paddingLeft: `${0.5 + level * 1}rem`,
-                                                cursor: 'pointer', borderRadius: '4px',
-                                                background: 'transparent',
-                                                transition: 'background 0.2s'
-                                            }}
-                                            className="hover-glow"
-                                        >
-                                            {isExpanded ? <ChevronDown size={14} color="var(--text-secondary)" /> : <ChevronRight size={14} color="var(--text-secondary)" />}
-                                            {icon && <span style={{ color: 'var(--text-secondary)', display: 'flex' }}>{icon}</span>}
-                                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: isExpanded ? '#fff' : 'var(--text-secondary)' }}>{label}</span>
-                                        </div>
-                                    );
-                                };
+                                                setDetailedSubstations(prev => ({
+                                                    ...prev,
+                                                    [subId]: data
+                                                }));
+                                            } catch (err) {
+                                                console.error("Failed to fetch substation details for expansion", err);
+                                                setDetailedSubstations(prev => ({
+                                                    ...prev,
+                                                    [subId]: { transformers: [], db_transformers: [] }
+                                                }));
+                                            }
+                                        };
 
-                                const renderRelayNode = (relay, sub, paddingLevel) => {
-                                    const rId = `relay-${relay.id}`;
-                                    const isExpanded = expandedNodes.has(rId);
+                                        const renderNodeHeader = (id, label, level, icon) => {
+                                            const isExpanded = expandedNodes.has(id);
+                                            return (
+                                                <div
+                                                    onClick={() => toggleNode(id)}
+                                                    style={{
+                                                        display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                        padding: '0.5rem', paddingLeft: `${0.5 + level * 1}rem`,
+                                                        cursor: 'pointer', borderRadius: '4px',
+                                                        background: 'transparent',
+                                                        transition: 'background 0.2s'
+                                                    }}
+                                                    className="hover-glow"
+                                                >
+                                                    {isExpanded ? <ChevronDown size={14} color="var(--text-secondary)" /> : <ChevronRight size={14} color="var(--text-secondary)" />}
+                                                    {icon && <span style={{ color: 'var(--text-secondary)', display: 'flex' }}>{icon}</span>}
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: isExpanded ? '#fff' : 'var(--text-secondary)' }}>{label}</span>
+                                                </div>
+                                            );
+                                        };
 
-                                    let assignedStageLabel = null;
-                                    for (const stage of stages) {
-                                        if (stage.transformer_bays && stage.transformer_bays.some(bay => String(bay.relay) === String(relay.id))) {
-                                            assignedStageLabel = stage.label || `Stage ${stage.stage_number}`;
-                                            break;
-                                        }
-                                    }
+                                        const renderRelayNode = (relay, sub, paddingLevel) => {
+                                            const rId = `relay-${relay.id}`;
+                                            const isExpanded = expandedNodes.has(rId);
 
-                                    let totalMw = 0;
-                                    const detail = detailedSubstations[sub.substation_id];
-
-                                    (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).forEach(transformerId => {
-                                        if (detail && detail.transformers && detail.db_transformers) {
-                                            const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                                            if (dbTx) {
-                                                const expectedName = `TX T${dbTx.transformer_no}`;
-                                                const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
-                                                if (tx && tx.load_mw != null) {
-                                                    totalMw += parseFloat(tx.load_mw);
+                                            let assignedStageLabel = null;
+                                            for (const stage of stages) {
+                                                if (stage.transformer_bays && stage.transformer_bays.some(bay => String(bay.relay) === String(relay.id))) {
+                                                    assignedStageLabel = stage.label || `Stage ${stage.stage_number}`;
+                                                    break;
                                                 }
                                             }
-                                        }
-                                    });
 
-                                    return (
-                                        <div key={relay.id} style={{ display: 'flex', flexDirection: 'column' }}>
-                                            <div
-                                                onClick={() => handleExpandRelay(relay.id, sub.substation_id)}
-                                                style={{
-                                                    padding: '0.4rem 0.5rem', paddingLeft: `${0.5 + paddingLevel * 1}rem`,
-                                                    cursor: 'pointer', borderRadius: '4px', transition: 'background 0.2s'
-                                                }}
-                                                className="hover-glow"
-                                            >
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                                                    <div style={{ height: '18px', display: 'flex', alignItems: 'center' }}>
-                                                        {isExpanded ? <ChevronDown size={14} color="var(--accent-cyan)" /> : <ChevronRight size={14} color="var(--accent-cyan)" />}
-                                                    </div>
-                                                    <div
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            if (!assignedStageLabel) addTransformerToStage(relay);
-                                                        }}
-                                                        style={{ height: '18px', display: 'flex', alignItems: 'center' }}
-                                                    >
-                                                        {assignedStageLabel ? <CheckSquare size={14} color="var(--text-secondary)" /> : <Square size={14} color="var(--accent-cyan)" />}
-                                                    </div>
-                                                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                            <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: assignedStageLabel ? 'var(--text-secondary)' : 'var(--accent-cyan)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                {relay.relay_name?.replace(' System', '') || 'Relay'}
-                                                            </span>
-                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--accent-cyan)', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>
-                                                                {totalMw.toFixed(2)} MW
-                                                            </span>
-                                                        </div>
-                                                        {assignedStageLabel && (
-                                                            <div style={{
-                                                                fontSize: '0.6rem',
-                                                                color: '#FFAB00',
-                                                                fontStyle: 'italic',
-                                                                marginTop: '2px',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'flex-start'
-                                                            }}>
-                                                                <span style={{ lineHeight: '1.2' }}>Assigned: {assignedStageLabel}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            {isExpanded && (
-                                                <div style={{ paddingBottom: '8px' }}>
-                                                    {(Array.isArray(relay.load_transformers) ? relay.load_transformers : []).map(transformerId => {
-                                                        let txLabel = `T-Bay ${transformerId}`;
-                                                        let txMw = 0;
+                                            let totalMw = 0;
+                                            const detail = detailedSubstations[sub.substation_id];
 
-                                                        if (detail && detail.db_transformers) {
-                                                            const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                                                            if (dbTx) {
-                                                                txLabel = `T${dbTx.transformer_no}`;
-                                                                const expectedName = `TX T${dbTx.transformer_no}`;
-                                                                const tx = detail.transformers?.find(t => t.name.includes(expectedName) || t.name === expectedName);
-                                                                if (tx && tx.load_mw != null) txMw = parseFloat(tx.load_mw);
-                                                            }
+                                            (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).forEach(transformerId => {
+                                                if (detail && detail.transformers && detail.db_transformers) {
+                                                    const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
+                                                    if (dbTx) {
+                                                        const expectedName = `TX T${dbTx.transformer_no}`;
+                                                        const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                                                        if (tx && tx.load_mw != null) {
+                                                            totalMw += parseFloat(tx.load_mw);
                                                         }
+                                                    }
+                                                }
+                                            });
 
+                                            // Check if this relay contains any critical assets
+                                            const hasCriticalAsset = (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).some(transformerId => {
+                                                return criticalAssets.some(ca => ca.load_transformers && ca.load_transformers.includes(Number(transformerId)));
+                                            });
+
+                                            return (
+                                                <div key={relay.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <div
+                                                        onClick={() => handleExpandRelay(relay.id, sub.substation_id)}
+                                                        style={{
+                                                            padding: '0.4rem 0.5rem', paddingLeft: `${0.5 + paddingLevel * 1}rem`,
+                                                            cursor: 'pointer', borderRadius: '4px', transition: 'background 0.2s'
+                                                        }}
+                                                        className="hover-glow"
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                                                            <div style={{ height: '18px', display: 'flex', alignItems: 'center' }}>
+                                                                {isExpanded ? <ChevronDown size={14} color="var(--accent-cyan)" /> : <ChevronRight size={14} color="var(--accent-cyan)" />}
+                                                            </div>
+                                                            <div
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (!assignedStageLabel) addTransformerToStage(relay);
+                                                                }}
+                                                                style={{ height: '18px', display: 'flex', alignItems: 'center' }}
+                                                            >
+                                                                {assignedStageLabel ? <CheckSquare size={14} color="var(--text-secondary)" /> : <Square size={14} color="var(--accent-cyan)" />}
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                                    <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: assignedStageLabel ? 'var(--text-secondary)' : 'var(--accent-cyan)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                        {relay.relay_name?.replace(' System', '') || 'Relay'}
+                                                                    </span>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                        {hasCriticalAsset && (
+                                                                            <FiAlertCircle size={12} style={{ color: '#EF4444' }} title="Contains Critical Asset" />
+                                                                        )}
+                                                                        <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--accent-cyan)', whiteSpace: 'nowrap' }}>
+                                                                            {totalMw.toFixed(2)} MW
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                {assignedStageLabel && (
+                                                                    <div style={{
+                                                                        fontSize: '0.6rem',
+                                                                        color: '#FFAB00',
+                                                                        fontStyle: 'italic',
+                                                                        marginTop: '2px',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'flex-start'
+                                                                    }}>
+                                                                        <span style={{ lineHeight: '1.2' }}>Assigned: {assignedStageLabel}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {isExpanded && (
+                                                        <div style={{ paddingBottom: '8px' }}>
+                                                            {(Array.isArray(relay.load_transformers) ? relay.load_transformers : []).map(transformerId => {
+                                                                let txLabel = `T-Bay ${transformerId}`;
+                                                                let txMw = 0;
+
+                                                                if (detail && detail.db_transformers) {
+                                                                    const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
+                                                                    if (dbTx) {
+                                                                        txLabel = `T${dbTx.transformer_no}`;
+                                                                        const expectedName = `TX T${dbTx.transformer_no}`;
+                                                                        const tx = detail.transformers?.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                                                                        if (tx && tx.load_mw != null) txMw = parseFloat(tx.load_mw);
+                                                                    }
+                                                                }
+
+                                                                return (
+                                                                    <div key={transformerId} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0.5rem', paddingLeft: `${1.5 + paddingLevel * 1}rem`, fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                            <span>{txLabel}</span>
+                                                                        </div>
+                                                                        <span style={{ fontFamily: 'monospace' }}>{txMw.toFixed(2)} MW</span>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        };
+
+                                        return Object.keys(tree).sort().map(region => {
+                                            const rId = `region-${region}`;
+                                            const grids = tree[region];
+                                            return (
+                                                <div key={region}>
+                                                    {renderNodeHeader(rId, region, 0)}
+                                                    {expandedNodes.has(rId) && Object.keys(grids).sort().map(grid => {
+                                                        const gId = `grid-${region}-${grid}`;
+                                                        const subs = grids[grid];
                                                         return (
-                                                            <div key={transformerId} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0.5rem', paddingLeft: `${1.5 + paddingLevel * 1}rem`, fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                                                                <span>{txLabel}</span>
-                                                                <span style={{ fontFamily: 'monospace' }}>{txMw.toFixed(2)} MW</span>
+                                                            <div key={grid} style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', marginLeft: '12px' }}>
+                                                                {renderNodeHeader(gId, grid, 1)}
+                                                                {expandedNodes.has(gId) && Object.keys(subs).sort().map(subId => {
+                                                                    const sId = `sub-${region}-${grid}-${subId}`;
+                                                                    const nodeData = subs[subId];
+                                                                    const substation = nodeData.substation;
+                                                                    return (
+                                                                        <div key={subId} style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', marginLeft: '12px' }}>
+                                                                            {renderNodeHeader(sId, `${substation.name} (${subId})`, 2)}
+                                                                            {expandedNodes.has(sId) && (
+                                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+                                                                                    {nodeData.relays.map(relay => renderRelayNode(relay, substation, 3))}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         );
                                                     })}
                                                 </div>
-                                            )}
-                                        </div>
-                                    );
-                                };
+                                            );
+                                        });
+                                    })()}
 
-                                return Object.keys(tree).sort().map(region => {
-                                    const rId = `region-${region}`;
-                                    const grids = tree[region];
-                                    return (
-                                        <div key={region}>
-                                            {renderNodeHeader(rId, region, 0)}
-                                            {expandedNodes.has(rId) && Object.keys(grids).sort().map(grid => {
-                                                const gId = `grid-${region}-${grid}`;
-                                                const subs = grids[grid];
-                                                return (
-                                                    <div key={grid} style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', marginLeft: '12px' }}>
-                                                        {renderNodeHeader(gId, grid, 1)}
-                                                        {expandedNodes.has(gId) && Object.keys(subs).sort().map(subId => {
-                                                            const sId = `sub-${region}-${grid}-${subId}`;
-                                                            const nodeData = subs[subId];
-                                                            const substation = nodeData.substation;
-                                                            return (
-                                                                <div key={subId} style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', marginLeft: '12px' }}>
-                                                                    {renderNodeHeader(sId, `${substation.name} (${subId})`, 2)}
-                                                                    {expandedNodes.has(sId) && (
-                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
-                                                                            {nodeData.relays.map(relay => renderRelayNode(relay, substation, 3))}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                );
-                                            })}
+                                    {relays.length === 0 && !loading && (
+                                        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                                            No load shedding relays found in the database.
                                         </div>
-                                    );
-                                });
-                            })()}
-
-                            {relays.length === 0 && !loading && (
-                                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                                    No load shedding relays found in the database.
+                                    )}
                                 </div>
-                            )}
-                        </div>
+                            </>
+                        ) : (
+                            <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <div style={{ border: '1px dashed rgba(255,255,255,0.1)', padding: '2rem', borderRadius: '8px', width: '100%' }}>
+                                    <Shield size={24} style={{ color: 'var(--accent-cyan)', marginBottom: '1rem', opacity: 0.8, alignSelf: 'center', margin: '0 auto 1rem auto' }} />
+                                    <div>Alert Message Content area</div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
