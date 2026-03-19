@@ -207,6 +207,8 @@ class AutoTransformerSerializer(serializers.ModelSerializer):
 class LoadSheddingRelaySerializer(serializers.ModelSerializer):
     substation_id = serializers.CharField(source='substation.substation_id', read_only=True)
 
+    incoming_branches = IncomingBranchSerializer(many=True, read_only=True)
+
     class Meta:
         model = LoadSheddingRelay
         fields = [

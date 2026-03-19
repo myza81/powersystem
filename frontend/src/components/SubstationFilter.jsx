@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Filter, RotateCcw, Search, X, PlusCircle } from 'lucide-react';
+import { BsGrid3X3GapFill, BsListUl } from 'react-icons/bs';
 
 const SubstationFilter = ({
     substations,
@@ -11,7 +12,9 @@ const SubstationFilter = ({
     extraValue,
     onExtraChange,
     extraOptions = null,
-    showVoltage = true
+    showVoltage = true,
+    viewMode = 'grid',
+    onViewModeChange
 }) => {
     const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -133,6 +136,49 @@ const SubstationFilter = ({
                         <span style={{ fontSize: '0.8rem' }}>Advanced</span>
                     </button>
 
+
+                    <div style={{ 
+                        display: 'flex', 
+                        background: 'rgba(255, 255, 255, 0.05)', 
+                        padding: '3px', 
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255, 255, 255, 0.1)'
+                    }}>
+                        <button
+                            onClick={() => onViewModeChange('grid')}
+                            style={{
+                                background: viewMode === 'grid' ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
+                                border: 'none',
+                                color: viewMode === 'grid' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                transition: 'all 0.2s'
+                            }}
+                            title="Grid View"
+                        >
+                            <BsGrid3X3GapFill size={16} />
+                        </button>
+                        <button
+                            onClick={() => onViewModeChange('list')}
+                            style={{
+                                background: viewMode === 'list' ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
+                                border: 'none',
+                                color: viewMode === 'list' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                transition: 'all 0.2s'
+                            }}
+                            title="List View"
+                        >
+                            <BsListUl size={16} />
+                        </button>
+                    </div>
 
                     <button
                         onClick={onRegister}

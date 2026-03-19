@@ -145,6 +145,124 @@ class TopologyViewSet(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=False, methods=['post'], url_path='pocket-preview')
+    def pocket_preview(self, request):
+        """
+        Preview a network pocket from branch IDs.
+        Payload:
+        {
+          "branch_ids": ["PKLG132_IGBK132_1", "PKLG132_IGBK132_2"],
+          "snapshot_id": "optional-uuid"
+        }
+        Returns isolated substations with per-substation load totals.
+        """
+        branch_ids = request.data.get('branch_ids', [])
+        snapshot_id = request.data.get('snapshot_id')
+
+        if not branch_ids:
+            return Response(
+                {"error": "branch_ids is required (list of strings like 'FROM_TO_CKT')."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        snapshot = self._get_snapshot(request, snapshot_id)
+        if not snapshot:
+            return Response(
+                {"error": "Snapshot not found or access denied."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Parse branch IDs into cut rules
+        cuts = []
+        parsed_cuts = []
+        for bid in branch_ids:
+            parts = str(bid).split('_')
+            if len(parts) < 3:
+                return Response(
+                    {"error": f"Invalid branch_id format: '{bid}'. Expected FROM_TO_CKT (e.g. PKLG132_IGBK132_1)."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            from_sub = parts[0]
+            to_sub = parts[1]
+            ckt = parts[2]
+            cuts.append({
+                "from_substation_id": from_sub,
+                "to_substation_id": to_sub,
+                "circuit_ids": [ckt],
+                "link_type": "branch",
+                "isolation_scope": "between",
+            })
+            parsed_cuts.append({"from": from_sub, "to": to_sub, "ckt": ckt})
+
+        try:
+            from core.models import Substation
+
+            service = TopologyService(snapshot)
+            isolated = service.compute_island(cuts, include_autotransformers=True)
+
+            result = {
+                "snapshot_id": str(snapshot.id),
+                "snapshot_name": snapshot.name,
+                "branch_cuts": parsed_cuts,
+                "pocket_substations": [],
+                "total_p_mw": 0.0,
+                "total_q_mvar": 0.0,
+            }
+
+            if not isolated:
+                result["warning"] = (
+                    "No substations were isolated. The selected branches do not form "
+                    "a complete pocket — remaining paths still connect the target "
+                    "substations to the grid."
+                )
+                return Response(result)
+
+            # Fetch substation metadata (name, region, grid, voltage)
+            sub_meta = {
+                s.substation_id: {"name": s.name, "region": s.region, "grid": s.grid, "voltage": getattr(s, 'voltage', None)}
+                for s in Substation.objects.filter(substation_id__in=isolated)
+            }
+
+            # Compute load totals
+            load_totals = service.compute_load_totals(substations=isolated)
+
+            # Build branch index grouped by isolated substation
+            # For each isolated sub, find all cuts where it appears as from or to end
+            sub_branches = {sub_id: [] for sub_id in isolated}
+            for cut in parsed_cuts:
+                if cut["from"] in sub_branches:
+                    sub_branches[cut["from"]].append(f"{cut['from']}_{cut['to']}_{cut['ckt']}")
+                if cut["to"] in sub_branches:
+                    sub_branches[cut["to"]].append(f"{cut['from']}_{cut['to']}_{cut['ckt']}")
+
+            pocket_list = []
+            for sub_id in isolated:
+                meta = sub_meta.get(sub_id, {})
+                loads = load_totals["isolated_substation_load_totals"].get(sub_id, {})
+                pocket_list.append({
+                    "substation_id": sub_id,
+                    "name": meta.get("name", ""),
+                    "region": meta.get("region", ""),
+                    "grid": meta.get("grid", ""),
+                    "voltage": f"{meta.get('voltage', '?')}kV" if meta.get("voltage") else None,
+                    "branches": sub_branches.get(sub_id, []),
+                    "p_mw": round(loads.get("total_p_mw", 0.0), 2),
+                    "q_mvar": round(loads.get("total_q_mvar", 0.0), 2),
+                })
+
+            result["pocket_substations"] = pocket_list
+            result["total_p_mw"] = round(load_totals["isolated_total_p_mw"], 2)
+            result["total_q_mvar"] = round(load_totals["isolated_total_q_mvar"], 2)
+
+            return Response(result)
+
+        except Exception:
+            logger.exception("Pocket preview failed")
+            return Response(
+                {"error": "Failed to compute pocket preview."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     def _get_snapshot(self, request, snapshot_id=None):
         """Helper to get snapshot with user isolation"""
         from django.db.models import Q

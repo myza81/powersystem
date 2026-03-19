@@ -13,6 +13,7 @@ import MainLayout from './components/MainLayout';
 import SubstationCard from './components/SubstationCard';
 import SubstationFilter from './components/SubstationFilter';
 import SubstationMap from './components/SubstationMap';
+import SubstationListRow from './components/SubstationListRow';
 
 import SnapshotManager from './components/SnapshotManager';
 import LoadSheddingViewer from './components/LoadSheddingViewer';
@@ -42,6 +43,8 @@ const App = () => {
         const params = new URLSearchParams(window.location.search);
         return params.get('view') || 'list';
     });
+
+    const [listDisplayMode, setListDisplayMode] = useState('grid');
 
     const [selectedSnapshotId, setSelectedSnapshotId] = useState(null);
 
@@ -147,7 +150,8 @@ const App = () => {
             );
         }
 
-        setFilteredSubstations(result);
+        const sortedResult = [...result].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        setFilteredSubstations(sortedResult);
     }, [substations, filterCriteria]);
 
     const handleSave = async (data) => {
@@ -325,24 +329,45 @@ const App = () => {
                             currentFilters={filterCriteria}
                             onUpdateFilters={setFilterCriteria}
                             onRegister={() => { setSelectedSub(null); setView('create'); }}
+                            viewMode={listDisplayMode}
+                            onViewModeChange={setListDisplayMode}
                         />
 
-                        <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
-                            <AnimatePresence>
-                                {filteredSubstations.map(sub => (
-                                    <SubstationCard
-                                        key={sub.substation_id}
-                                        substation={sub}
-                                        onEdit={() => { setSelectedSub(sub); setView('edit'); }}
-                                        onSLDUpload={handleSLDUpload}
-                                        onProcess={handleProcessSLD}
-                                        processing={loading}
-                                        onViewSld={setViewingSld}
-                                        onLocate={setLocatingSubstation}
-                                    />
-                                ))}
-                            </AnimatePresence>
-                        </div>
+                        {listDisplayMode === 'grid' ? (
+                            <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
+                                <AnimatePresence>
+                                    {filteredSubstations.map(sub => (
+                                        <SubstationCard
+                                            key={sub.substation_id}
+                                            substation={sub}
+                                            onEdit={() => { setSelectedSub(sub); setView('edit'); }}
+                                            onSLDUpload={handleSLDUpload}
+                                            onProcess={handleProcessSLD}
+                                            processing={loading}
+                                            onViewSld={setViewingSld}
+                                            onLocate={setLocatingSubstation}
+                                        />
+                                    ))}
+                                </AnimatePresence>
+                            </div>
+                        ) : (
+                            <div className="substation-list" style={{ display: 'flex', flexDirection: 'column' }}>
+                                <AnimatePresence>
+                                    {filteredSubstations.map(sub => (
+                                        <SubstationListRow
+                                            key={sub.substation_id}
+                                            substation={sub}
+                                            onEdit={() => { setSelectedSub(sub); setView('edit'); }}
+                                            onSLDUpload={handleSLDUpload}
+                                            onProcess={handleProcessSLD}
+                                            processing={loading}
+                                            onViewSld={setViewingSld}
+                                            onLocate={setLocatingSubstation}
+                                        />
+                                    ))}
+                                </AnimatePresence>
+                            </div>
+                        )}
 
                         <div style={{ marginTop: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
                             Showing {filteredSubstations.length} of {substations.length} assets

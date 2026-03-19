@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PlusCircle, X, Save, FileText, Trash2, Edit2, LayoutGrid, BarChart2, MapPin } from 'lucide-react';
 import api from '../api';
 import CriticalSubstationCard from './CriticalSubstationCard';
+import CriticalSubstationListRow from './CriticalSubstationListRow';
 import SubstationMap from './SubstationMap';
 import SubstationFilter from './SubstationFilter';
+import { BsGrid3X3GapFill, BsListUl } from 'react-icons/bs';
 
 const DEFAULT_FILTERS = {
     region: 'All',
@@ -27,6 +29,7 @@ const CriticalSubstationManager = () => {
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('assets');
     const [filterCriteria, setFilterCriteria] = useState(DEFAULT_FILTERS);
+    const [listDisplayMode, setListDisplayMode] = useState('grid');
 
     const formatBayTagLabel = (bayId, lvVoltage) => {
         if (!bayId) return '';
@@ -199,7 +202,7 @@ const CriticalSubstationManager = () => {
                 (s.substation_id || '').toLowerCase().includes(lowSearch)
             );
         }
-        return result;
+        return [...result].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     }, [substations, filterCriteria, grouped, categories]);
 
     // Apply filters to grouped critical assets
@@ -437,27 +440,47 @@ const CriticalSubstationManager = () => {
                         onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, category: val }))}
                         extraOptions={['All', ...categories.map(c => c.category_name)].sort()}
                         showVoltage={false}
+                        viewMode={listDisplayMode}
+                        onViewModeChange={setListDisplayMode}
                     />
-                    <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
-                        <AnimatePresence>
-                            {Object.keys(filteredGrouped).map(subId => (
-                                <CriticalSubstationCard
-                                    key={subId}
-                                    substation={substationLookup[subId] || { substation_id: subId, name: subId }}
-                                    tags={filteredGrouped[subId]}
-                                    allTransformers={loadTransformers}
-                                    onEditAsset={openEditTagModal}
-                                    onAddAsset={() => openAddModal(subId)}
-                                />
-                            ))}
-                        </AnimatePresence>
-                        {Object.keys(filteredGrouped).length === 0 && !loading && (
-                            <div style={{ color: 'var(--text-secondary)', textAlign: 'center', gridColumn: '1/-1', padding: '4rem 0' }}>
-                                <div style={{ opacity: 0.5, marginBottom: '1rem' }}><LayoutGrid size={48} style={{ margin: '0 auto' }} /></div>
-                                No critical substations found matching your criteria.
-                            </div>
-                        )}
-                    </div>
+
+                    {listDisplayMode === 'grid' ? (
+                        <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
+                            <AnimatePresence>
+                                {Object.keys(filteredGrouped).map(subId => (
+                                    <CriticalSubstationCard
+                                        key={subId}
+                                        substation={substationLookup[subId] || { substation_id: subId, name: subId }}
+                                        tags={filteredGrouped[subId]}
+                                        allTransformers={loadTransformers}
+                                        onEditAsset={openEditTagModal}
+                                        onAddAsset={() => openAddModal(subId)}
+                                    />
+                                ))}
+                            </AnimatePresence>
+                        </div>
+                    ) : (
+                        <div className="substation-list" style={{ display: 'flex', flexDirection: 'column' }}>
+                            <AnimatePresence>
+                                {Object.keys(filteredGrouped).map(subId => (
+                                    <CriticalSubstationListRow
+                                        key={subId}
+                                        substation={substationLookup[subId] || { substation_id: subId, name: subId }}
+                                        tags={filteredGrouped[subId]}
+                                        onEditAsset={openEditTagModal}
+                                        onAddAsset={() => openAddModal(subId)}
+                                    />
+                                ))}
+                            </AnimatePresence>
+                        </div>
+                    )}
+
+                    {Object.keys(filteredGrouped).length === 0 && !loading && (
+                        <div style={{ color: 'var(--text-secondary)', textAlign: 'center', gridColumn: '1/-1', padding: '4rem 0' }}>
+                            <div style={{ opacity: 0.5, marginBottom: '1rem' }}><LayoutGrid size={48} style={{ margin: '0 auto' }} /></div>
+                            No critical substations found matching your criteria.
+                        </div>
+                    )}
                 </div>
             )}
 
