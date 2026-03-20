@@ -23,7 +23,7 @@ import {
     BarChart
 } from 'lucide-react';
 import BulletChart from './BulletChart';
-import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes } from 'react-icons/fa6';
+import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes, FaCodeBranch } from 'react-icons/fa6';
 import { FiAlertCircle } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api';
@@ -79,6 +79,8 @@ const LoadSheddingDesigner = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [gridData, setGridData] = useState(null);
     const [fetchingAnalytics, setFetchingAnalytics] = useState(false);
+    const [pocketPreview, setPocketPreview] = useState(null);
+    const [fetchingPocket, setFetchingPocket] = useState(false);
 
     // --- Settings Modal & Tab State ---
     const [showStageSettingsModal, setShowStageSettingsModal] = useState(false);
@@ -152,6 +154,30 @@ const LoadSheddingDesigner = () => {
         }
     }, [activeVersionId, schemeType, versionLabel, reviewYear, stages, activeStageIdx, detailedSubstations, view]);
 
+    // --- Pocket Preview ---
+    useEffect(() => {
+        const activeBranches = stages[activeStageIdx]?.pocket_branches || [];
+        if (activeBranches.length === 0) {
+            setPocketPreview(null);
+            return;
+        }
+
+        let cancelled = false;
+        setFetchingPocket(true);
+        api.post('/topology/pocket-preview/', { branch_ids: activeBranches })
+            .then(res => {
+                if (!cancelled) setPocketPreview(res.data);
+            })
+            .catch(() => {
+                if (!cancelled) setPocketPreview({ error: "Failed to compute pocket." });
+            })
+            .finally(() => {
+                if (!cancelled) setFetchingPocket(false);
+            });
+
+        return () => { cancelled = true; };
+    }, [stages, activeStageIdx]);
+
     // ==========================================
     // VERSION MANAGER LOGIC
     // ==========================================
@@ -161,7 +187,7 @@ const LoadSheddingDesigner = () => {
         setSchemeType('UFLS');
         setReviewYear(new Date().getFullYear());
         setVersionLabel('');
-        setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], setting_ids: [] }]);
+        setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], pocket_branches: [], setting_ids: [] }]);
         setActiveStageIdx(0);
         setActiveVersionId(null);
         setView('designer');
@@ -191,7 +217,19 @@ const LoadSheddingDesigner = () => {
                             target_mw: stageData.target_mw || 0,
                             setting_ids: (stageData.settings || []).map(stg => stg.id),
                             transformer_bays: stageData.transformer_bays || [],
-                            pocket_bays: stageData.pocket_bays || []
+                            pocket_bays: stageData.pocket_bays || [],
+                            pocket_branches: (stageData.pocket_bays || []).flatMap(pb => 
+                                (pb.boundaries || []).flatMap(bound => 
+                                    (bound.branches || []).map(bId => {
+                                        let foundBayId = null;
+                                        relays.forEach(r => {
+                                            const br = (r.incoming_branches || []).find(b => b.id === bId);
+                                            if (br) foundBayId = br.bay_id;
+                                        });
+                                        return foundBayId;
+                                    })
+                                )
+                            ).filter(id => id !== null)
                         };
                     })
                 );
@@ -281,6 +319,7 @@ const LoadSheddingDesigner = () => {
             label: newStageLabel,
             transformer_bays: [],
             pocket_bays: [],
+            pocket_branches: [],
             setting_ids: newStageSettings,
             target_mw: 0.0
         };
@@ -355,6 +394,26 @@ const LoadSheddingDesigner = () => {
         }
     };
 
+    const toggleBranchInStage = (bayId, localSubstationId) => {
+        const currentStages = [...stages];
+        const active = { ...currentStages[activeStageIdx] };
+
+        // Reconstruct full bay_id if needed (incoming branches display as remote-end only)
+        let fullId = bayId;
+        if (localSubstationId && !fullId.includes('_')) {
+            fullId = `${localSubstationId}_${fullId}`;
+        }
+
+        const existing = active.pocket_branches || [];
+        const isAdded = existing.includes(fullId);
+        active.pocket_branches = isAdded
+            ? existing.filter(id => id !== fullId)
+            : [...existing, fullId];
+
+        currentStages[activeStageIdx] = active;
+        setStages(currentStages);
+    };
+
     const refreshStageData = async (stageIdx) => {
         const stage = stages[stageIdx];
         if (!stage || !stage.transformer_bays) return;
@@ -423,6 +482,50 @@ const LoadSheddingDesigner = () => {
                         relay: tb.relay,
                         transformers: tb.transformers.map(t => t.id)
                     });
+                }
+
+                // Add pocket bays
+                const pocketBranches = stage.pocket_branches || [];
+                if (pocketBranches.length > 0) {
+                    // Group branches by relay
+                    const relayGroups = {}; // relayId -> [branchId1, branchId2]
+
+                    pocketBranches.forEach(bayId => {
+                        // bayId is like SUB_SUB_CKT
+                        // Find the relay and incoming branch ID in master data
+                        let foundRelay = null;
+                        let foundBranchId = null;
+
+                        relays.forEach(r => {
+                            const br = (r.incoming_branches || []).find(b => b.bay_id === bayId);
+                            if (br) {
+                                foundRelay = r;
+                                foundBranchId = br.id;
+                            }
+                        });
+
+                        if (foundRelay && foundBranchId) {
+                            if (!relayGroups[foundRelay.id]) relayGroups[foundRelay.id] = [];
+                            relayGroups[foundRelay.id].push(foundBranchId);
+                        }
+                    });
+
+                    if (Object.keys(relayGroups).length > 0) {
+                        // Create one pocket bay for the stage (or should it be one per relay?
+                        // The model allows multiple boundaries per pocket. We'll create one pocket per stage for now.)
+                        const pbRes = await api.post('/load-shedding-pocket-bays/', {
+                            stage: stageId
+                        });
+                        const pbId = pbRes.data.id;
+
+                        for (const [rId, branchIds] of Object.entries(relayGroups)) {
+                            await api.post('/load-shedding-pocket-boundaries/', {
+                                pocket: pbId,
+                                relay: rId,
+                                branches: branchIds
+                            });
+                        }
+                    }
                 }
             }
             sessionStorage.removeItem('ls_draft_state');
@@ -1099,17 +1202,166 @@ const LoadSheddingDesigner = () => {
                                 </div>
                             </div>
 
-                            {/* Pocket Assignment Placeholder */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                            {/* Network Pockets */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <h4 style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, opacity: 0.5 }}>
-                                        <FaCircleNodes size={14} style={{ color: 'var(--accent-blue)' }} /> Network Pockets
+                                    <h4 style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                                        <FaCodeBranch size={14} style={{ color: 'var(--accent-cyan)' }} /> Network Pockets
                                     </h4>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>
+                                            {fetchingPocket ? '...' : (pocketPreview ? `${(pocketPreview.total_p_mw ?? 0).toFixed(1)} MW` : '0.0 MW')}
+                                        </div>
+                                    </div>
                                 </div>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                    {/* Once integrated, map pocket_bays similar to transformer_bays with pills */}
-                                    <div style={{ width: '100%', border: '1px dashed rgba(255,255,255,0.05)', borderRadius: '8px', padding: '0.75rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', cursor: 'not-allowed', opacity: 0.3 }}>
-                                        <div style={{ fontSize: '0.75rem' }}>Pocket Generation API pending integration</div>
+                                <div style={{
+                                    background: 'rgba(0, 229, 255, 0.04)',
+                                    border: '1px solid rgba(0, 229, 255, 0.12)',
+                                    borderRadius: '10px',
+                                    overflow: 'hidden'
+                                }}>
+                                    {/* BRANCHES BAY */}
+                                    <div style={{ padding: '0.75rem' }}>
+                                        <div style={{ fontSize: '0.6rem', color: 'rgba(0, 229, 255, 0.5)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '0.5rem' }}>
+                                            BRANCHES BAY
+                                        </div>
+                                        {fetchingPocket && (
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
+                                                Computing...
+                                            </div>
+                                        )}
+                                        {!fetchingPocket && (stages[activeStageIdx]?.pocket_branches?.length === 0 || !stages[activeStageIdx]?.pocket_branches) && (
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.5, fontStyle: 'italic' }}>
+                                                No branches selected
+                                            </div>
+                                        )}
+                                        {!fetchingPocket && (stages[activeStageIdx]?.pocket_branches?.length > 0) && (() => {
+                                            const branches = stages[activeStageIdx].pocket_branches;
+                                            // Group by (substation_id, voltage)
+                                            const groupKey = (subId, voltage) => `${subId}||${voltage || ''}`;
+                                            const groups = {};
+                                            branches.forEach(fullId => {
+                                                const parts = fullId.split('_');
+                                                if (parts.length >= 3) {
+                                                    const localSub = parts[0];
+                                                    const voltage = substations.find(s => s.substation_id === localSub)?.voltage;
+                                                    const key = groupKey(localSub, voltage);
+                                                    if (!groups[key]) groups[key] = { subId: localSub, voltage: voltage ? `${voltage}kV` : '', branches: [] };
+                                                    groups[key].branches.push(parts.slice(1).join('_'));
+                                                }
+                                            });
+                                            return (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                                    {Object.values(groups).sort((a, b) => a.subId.localeCompare(b.subId)).map(group => {
+                                                        return (
+                                                            <div key={groupKey(group.subId, group.voltage)} style={{
+                                                                display: 'flex', alignItems: 'center', gap: '0.3rem',
+                                                                padding: '0.1rem 0.2rem 0.1rem 0.3rem', borderRadius: '12px',
+                                                                background: 'rgba(0, 229, 255, 0.05)', border: '1px solid rgba(0, 229, 255, 0.2)'
+                                                            }}>
+                                                                <FaCodeBranch size={8} style={{ color: 'var(--accent-cyan)' }} />
+                                                                <div style={{ fontSize: '0.7rem', fontWeight: 600, fontFamily: 'monospace', color: '#fff' }}>{group.subId}</div>
+                                                                <div style={{
+                                                                    fontSize: '0.65rem',
+                                                                    color: 'var(--accent-cyan)',
+                                                                    fontWeight: 600,
+                                                                    paddingLeft: '0.2rem',
+                                                                    borderLeft: '1px solid rgba(0, 229, 255, 0.2)',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px'
+                                                                }}>
+                                                                    {`${group.voltage} | ${group.branches.sort().join(', ')}`}
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const newStages = [...stages];
+                                                                        const newBranches = [...(newStages[activeStageIdx].pocket_branches || [])];
+                                                                        // Remove all branches belonging to this group
+                                                                        group.branches.forEach(suffix => {
+                                                                            const fullId = `${group.subId}_${suffix}`;
+                                                                            const idx = newBranches.indexOf(fullId);
+                                                                            if (idx > -1) newBranches.splice(idx, 1);
+                                                                        });
+                                                                        newStages[activeStageIdx] = { ...newStages[activeStageIdx], pocket_branches: newBranches };
+                                                                        setStages(newStages);
+                                                                    }}
+                                                                    style={{
+                                                                        background: 'none', border: 'none', color: 'rgba(239, 68, 68, 0.6)', cursor: 'pointer',
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                        width: '18px', height: '18px', borderRadius: '50%',
+                                                                        transition: 'all 0.2s', marginLeft: '0.2rem'
+                                                                    }}
+                                                                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = '#EF4444'; }}
+                                                                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'rgba(239, 68, 68, 0.6)'; }}
+                                                                >
+                                                                    <X size={12} />
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Divider */}
+                                    {(pocketPreview?.pocket_substations?.length > 0 || pocketPreview?.warning || pocketPreview?.error) && (
+                                        <div style={{ height: '1px', background: 'rgba(0, 229, 255, 0.1)' }} />
+                                    )}
+
+                                    {/* ISOLATED SUBSTATIONS */}
+                                    <div style={{ padding: '0.75rem' }}>
+                                        <div style={{ fontSize: '0.6rem', color: 'rgba(0, 229, 255, 0.5)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '0.5rem' }}>
+                                            ISOLATED SUBSTATIONS
+                                        </div>
+                                        {pocketPreview?.error && (
+                                            <div style={{ fontSize: '0.75rem', color: '#EF4444' }}>{pocketPreview.error}</div>
+                                        )}
+                                        {pocketPreview?.warning && (
+                                            <div style={{ fontSize: '0.75rem', color: '#FFAB00' }}>{pocketPreview.warning}</div>
+                                        )}
+                                        {!fetchingPocket && pocketPreview && !pocketPreview.error && !pocketPreview.warning && (
+                                            <>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.75rem' }}>
+                                                    {(pocketPreview.pocket_substations || []).map(sub => (
+                                                        <span key={sub.substation_id} style={{
+                                                            padding: '3px 8px', borderRadius: '4px',
+                                                            background: 'rgba(0, 229, 255, 0.12)',
+                                                            border: '1px solid rgba(0, 229, 255, 0.25)',
+                                                            fontSize: '0.7rem', color: 'var(--accent-cyan)', fontWeight: 600
+                                                        }}>
+                                                            {sub.name || sub.substation_id}
+                                                        </span>
+                                                    ))}
+                                                    {pocketPreview.pocket_substations?.length === 0 && (
+                                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                                                            No substations isolated
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '1.5rem' }}>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Total Load</div>
+                                                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                                                            {(pocketPreview.total_p_mw ?? 0).toFixed(1)} MW
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Substations</div>
+                                                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                                                            {pocketPreview.pocket_substations?.length ?? 0}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                        {!fetchingPocket && !pocketPreview && (
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.5, fontStyle: 'italic' }}>
+                                                Select branches to preview
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1371,6 +1623,43 @@ const LoadSheddingDesigner = () => {
                                                                     </div>
                                                                 );
                                                             })}
+
+                                                            {/* Incoming Branches */}
+                                                            {(relay.incoming_branches || []).length > 0 && (
+                                                                <div style={{ paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: '4px' }}>
+                                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', paddingLeft: `${1.5 + paddingLevel * 1}rem`, marginBottom: '2px' }}>
+                                                                        INCOMING BRANCHES
+                                                                    </div>
+                                                                    {(relay.incoming_branches || []).map(branch => {
+                                                                        const localPrefix = `${sub.substation_id}_`;
+                                                                        const bayId = typeof branch === 'object' ? branch.bay_id : branch;
+                                                                        const displayId = bayId?.startsWith(localPrefix) ? bayId.replace(localPrefix, '') : bayId;
+                                                                        const isAssigned = (stages[activeStageIdx]?.pocket_branches || []).includes(bayId);
+                                                                        return (
+                                                                            <div
+                                                                                key={typeof branch === 'object' ? branch.id : branch}
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    toggleBranchInStage(bayId, sub.substation_id);
+                                                                                }}
+                                                                                style={{
+                                                                                    display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0.5rem',
+                                                                                    paddingLeft: `${1.5 + paddingLevel * 1}rem`, fontSize: '0.7rem',
+                                                                                    color: isAssigned ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                                                                    cursor: 'pointer',
+                                                                                }}
+                                                                                className="hover-glow"
+                                                                            >
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                    <FaCodeBranch size={10} style={{ opacity: 0.5 }} />
+                                                                                    <span style={{ fontWeight: isAssigned ? 700 : 400 }}>{displayId}</span>
+                                                                                </div>
+                                                                                {isAssigned && <CheckSquare size={12} color="var(--accent-cyan)" />}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </div>
