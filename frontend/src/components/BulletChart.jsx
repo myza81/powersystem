@@ -25,9 +25,9 @@ const BulletChart = ({ actual, target, max, label, unit = 'MW', color = 'var(--a
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem' }}>
                 <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{label}</span>
                 <span style={{ fontFamily: 'monospace', color: '#fff' }}>
-                    <span style={{ color: color }}>{actual.toFixed(1)}</span>
+                    <span style={{ color: color }}>{Number(actual).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                     <span style={{ margin: '0 4px', opacity: 0.3 }}>/</span>
-                    <span style={{ color: 'var(--text-secondary)' }}>{target.toFixed(1)}</span> {unit}
+                    <span style={{ color: 'var(--text-secondary)' }}>{Number(target).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span> {unit}
                 </span>
             </div>
 

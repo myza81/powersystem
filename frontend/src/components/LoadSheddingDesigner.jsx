@@ -20,10 +20,12 @@ import {
     Square,
     CheckSquare,
     RefreshCw,
-    BarChart
+    BarChart,
+    ShieldAlert, Cpu, CheckCircle2, Loader2, ArrowLeft, ZoomIn, ZoomOut, Network, Maximize2, Minimize2, MapPin, Eye, Filter, EyeOff, List, Layers, Unlock, Database, Building2, TrendingUp, Download, Settings2, ListChecks, Pause, ArrowUpRight, Check, Activity, BarChart2, CheckCircle, Navigation, Anchor, MousePointerClick, Move
 } from 'lucide-react';
 import BulletChart from './BulletChart';
-import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes, FaCodeBranch, FaLock } from 'react-icons/fa6';
+import CompactRegionalMetrics from './CompactRegionalMetrics';
+import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes, FaCodeBranch, FaLock, FaBullseye, FaGaugeHigh } from 'react-icons/fa6';
 import { FiAlertCircle } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api';
@@ -71,7 +73,19 @@ const LoadSheddingDesigner = () => {
     const [schemeType, setSchemeType] = useState(() => getInitialState('schemeType', 'UFLS'));
     const [versionLabel, setVersionLabel] = useState(() => getInitialState('versionLabel', ''));
     const [reviewYear, setReviewYear] = useState(() => getInitialState('reviewYear', new Date().getFullYear()));
-    const [stages, setStages] = useState(() => getInitialState('stages', [{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], setting_ids: [], target_mw: 0.0 }]));
+    const [targetPercentage, setTargetPercentage] = useState(() => getInitialState('targetPercentage', 60));
+    const [isMetricsDrawerOpen, setIsMetricsDrawerOpen] = useState(() => getInitialState('isMetricsDrawerOpen', true));
+
+    // Auto-update default target percentage when scheme type changes for new drafts
+    useEffect(() => {
+        if (!activeVersionId) {
+            if (schemeType === 'UFLS') setTargetPercentage(60);
+            else if (schemeType === 'UVLS') setTargetPercentage(15);
+            else setTargetPercentage(10);
+        }
+    }, [schemeType, activeVersionId]);
+
+    const [stages, setStages] = useState(() => getInitialState('stages', [{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], setting_ids: [], target_mw: 1000 }]));
     const [activeStageIdx, setActiveStageIdx] = useState(() => getInitialState('activeStageIdx', 0));
     const [detailedSubstations, setDetailedSubstations] = useState(() => getInitialState('detailedSubstations', {}));
 
@@ -103,8 +117,10 @@ const LoadSheddingDesigner = () => {
 
     // --- Create Stage Modal State ---
     const [showCreateStageModal, setShowCreateStageModal] = useState(false);
+    const [editingStageIdx, setEditingStageIdx] = useState(null);
     const [newStageNumber, setNewStageNumber] = useState(1);
     const [newStageLabel, setNewStageLabel] = useState('');
+    const [newStageTargetMW, setNewStageTargetMW] = useState(0);
     const [newStageSettings, setNewStageSettings] = useState([]);
 
     const fetchMasterData = async () => {
@@ -149,11 +165,11 @@ const LoadSheddingDesigner = () => {
     useEffect(() => {
         if (view === 'designer') {
             const draftState = {
-                activeVersionId, schemeType, versionLabel, reviewYear, stages, activeStageIdx, detailedSubstations
+                activeVersionId, schemeType, versionLabel, reviewYear, targetPercentage, isMetricsDrawerOpen, stages, activeStageIdx, detailedSubstations
             };
             sessionStorage.setItem('ls_draft_state', JSON.stringify(draftState));
         }
-    }, [activeVersionId, schemeType, versionLabel, reviewYear, stages, activeStageIdx, detailedSubstations, view]);
+    }, [activeVersionId, schemeType, versionLabel, reviewYear, targetPercentage, isMetricsDrawerOpen, stages, activeStageIdx, detailedSubstations, view]);
 
     // --- Pocket Preview ---
     useEffect(() => {
@@ -216,9 +232,10 @@ const LoadSheddingDesigner = () => {
     const handleCreateNew = () => {
         sessionStorage.removeItem('ls_draft_state');
         setSchemeType('UFLS');
+        setTargetPercentage(60);
         setReviewYear(new Date().getFullYear());
         setVersionLabel('');
-        setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], pocket_branches: [], setting_ids: [] }]);
+        setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], pocket_branches: [], setting_ids: [], target_mw: 1000 }]);
         setActiveStageIdx(0);
         setActiveVersionId(null);
         setView('designer');
@@ -233,6 +250,7 @@ const LoadSheddingDesigner = () => {
             setSchemeType(vData.scheme_type);
             setReviewYear(vData.review_year);
             setVersionLabel(vData.notes);
+            setTargetPercentage(vData.target_percentage || (vData.scheme_type === 'UVLS' ? 15 : 60));
             setActiveVersionId(vData.id);
 
             if (vData.stages && vData.stages.length > 0) {
@@ -249,8 +267,8 @@ const LoadSheddingDesigner = () => {
                             setting_ids: (stageData.settings || []).map(stg => stg.id),
                             transformer_bays: stageData.transformer_bays || [],
                             pocket_bays: stageData.pocket_bays || [],
-                            pocket_branches: (stageData.pocket_bays || []).flatMap(pb => 
-                                (pb.boundaries || []).flatMap(bound => 
+                            pocket_branches: (stageData.pocket_bays || []).flatMap(pb =>
+                                (pb.boundaries || []).flatMap(bound =>
                                     (bound.branches || []).map(bId => {
                                         let foundBayId = null;
                                         relays.forEach(r => {
@@ -268,7 +286,7 @@ const LoadSheddingDesigner = () => {
                 detailedStages.sort((a, b) => a.stage_number - b.stage_number);
                 setStages(detailedStages);
             } else {
-                setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', target_mw: 0.0, transformer_bays: [], pocket_bays: [], setting_ids: [] }]);
+                setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', target_mw: 1000, transformer_bays: [], pocket_bays: [], setting_ids: [] }]);
             }
             setActiveStageIdx(0);
             setView('designer');
@@ -313,9 +331,21 @@ const LoadSheddingDesigner = () => {
 
     const handleOpenAddStage = () => {
         const nextNum = stages.length > 0 ? Math.max(...stages.map(s => s.stage_number)) + 1 : 1;
+        setEditingStageIdx(null);
         setNewStageNumber(nextNum);
         setNewStageLabel(`Stage ${nextNum}`);
+        setNewStageTargetMW(1000);
         setNewStageSettings([]);
+        setShowCreateStageModal(true);
+    };
+
+    const handleOpenEditStage = (idx) => {
+        const stage = stages[idx];
+        setEditingStageIdx(idx);
+        setNewStageNumber(stage.stage_number);
+        setNewStageLabel(stage.label);
+        setNewStageTargetMW(stage.target_mw || 0);
+        setNewStageSettings([...(stage.setting_ids || [])]);
         setShowCreateStageModal(true);
     };
 
@@ -326,7 +356,7 @@ const LoadSheddingDesigner = () => {
         }
 
         // 1. Check for Duplicate Stage Number
-        if (stages.some(s => s.stage_number === newStageNumber)) {
+        if (stages.some((s, i) => i !== editingStageIdx && s.stage_number === newStageNumber)) {
             alert(`A stage with number ${newStageNumber} already exists. Please use a unique number.`);
             return;
         }
@@ -334,7 +364,8 @@ const LoadSheddingDesigner = () => {
         // 2. Check for Duplicate Settings Combination
         // Sort IDs to compare correctly as a set
         const sortedNewSettings = [...newStageSettings].sort().join(',');
-        const duplicateSettings = stages.find(s => {
+        const duplicateSettings = stages.find((s, i) => {
+            if (i === editingStageIdx) return false;
             const sortedExisting = [...(s.setting_ids || [])].sort().join(',');
             return sortedExisting === sortedNewSettings;
         });
@@ -344,18 +375,31 @@ const LoadSheddingDesigner = () => {
             return;
         }
 
-        const newStageObj = {
-            id: Date.now(),
-            stage_number: newStageNumber,
-            label: newStageLabel,
-            transformer_bays: [],
-            pocket_bays: [],
-            pocket_branches: [],
-            setting_ids: newStageSettings,
-            target_mw: 0.0
-        };
-        setStages([...stages, newStageObj]);
-        setActiveStageIdx(stages.length);
+        if (editingStageIdx !== null) {
+            const updatedStages = [...stages];
+            updatedStages[editingStageIdx] = {
+                ...updatedStages[editingStageIdx],
+                stage_number: newStageNumber,
+                label: newStageLabel,
+                setting_ids: newStageSettings,
+                target_mw: newStageTargetMW || 0.0
+            };
+            setStages(updatedStages);
+            setEditingStageIdx(null);
+        } else {
+            const newStageObj = {
+                id: Date.now(),
+                stage_number: newStageNumber,
+                label: newStageLabel,
+                transformer_bays: [],
+                pocket_bays: [],
+                pocket_branches: [],
+                setting_ids: newStageSettings,
+                target_mw: newStageTargetMW || 0.0
+            };
+            setStages([...stages, newStageObj]);
+            setActiveStageIdx(stages.length);
+        }
         setShowCreateStageModal(false);
     };
 
@@ -692,6 +736,66 @@ const LoadSheddingDesigner = () => {
     // RENDER HELPERS
     // ==========================================
 
+    const formatMW = (val, decimals = 1) => {
+        if (val == null || isNaN(val)) return "0.0";
+        return Number(val).toLocaleString(undefined, {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
+        });
+    };
+
+    const formatInputNumber = (val) => {
+        if (val === "" || val == null) return "";
+        const stringVal = String(val);
+        if (stringVal.endsWith('.')) return stringVal.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        const parts = stringVal.split(".");
+        parts[0] = parts[0].replace(/,/g, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return parts.join(".");
+    };
+
+    const calculateTargetMW = () => {
+        if (!gridData || !gridData.total_pload_mw) return 0;
+        return (targetPercentage / 100) * gridData.total_pload_mw;
+    };
+
+    const calculateRemainingTargetMW = () => {
+        const totalTarget = calculateTargetMW();
+        const totalAssigned = calculateOverallAssignedMW();
+        // Returns (Assigned - Target). 
+        // Negative means short of target, Positive means over target.
+        return totalAssigned - totalTarget;
+    };
+
+    const calculateOverallAssignedMW = () => {
+        let total = 0;
+        // Add all stages' transformer MW
+        stages.forEach(stage => {
+            stage.transformer_bays?.forEach(bay => {
+                const subId = bay.relay_substation_id;
+                const detail = detailedSubstations[subId];
+                if (!detail || !detail.transformers || !detail.db_transformers) return;
+
+                bay.transformers?.forEach(transformerObj => {
+                    const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
+                    const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
+                    if (dbTx) {
+                        const expectedName = `TX T${dbTx.transformer_no}`;
+                        const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                        if (tx && tx.load_mw != null) {
+                            total += parseFloat(tx.load_mw);
+                        }
+                    }
+                });
+            });
+        });
+
+        // Add network pockets MW
+        const lockedMW = pocketCards.reduce((sum, card) => sum + (card.total_p_mw || 0), 0);
+        total += lockedMW;
+
+        return total;
+    };
+
     const calculateTotalMW = (stage) => {
         if (!stage) return "0.00";
         let total = 0;
@@ -721,7 +825,7 @@ const LoadSheddingDesigner = () => {
         });
 
         if (anyLoading && total === 0) return "Loading...";
-        return total.toFixed(2);
+        return formatMW(total);
     };
     const calculateRegionalMW = (stage, region) => {
         if (!stage || !region) return 0;
@@ -748,7 +852,62 @@ const LoadSheddingDesigner = () => {
             });
         });
 
-        return total;
+        return total.toFixed(2);
+    };
+
+    const getOverallRegionalSpiralData = () => {
+        if (!gridData || !gridData.regional_breakdown) return [];
+        return gridData.regional_breakdown.map(reg => {
+            const target_mw = (targetPercentage / 100) * reg.total_pload_mw;
+            const assigned_mw = stages.reduce((sum, s) => sum + Number(calculateRegionalMW(s, reg.region) || 0), 0);
+            return {
+                region: reg.region,
+                target_mw,
+                assigned_mw
+            };
+        });
+    };
+
+    const getOverallRegionalPotentialData = () => {
+        if (!gridData || !gridData.regional_breakdown) return [];
+        return gridData.regional_breakdown.map(reg => {
+            const potential_mw = substations
+                .filter(sub => {
+                    if (sub.region !== reg.region || !sub.has_active_relay) return false;
+                    // Check if this substation has any active relay that sheds transformers
+                    const subRelays = relays.filter(r => 
+                        (r.substation_id === sub.substation_id || r.substation === sub.substation_id) && 
+                        r.is_active && 
+                        r.load_transformers && r.load_transformers.length > 0
+                    );
+                    return subRelays.length > 0;
+                })
+                .reduce((sum, sub) => sum + (parseFloat(sub.total_pload_mw) || 0), 0);
+            
+            const assigned_mw = stages.reduce((sum, s) => sum + Number(calculateRegionalMW(s, reg.region) || 0), 0);
+            
+            return {
+                region: reg.region,
+                potential_mw,
+                assigned_mw
+            };
+        });
+    };
+
+    const getStageRegionalSpiralData = (stage) => {
+        if (!gridData || !gridData.regional_breakdown || !stage) return [];
+        const stageTarget = Number(stage.target_mw) || 0;
+        return gridData.regional_breakdown.map(reg => {
+            const target_mw = gridData.total_pload_mw > 0 
+                ? (reg.total_pload_mw / gridData.total_pload_mw) * stageTarget 
+                : 0;
+            const assigned_mw = Number(calculateRegionalMW(stage, reg.region) || 0);
+            return {
+                region: reg.region,
+                target_mw,
+                assigned_mw
+            };
+        });
     };
 
     const isStaff = currentUser?.is_staff || false;
@@ -1020,6 +1179,33 @@ const LoadSheddingDesigner = () => {
                                             disabled={!!activeVersionId}
                                         />
                                     </div>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Target (%)</label>
+                                        </div>
+                                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                            <input
+                                                type="text"
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '0.525rem 2.5rem 0.525rem 1rem',
+                                                    background: 'rgba(255,255,255,0.03)',
+                                                    border: '1px solid rgba(255,255,255,0.08)',
+                                                    borderRadius: '8px',
+                                                    color: 'var(--text-primary)',
+                                                    fontSize: '0.75rem',
+                                                    outline: 'none',
+                                                    transition: 'all 0.2s ease',
+                                                }}
+                                                value={formatInputNumber(targetPercentage)}
+                                                onChange={(e) => {
+                                                    const raw = e.target.value.replace(/,/g, '');
+                                                    if (raw === '' || !isNaN(raw)) setTargetPercentage(raw);
+                                                }}
+                                            />
+                                            <span style={{ position: 'absolute', right: '12px', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>%</span>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -1077,9 +1263,14 @@ const LoadSheddingDesigner = () => {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                             <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{stage.label}</div>
                                         </div>
-                                        <button style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', padding: '4px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleDeleteStage(idx); }}>
-                                            <Trash2 size={14} />
-                                        </button>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <button style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', padding: '4px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleOpenEditStage(idx); }}>
+                                                <Edit3 size={14} />
+                                            </button>
+                                            <button style={{ color: activeStageIdx === idx ? '#EF4444' : 'var(--text-secondary)', background: 'none', border: 'none', padding: '4px', cursor: 'pointer', opacity: activeStageIdx === idx ? 1 : 0.6 }} onClick={(e) => { e.stopPropagation(); handleDeleteStage(idx); }}>
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -1133,68 +1324,6 @@ const LoadSheddingDesigner = () => {
                                 )}
                             </div>
                         </div>
-
-                        {/* STAGE METRICS SUMMARY */}
-                        {gridData && stages[activeStageIdx]?.target_mw > 0 && (
-                            <div style={{
-                                padding: '1rem 1.25rem',
-                                background: 'rgba(255,255,255,0.02)',
-                                borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                flexDirection: 'column',
-                                gap: '1rem'
-                            }}>
-                                <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                                        <div>
-                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', fontWeight: 600 }}>Fairness Metrics</div>
-                                            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                                                {calculateTotalMW(stages[activeStageIdx])}
-                                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 400, marginLeft: '4px' }}>
-                                                    / {stages[activeStageIdx].target_mw} MW
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <button
-                                        className="btn-secondary"
-                                        style={{ padding: '0.4rem 0.6rem', fontSize: '0.7rem', whiteSpace: 'nowrap' }}
-                                        onClick={() => {
-                                            setActiveStageSettingsTab('metrics');
-                                            setShowStageSettingsModal(true);
-                                        }}
-                                    >
-                                        <BarChart size={12} style={{ marginRight: '4px' }} /> Details
-                                    </button>
-                                </div>
-                                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1.5rem' }}>
-                                    {gridData.regional_breakdown.map(reg => {
-                                        const overallRatio = stages[activeStageIdx].target_mw / gridData.total_pload_mw;
-                                        const regTarget = reg.total_pload_mw * overallRatio;
-                                        const regActual = calculateRegionalMW(stages[activeStageIdx], reg.region);
-                                        const regProgress = regTarget > 0 ? (regActual / regTarget) * 100 : 0;
-
-                                        return (
-                                            <div key={reg.region} style={{ width: '100%' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '4px' }}>
-                                                    <span style={{ color: 'var(--text-secondary)' }}>{reg.region}</span>
-                                                    <span style={{ color: '#fff', fontWeight: 600 }}>{regProgress.toFixed(0)}%</span>
-                                                </div>
-                                                <div style={{ height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden', width: '100%' }}>
-                                                    <div style={{
-                                                        height: '100%',
-                                                        width: `${Math.min(regProgress, 100)}%`,
-                                                        background: regProgress > 105 ? '#EF4444' : (regProgress > 90 ? 'var(--accent-cyan)' : '#3B82F6'),
-                                                        transition: 'width 0.4s ease-out'
-                                                    }} />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
 
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '4rem' }}>
                             {/* Transformer Assignment */}
@@ -1312,7 +1441,7 @@ const LoadSheddingDesigner = () => {
                                                 const lockedMW = pocketCards.reduce((sum, card) => sum + (card.total_p_mw || 0), 0);
                                                 const previewMW = pocketPreview?.total_p_mw || 0;
                                                 const totalMW = lockedMW + previewMW;
-                                                return `${totalMW.toFixed(1)} MW`;
+                                                return `${formatMW(totalMW)} MW`;
                                             })()}
                                         </div>
                                     </div>
@@ -1341,7 +1470,7 @@ const LoadSheddingDesigner = () => {
                                                 <div style={{ textAlign: 'center' }}>
                                                     <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>Load</div>
                                                     <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                                                        {(card.total_p_mw ?? 0).toFixed(1)} MW
+                                                        {formatMW(card.total_p_mw ?? 0)} MW
                                                     </div>
                                                 </div>
                                                 <div style={{ textAlign: 'center' }}>
@@ -1380,7 +1509,7 @@ const LoadSheddingDesigner = () => {
                                                     fontSize: '0.75rem', color: 'var(--accent-cyan)', fontWeight: 500
                                                 }}>
                                                     {sub.name || sub.substation_id}
-                                                    {sub.p_mw != null && <span style={{ opacity: 0.7, marginLeft: '4px' }}>({sub.p_mw} MW)</span>}
+                                                    {sub.p_mw != null && <span style={{ opacity: 0.7, marginLeft: '4px' }}>({formatMW(sub.p_mw)} MW)</span>}
                                                 </span>
                                             ))}
                                         </div>
@@ -1500,7 +1629,7 @@ const LoadSheddingDesigner = () => {
                                                         )}
                                                         {pocketPreview.pocket_substations?.length > 0 && (
                                                             <div style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', marginBottom: '0.5rem', fontWeight: 600 }}>
-                                                                Preview: {pocketPreview.pocket_substations.length} substations ({(pocketPreview.total_p_mw ?? 0).toFixed(1)} MW)
+                                                                Preview: {pocketPreview.pocket_substations.length} substations ({formatMW(pocketPreview.total_p_mw ?? 0)} MW)
                                                             </div>
                                                         )}
                                                         <button
@@ -1790,7 +1919,7 @@ const LoadSheddingDesigner = () => {
                                                                             <FiAlertCircle size={12} style={{ color: '#EF4444' }} title="Contains Critical Asset" />
                                                                         )}
                                                                         <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--accent-cyan)', whiteSpace: 'nowrap' }}>
-                                                                            {totalMw.toFixed(2)} MW
+                                                                            {formatMW(totalMw)} MW
                                                                         </span>
                                                                     </div>
                                                                 </div>
@@ -1849,7 +1978,7 @@ const LoadSheddingDesigner = () => {
                                                                             <span style={{ fontWeight: isTxAssigned ? 700 : 400 }}>{txLabel}</span>
                                                                         </div>
                                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                            <span style={{ fontFamily: 'monospace' }}>{txMw.toFixed(2)} MW</span>
+                                                                            <span style={{ fontFamily: 'monospace' }}>{formatMW(txMw)} MW</span>
                                                                             {isTxAssigned && <CheckSquare size={12} color="var(--accent-cyan)" />}
                                                                         </div>
                                                                     </div>
@@ -2244,7 +2373,7 @@ const LoadSheddingDesigner = () => {
                                                         </div>
                                                         {gridData?.total_pload_mw > 0 && (
                                                             <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
-                                                                Equivalent to <strong>{((stages[activeStageIdx]?.target_mw || 0) / gridData.total_pload_mw * 100).toFixed(2)}%</strong> of total system demand ({gridData.total_pload_mw.toFixed(1)} MW)
+                                                                Equivalent to <strong>{((stages[activeStageIdx]?.target_mw || 0) / gridData.total_pload_mw * 100).toFixed(2)}%</strong> of total system demand ({formatMW(gridData.total_pload_mw)} MW)
                                                             </div>
                                                         )}
                                                     </div>
@@ -2323,8 +2452,10 @@ const LoadSheddingDesigner = () => {
                             className="glass-card"
                             style={{ width: '500px', maxWidth: '90vw', padding: '2rem' }}
                         >
-                            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem' }}>Create New Stage</h3>
-                            <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Define the parameters for the next load shedding step.</p>
+                            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem' }}>{editingStageIdx !== null ? "Edit Stage Details" : "Create New Stage"}</h3>
+                            <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                {editingStageIdx !== null ? "Modify the parameters for this load shedding step." : "Define the parameters for the next load shedding step."}
+                            </p>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                 <div style={{ display: 'flex', gap: '1rem' }}>
@@ -2348,6 +2479,22 @@ const LoadSheddingDesigner = () => {
                                             value={newStageLabel}
                                             onChange={e => setNewStageLabel(e.target.value)}
                                         />
+                                    </div>
+                                    <div style={{ flex: 1.5 }}>
+                                        <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Target (MW)</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <input
+                                                type="text"
+                                                className="dark-input"
+                                                style={{ width: '100%', paddingRight: '2rem' }}
+                                                value={formatInputNumber(newStageTargetMW)}
+                                                onChange={e => {
+                                                    const raw = e.target.value.replace(/,/g, '');
+                                                    if (raw === '' || !isNaN(raw)) setNewStageTargetMW(raw);
+                                                }}
+                                            />
+                                            <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>MW</span>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -2387,13 +2534,190 @@ const LoadSheddingDesigner = () => {
 
                                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                                     <button className="btn-secondary" style={{ flex: 1, padding: '0.75rem' }} onClick={() => setShowCreateStageModal(false)}>Cancel</button>
-                                    <button className="btn-primary" style={{ flex: 1, padding: '0.75rem' }} onClick={confirmAddStage}>Create Stage</button>
+                                    <button className="btn-primary" style={{ flex: 1, padding: '0.75rem' }} onClick={confirmAddStage}>
+                                        {editingStageIdx !== null ? "Save Changes" : "Create Stage"}
+                                    </button>
                                 </div>
                             </div>
                         </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* --- METRICS DRAWER (Bottom Panel) --- */}
+            <div
+                style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    background: 'rgba(10, 15, 25, 0.95)',
+                    borderTop: '1px solid rgba(0, 229, 255, 0.2)',
+                    backdropFilter: 'blur(20px)',
+                    boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
+                    transform: isMetricsDrawerOpen ? 'translateY(0)' : 'translateY(calc(100% - 40px))',
+                    transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                    zIndex: 50,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    maxHeight: '40vh'
+                }}
+            >
+                {/* Drag Handle / Toggle */}
+                <div
+                    onClick={() => setIsMetricsDrawerOpen(!isMetricsDrawerOpen)}
+                    style={{
+                        height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        background: 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%)',
+                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                        color: 'var(--text-secondary)'
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, padding: '0 1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <FaGaugeHigh size={14} style={{ color: 'var(--accent-cyan)' }} />
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                Scheme Metrics Dashboard
+                            </span>
+                        </div>
+                        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                            <div style={{ width: '40px', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px' }} />
+                        </div>
+                        <div style={{ color: 'var(--accent-cyan)' }}>
+                            {isMetricsDrawerOpen ? <ChevronDown size={14} /> : <div style={{ transform: 'rotate(-90deg)', display: 'flex' }}><ChevronDown size={14} /></div>}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Drawer Content */}
+                <div style={{ padding: '1rem 1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    
+                    {/* Top Bar: General Metrics */}
+                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '2rem', alignItems: 'stretch' }}>
+                        
+                        {/* 1. Overall Bullet & Stats (Combined) */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <h4 style={{ margin: 0, fontSize: '0.85rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <FaBullseye size={14} style={{ color: 'var(--accent-cyan)' }} />
+                                General Scheme Metrics
+                            </h4>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'center' }}>
+                                {/* Embedded Stats Grid (moved above Bullet Chart) */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '8px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Target System %</span>
+                                        <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 700, color: '#fff' }}>{targetPercentage}%</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>System Total Load</span>
+                                        <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 700, color: '#fff' }}>{gridData ? formatMW(gridData.total_pload_mw) : '0.0'} MW</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Remaining Target</span>
+                                            <span style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>Target - Assigned MW</span>
+                                        </div>
+                                        <span style={{ 
+                                            fontSize: '0.9rem', 
+                                            fontFamily: 'monospace', 
+                                            fontWeight: 700, 
+                                            color: (() => {
+                                                const diff = calculateRemainingTargetMW();
+                                                const target = calculateTargetMW();
+                                                if (target === 0) return '#fff';
+                                                const percentDiff = (diff / target) * 100;
+                                                return Math.abs(percentDiff) <= 3 ? '#10B981' : '#EF4444'; // Green if within 3%, else Red
+                                            })()
+                                        }}>
+                                            {calculateRemainingTargetMW() > 0 ? '+' : ''}{formatMW(calculateRemainingTargetMW())} MW
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <BulletChart 
+                                    label="Overall Target vs Current Assigned"
+                                    actual={Number(calculateOverallAssignedMW()) || 0} 
+                                    target={Number(calculateTargetMW()) || 0} 
+                                    unit="MW" 
+                                    color="var(--accent-cyan)" 
+                                />
+                            </div>
+                        </div>
+
+                        {/* 2. Target vs Assigned Regional Progress */}
+                        {gridData?.regional_breakdown && (
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(255,255,255,0.05)', paddingLeft: '1.5rem' }}>
+                                <h5 style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Regional Target vs Assigned</h5>
+                                <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
+                                    <CompactRegionalMetrics 
+                                        data={getOverallRegionalSpiralData()}
+                                        labelKey="region"
+                                        valueKey="assigned_mw"
+                                        targetKey="target_mw"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 3. Potential MW vs Assigned */}
+                        {gridData?.regional_breakdown && (
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(255,255,255,0.05)', paddingLeft: '1.5rem' }}>
+                                <h5 style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Potential vs Assigned</h5>
+                                <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
+                                    <CompactRegionalMetrics 
+                                        data={getOverallRegionalPotentialData()}
+                                        labelKey="region"
+                                        valueKey="assigned_mw"
+                                        targetKey="potential_mw"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Stage Metrics List */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.85rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <FaLayerGroup size={14} style={{ color: 'var(--accent-cyan)' }} />
+                            Individual Stage Metrics
+                        </h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {stages.map((stage, idx) => {
+                                const stageAssigned = calculateTotalMW(stage);
+                                const stageAssignedVal = stageAssigned === "Loading..." ? 0 : parseFloat(stageAssigned);
+                                
+                                return (
+                                    <div key={stage.id} style={{ padding: '1rem 1.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: activeStageIdx === idx ? '1px solid var(--accent-cyan)' : '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '3rem', alignItems: 'center' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <BulletChart 
+                                                label={`${stage.label} Target vs Assigned`} 
+                                                actual={Number(stageAssignedVal) || 0} 
+                                                target={Number(stage.target_mw) || 0} 
+                                                unit="MW" 
+                                                color={activeStageIdx === idx ? 'var(--accent-cyan)' : '#3B82F6'} 
+                                            />
+                                        </div>
+                                        <div style={{ width: '40%', display: 'flex', flexDirection: 'column' }}>
+                                            <h5 style={{ margin: 0, fontSize: '0.65rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Regional Distribution</h5>
+                                            <CompactRegionalMetrics 
+                                                data={getStageRegionalSpiralData(stage)}
+                                                labelKey="region"
+                                                valueKey="assigned_mw"
+                                                targetKey="target_mw"
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                </div>
+            </div>
 
         </div >
     );
