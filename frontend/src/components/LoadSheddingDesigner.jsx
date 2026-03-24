@@ -2619,7 +2619,7 @@ const LoadSheddingDesigner = () => {
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                                             <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Remaining Target</span>
-                                            <span style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>Target - Assigned MW</span>
+                                            <span style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>Assigned - Target</span>
                                         </div>
                                         <span style={{ 
                                             fontSize: '0.9rem', 
@@ -2652,7 +2652,7 @@ const LoadSheddingDesigner = () => {
                         {gridData?.regional_breakdown && (
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(255,255,255,0.05)', paddingLeft: '1.5rem' }}>
                                 <h5 style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Regional Target vs Assigned</h5>
-                                <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
+                                <div style={{ flex: 1, paddingRight: '0.5rem', paddingTop: '1.25rem' }}>
                                     <CompactRegionalMetrics 
                                         data={getOverallRegionalSpiralData()}
                                         labelKey="region"
@@ -2667,7 +2667,7 @@ const LoadSheddingDesigner = () => {
                         {gridData?.regional_breakdown && (
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(255,255,255,0.05)', paddingLeft: '1.5rem' }}>
                                 <h5 style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Potential vs Assigned</h5>
-                                <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
+                                <div style={{ flex: 1, paddingRight: '0.5rem', paddingTop: '1.25rem' }}>
                                     <CompactRegionalMetrics 
                                         data={getOverallRegionalPotentialData()}
                                         labelKey="region"

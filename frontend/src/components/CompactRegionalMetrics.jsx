@@ -50,7 +50,8 @@ const CompactRegionalMetrics = ({ data, labelKey = 'region', valueKey = 'assigne
                             borderRadius: '6px',
                             transition: 'background 0.2s ease',
                             cursor: 'default',
-                            position: 'relative'
+                            position: 'relative',
+                            zIndex: isHovered ? 10 : 1
                         }}
                     >
                         {/* Header Row */}
@@ -134,7 +135,7 @@ const CompactRegionalMetrics = ({ data, labelKey = 'region', valueKey = 'assigne
                                         borderRadius: '4px',
                                         fontSize: '0.7rem',
                                         color: '#fff',
-                                        zIndex: 40,
+                                        zIndex: 999,
                                         whiteSpace: 'nowrap',
                                         pointerEvents: 'none',
                                         boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
