@@ -26,7 +26,7 @@ import {
 import BulletChart from './BulletChart';
 import CompactRegionalMetrics from './CompactRegionalMetrics';
 import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes, FaCodeBranch, FaLock, FaBullseye, FaGaugeHigh } from 'react-icons/fa6';
-import { FiAlertCircle } from 'react-icons/fi';
+import { FiAlertCircle, FiEdit2 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api';
 
@@ -85,7 +85,7 @@ const LoadSheddingDesigner = () => {
         }
     }, [schemeType, activeVersionId]);
 
-    const [stages, setStages] = useState(() => getInitialState('stages', [{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], setting_ids: [], target_mw: 1000 }]));
+    const [stages, setStages] = useState(() => getInitialState('stages', [{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], computed_pockets: [], setting_ids: [], target_mw: 1000 }]));
     const [activeStageIdx, setActiveStageIdx] = useState(() => getInitialState('activeStageIdx', 0));
     const [detailedSubstations, setDetailedSubstations] = useState(() => getInitialState('detailedSubstations', {}));
 
@@ -95,7 +95,6 @@ const LoadSheddingDesigner = () => {
     const [fetchingAnalytics, setFetchingAnalytics] = useState(false);
     const [pocketPreview, setPocketPreview] = useState(null);
     const [fetchingPocket, setFetchingPocket] = useState(false);
-    const [pocketCards, setPocketCards] = useState([]);
 
     // --- Settings Modal & Tab State ---
     const [showStageSettingsModal, setShowStageSettingsModal] = useState(false);
@@ -179,6 +178,20 @@ const LoadSheddingDesigner = () => {
             return;
         }
 
+        const existingPocket = (stages[activeStageIdx]?.computed_pockets || []).find(p =>
+            p.branches.length === activeBranches.length &&
+            p.branches.every(b => activeBranches.includes(b))
+        );
+        if (existingPocket) {
+            setPocketPreview({
+                pocket_substations: existingPocket.pocket_substations,
+                pocket_substation_details: existingPocket.pocket_substation_details || [],
+                total_p_mw: existingPocket.total_p_mw,
+                total_q_mvar: existingPocket.total_q_mvar,
+            });
+            return;
+        }
+
         let cancelled = false;
         setFetchingPocket(true);
         api.post('/topology/pocket-preview/', { branch_ids: activeBranches })
@@ -186,12 +199,13 @@ const LoadSheddingDesigner = () => {
                 if (!cancelled) {
                     const data = res.data;
                     setPocketPreview(data);
-                    // Auto-create pocket card if valid pocket formed (has substations and no warning)
-                    if (data.pocket_substations?.length > 0 && !data.warning && !data.error) {
+
+                    const canAutoCreate = !data.error && !data.warning && (data.pocket_substations || []).length > 0;
+                    if (canAutoCreate) {
                         const groupKey = (subId, voltage) => `${subId}||${voltage || ''}`;
                         const groups = {};
                         activeBranches.forEach(fullId => {
-                            const parts = fullId.split('_');
+                            const parts = String(fullId).split('_');
                             if (parts.length >= 3) {
                                 const localSub = parts[0];
                                 const voltageValue = substations.find(s => s.substation_id === localSub)?.voltage;
@@ -200,23 +214,45 @@ const LoadSheddingDesigner = () => {
                                 groups[key].branches.push(parts.slice(1).join('_'));
                             }
                         });
-                        setPocketCards(prev => [...prev, {
-                            id: Date.now(),
-                            branches: [...activeBranches],
-                            branchGroups: Object.values(groups),
-                            pocket_substations: data.pocket_substations,
-                            total_p_mw: data.total_p_mw,
-                            total_q_mvar: data.total_q_mvar
-                        }]);
-                        // Clear branches after auto-creating pocket
-                        const newStages = [...stages];
-                        newStages[activeStageIdx] = { ...newStages[activeStageIdx], pocket_branches: [] };
-                        setStages(newStages);
+
+                        setStages(prevStages => prevStages.map((stage, idx) => {
+                            if (idx !== activeStageIdx) return stage;
+
+                            const existingPocket = (stage.computed_pockets || []).find(p =>
+                                (p.branches || []).length === activeBranches.length &&
+                                (p.branches || []).every(branchId => activeBranches.includes(branchId))
+                            );
+                            if (existingPocket) {
+                                return { ...stage, pocket_branches: [] };
+                            }
+
+                            const newPocket = {
+                                id: Date.now(),
+                                branches: [...activeBranches],
+                                branchGroups: Object.values(groups),
+                                pocket_substations: data.pocket_substations || [],
+                                pocket_substation_details: data.pocket_substation_details || [],
+                                total_p_mw: data.total_p_mw || 0,
+                                substation_mw: (data.pocket_substation_details || []).reduce((acc, sub) => {
+                                    acc[sub.substation_id] = { total_p_mw: sub.p_mw, total_q_mvar: sub.q_mvar };
+                                    return acc;
+                                }, {}),
+                                total_q_mvar: data.total_q_mvar || 0,
+                            };
+
+                            return {
+                                ...stage,
+                                computed_pockets: [...(stage.computed_pockets || []), newPocket],
+                                pocket_branches: [],
+                            };
+                        }));
                     }
                 }
             })
             .catch(() => {
-                if (!cancelled) setPocketPreview({ error: "Failed to compute pocket." });
+                if (!cancelled) {
+                    setPocketPreview({ error: 'Failed to compute pocket.' });
+                }
             })
             .finally(() => {
                 if (!cancelled) setFetchingPocket(false);
@@ -235,7 +271,7 @@ const LoadSheddingDesigner = () => {
         setTargetPercentage(60);
         setReviewYear(new Date().getFullYear());
         setVersionLabel('');
-        setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], pocket_branches: [], setting_ids: [], target_mw: 1000 }]);
+        setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], computed_pockets: [], pocket_branches: [], setting_ids: [], target_mw: 1000 }]);
         setActiveStageIdx(0);
         setActiveVersionId(null);
         setView('designer');
@@ -267,6 +303,42 @@ const LoadSheddingDesigner = () => {
                             setting_ids: (stageData.settings || []).map(stg => stg.id),
                             transformer_bays: stageData.transformer_bays || [],
                             pocket_bays: stageData.pocket_bays || [],
+                            computed_pockets: (stageData.pocket_bays || []).map(pb => {
+                                const cache = pb.topology_cache || {};
+                                // Reconstruct the groups for UI display
+                                const branchIds = (pb.boundaries || []).flatMap(bound => bound.branches || []);
+                                const groupKey = (subId, voltage) => `${subId}||${voltage || ''}`;
+                                const groups = {};
+                                branchIds.forEach(bId => {
+                                    relays.forEach(r => {
+                                        const br = (r.incoming_branches || []).find(b => b.id === bId);
+                                        if (br) {
+                                            const subId = r.substation_id || r.substation;
+                                            const voltageValue = substations.find(s => s.substation_id === subId)?.voltage;
+                                            const key = groupKey(subId, voltageValue);
+                                            if (!groups[key]) groups[key] = { subId, voltage: voltageValue ? `${voltageValue}kV` : '', branches: [] };
+                                            groups[key].branches.push(br.bay_id.split('_').slice(1).join('_'));
+                                        }
+                                    });
+                                });
+
+                                return {
+                                    id: pb.id,
+                                    branches: branchIds.map(bId => {
+                                        let foundBayId = null;
+                                        relays.forEach(r => {
+                                            const br = (r.incoming_branches || []).find(b => b.id === bId);
+                                            if (br) foundBayId = br.bay_id;
+                                        });
+                                        return foundBayId;
+                                    }).filter(id => id !== null),
+                                    branchGroups: Object.values(groups),
+                                    pocket_substations: cache.isolated_substations || [],
+                                    total_p_mw: cache.mw || 0,
+                                    substation_mw: cache.substation_mw || {},
+                                    total_q_mvar: 0
+                                };
+                            }),
                             pocket_branches: (stageData.pocket_bays || []).flatMap(pb =>
                                 (pb.boundaries || []).flatMap(bound =>
                                     (bound.branches || []).map(bId => {
@@ -285,6 +357,27 @@ const LoadSheddingDesigner = () => {
                 // Sort by stage_number
                 detailedStages.sort((a, b) => a.stage_number - b.stage_number);
                 setStages(detailedStages);
+                
+                // Fetch detailed substation data for all substations in all stages (for MW calculations)
+                const allSubIds = [...new Set(detailedStages.flatMap(s => 
+                    [...(s.transformer_bays?.map(b => b.relay_substation_id) || []),
+                     ...(s.computed_pockets?.flatMap(p => p.pocket_substations || []) || [])]
+                ))];
+                for (const subId of allSubIds) {
+                    if (!detailedSubstations[subId]) {
+                        try {
+                            const [res, txRes] = await Promise.all([
+                                api.get(`/substations/${subId}/`),
+                                api.get(`/load-transformers/?substation=${subId}`)
+                            ]);
+                            const data = res.data;
+                            data.db_transformers = txRes.data;
+                            setDetailedSubstations(prev => ({ ...prev, [subId]: data }));
+                        } catch (err) {
+                            console.error(`Failed to fetch sub data for ${subId}`, err);
+                        }
+                    }
+                }
             } else {
                 setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', target_mw: 1000, transformer_bays: [], pocket_bays: [], setting_ids: [] }]);
             }
@@ -442,7 +535,7 @@ const LoadSheddingDesigner = () => {
             id: 'temp_' + Date.now(),
             relay: relay.id,
             relay_substation_id: relay.substation_id || relay.substation, // Use mnemonic if available
-            transformers: (relay.load_transformers || []).map(tId => ({ id: tId })) // Store minimal ref
+            transformers: (relay.load_transformers || []).map(t => ({ id: typeof t === 'object' ? t.id : t })) // Store minimal ref
         }];
 
         currentStages[activeStageIdx] = {
@@ -470,55 +563,67 @@ const LoadSheddingDesigner = () => {
     };
 
     const toggleBranchInStage = (bayId, localSubstationId) => {
-        const currentStages = [...stages];
-        const active = { ...currentStages[activeStageIdx] };
-
-        // Reconstruct full bay_id if needed (incoming branches display as remote-end only)
-        let fullId = bayId;
+        let fullId = typeof bayId === 'string' ? bayId : String(bayId);
         if (localSubstationId && !fullId.includes('_')) {
             fullId = `${localSubstationId}_${fullId}`;
         }
 
-        const existing = active.pocket_branches || [];
-        const isAdded = existing.includes(fullId);
-        active.pocket_branches = isAdded
-            ? existing.filter(id => id !== fullId)
-            : [...existing, fullId];
+        setStages(prevStages => prevStages.map((stage, idx) => {
+            if (idx !== activeStageIdx) return stage;
+            const existing = stage.pocket_branches || [];
+            const isAdded = existing.includes(fullId);
+            const pocketContainingBranch = (stage.computed_pockets || []).find(pocket => (pocket.branches || []).includes(fullId));
 
-        currentStages[activeStageIdx] = active;
-        setStages(currentStages);
+            if (pocketContainingBranch) {
+                return {
+                    ...stage,
+                    computed_pockets: (stage.computed_pockets || []).filter(pocket => pocket.id !== pocketContainingBranch.id),
+                };
+            }
+
+            return {
+                ...stage,
+                pocket_branches: isAdded
+                    ? existing.filter(id => id !== fullId)
+                    : [...existing, fullId],
+            };
+        }));
     };
 
-    const toggleTransformerInStage = (relay, transformerId) => {
+    const toggleTransformerInStage = (relay, transformerVal) => {
+        const transformerId = typeof transformerVal === 'object' ? transformerVal.id : transformerVal;
         const currentStages = [...stages];
         const active = { ...currentStages[activeStageIdx] };
-        const existingBayIdx = active.transformer_bays.findIndex(tb => tb.relay === relay.id);
+        
+        // Ensure we clone the transformer_bays array so we don't mutate state
+        const activeBays = [...(active.transformer_bays || [])];
+        const existingBayIdx = activeBays.findIndex(tb => tb.relay === relay.id);
 
         if (existingBayIdx > -1) {
             // Relay already in stage
-            const bay = { ...active.transformer_bays[existingBayIdx] };
+            const bay = { ...activeBays[existingBayIdx] };
             const txList = [...bay.transformers];
-            const txIdx = txList.findIndex(t => String(t.id) === String(transformerId));
+            const txIdx = txList.findIndex(t => String(typeof t === 'object' ? t.id : t) === String(transformerId));
 
             if (txIdx > -1) {
                 // Remove transformer
                 txList.splice(txIdx, 1);
                 if (txList.length === 0) {
                     // Remove bay if empty
-                    active.transformer_bays.splice(existingBayIdx, 1);
+                    activeBays.splice(existingBayIdx, 1);
                 } else {
                     bay.transformers = txList;
-                    active.transformer_bays[existingBayIdx] = bay;
+                    activeBays[existingBayIdx] = bay;
                 }
             } else {
                 // Add transformer
                 txList.push({ id: transformerId });
                 bay.transformers = txList;
-                active.transformer_bays[existingBayIdx] = bay;
+                activeBays[existingBayIdx] = bay;
             }
         } else {
             // Relay not in stage, add it with this transformer
-            active.transformer_bays.push({
+            activeBays.push({
                 id: 'temp_' + Date.now(),
                 relay: relay.id,
                 relay_substation_id: relay.substation_id || relay.substation,
@@ -527,12 +632,68 @@ const LoadSheddingDesigner = () => {
             // Fetch substation data if missing
             const subId = relay.substation_id || relay.substation;
             if (!detailedSubstations[subId]) {
-                refreshStageData(activeStageIdx);
+                Promise.all([
+                    api.get(`/substations/${subId}/`),
+                    api.get(`/load-transformers/?substation=${subId}`)
+                ]).then(([res, txRes]) => {
+                    const data = res.data;
+                    data.db_transformers = txRes.data;
+                    setDetailedSubstations(prev => ({ ...prev, [subId]: data }));
+                }).catch(err => {
+                    console.error("Failed to fetch sub data mapping for MW calc", err);
+                });
             }
         }
 
+        active.transformer_bays = activeBays;
         currentStages[activeStageIdx] = active;
         setStages(currentStages);
+    };
+
+    const buildPocketCardFromPreview = (branches, preview) => {
+        const groupKey = (subId, voltage) => `${subId}||${voltage || ''}`;
+        const groups = {};
+        (branches || []).forEach(fullId => {
+            const parts = String(fullId || '').split('_');
+            if (parts.length >= 3) {
+                const localSub = parts[0];
+                const voltageValue = substations.find(s => s.substation_id === localSub)?.voltage;
+                const key = groupKey(localSub, voltageValue);
+                if (!groups[key]) groups[key] = { subId: localSub, voltage: voltageValue ? `${voltageValue}kV` : '', branches: [] };
+                groups[key].branches.push(parts.slice(1).join('_'));
+            }
+        });
+
+        return {
+            id: `preview-${Date.now()}`,
+            branches: [...(branches || [])],
+            branchGroups: Object.values(groups),
+            pocket_substations: preview?.pocket_substations || [],
+            pocket_substation_details: preview?.pocket_substation_details || [],
+            total_p_mw: preview?.total_p_mw || 0,
+            substation_mw: (preview?.pocket_substation_details || []).reduce((acc, sub) => {
+                acc[sub.substation_id] = { total_p_mw: sub.p_mw, total_q_mvar: sub.q_mvar };
+                return acc;
+            }, {}),
+            total_q_mvar: preview?.total_q_mvar || 0,
+        };
+    };
+
+    const getEffectiveStagePockets = (stage, stageIdx) => {
+        const pockets = stage?.computed_pockets || [];
+        if (stageIdx !== activeStageIdx) return pockets;
+
+        const looseBranches = stage?.pocket_branches || [];
+        const previewIsUsable = pocketPreview && !pocketPreview.error && (pocketPreview.pocket_substations || []).length > 0;
+        if (!looseBranches.length || !previewIsUsable) return pockets;
+
+        const duplicatePocket = pockets.some(pocket =>
+            (pocket.branches || []).length === looseBranches.length &&
+            (pocket.branches || []).every(branchId => looseBranches.includes(branchId))
+        );
+        if (duplicatePocket) return pockets;
+
+        return [...pockets, buildPocketCardFromPreview(looseBranches, pocketPreview)];
     };
 
     const refreshStageData = async (stageIdx) => {
@@ -606,17 +767,18 @@ const LoadSheddingDesigner = () => {
                 }
 
                 // Add pocket bays
-                const pocketBranches = stage.pocket_branches || [];
-                if (pocketBranches.length > 0) {
-                    // Group branches by relay
-                    const relayGroups = {}; // relayId -> [branchId1, branchId2]
+                const pockets = stage.computed_pockets || [];
+                for (const pocket of pockets) {
+                    const pbRes = await api.post('/load-shedding-pocket-bays/', {
+                        stage: stageId
+                    });
+                    const pbId = pbRes.data.id;
 
-                    pocketBranches.forEach(bayId => {
-                        // bayId is like SUB_SUB_CKT
-                        // Find the relay and incoming branch ID in master data
+                    // Group branches in this pocket by relay
+                    const relayGroups = {};
+                    (pocket.branches || []).forEach(bayId => {
                         let foundRelay = null;
                         let foundBranchId = null;
-
                         relays.forEach(r => {
                             const br = (r.incoming_branches || []).find(b => b.bay_id === bayId);
                             if (br) {
@@ -624,7 +786,35 @@ const LoadSheddingDesigner = () => {
                                 foundBranchId = br.id;
                             }
                         });
+                        if (foundRelay && foundBranchId) {
+                            if (!relayGroups[foundRelay.id]) relayGroups[foundRelay.id] = [];
+                            relayGroups[foundRelay.id].push(foundBranchId);
+                        }
+                    });
 
+                    for (const [rId, branchIds] of Object.entries(relayGroups)) {
+                        await api.post('/load-shedding-pocket-boundaries/', {
+                            pocket: pbId,
+                            relay: rId,
+                            branches: branchIds
+                        });
+                    }
+                }
+
+                // Also save any "loose" branches not in a pocket yet
+                const looseBranches = stage.pocket_branches || [];
+                if (looseBranches.length > 0) {
+                    const relayGroups = {};
+                    looseBranches.forEach(bayId => {
+                        let foundRelay = null;
+                        let foundBranchId = null;
+                        relays.forEach(r => {
+                            const br = (r.incoming_branches || []).find(b => b.bay_id === bayId);
+                            if (br) {
+                                foundRelay = r;
+                                foundBranchId = br.id;
+                            }
+                        });
                         if (foundRelay && foundBranchId) {
                             if (!relayGroups[foundRelay.id]) relayGroups[foundRelay.id] = [];
                             relayGroups[foundRelay.id].push(foundBranchId);
@@ -632,13 +822,8 @@ const LoadSheddingDesigner = () => {
                     });
 
                     if (Object.keys(relayGroups).length > 0) {
-                        // Create one pocket bay for the stage (or should it be one per relay?
-                        // The model allows multiple boundaries per pocket. We'll create one pocket per stage for now.)
-                        const pbRes = await api.post('/load-shedding-pocket-bays/', {
-                            stage: stageId
-                        });
+                        const pbRes = await api.post('/load-shedding-pocket-bays/', { stage: stageId });
                         const pbId = pbRes.data.id;
-
                         for (const [rId, branchIds] of Object.entries(relayGroups)) {
                             await api.post('/load-shedding-pocket-boundaries/', {
                                 pocket: pbId,
@@ -653,6 +838,7 @@ const LoadSheddingDesigner = () => {
             alert("Draft saved successfully!");
         } catch (err) {
             console.error("Failed to save scheme", err);
+            // ... (rest of error handling)
 
             // Try to extract useful error message based on DRF format
             let errStr = "Check console.";
@@ -789,54 +975,25 @@ const LoadSheddingDesigner = () => {
             });
         });
 
-        // Add network pockets MW
-        const lockedMW = pocketCards.reduce((sum, card) => sum + (card.total_p_mw || 0), 0);
-        total += lockedMW;
+        // Add network pockets MW from all stages
+        stages.forEach((stage, stageIdx) => {
+            const pockets = getEffectiveStagePockets(stage, stageIdx);
+            pockets.forEach(card => {
+                total += (card.total_p_mw || 0);
+            });
+        });
 
         return total;
     };
 
-    const calculateTotalMW = (stage) => {
-        if (!stage) return "0.00";
+    const calculateTotalMW = (stage, stageIdx = activeStageIdx) => {
+        if (!stage) return 0;
         let total = 0;
-        let anyLoading = false;
 
         stage.transformer_bays?.forEach(bay => {
             const subId = bay.relay_substation_id;
             const detail = detailedSubstations[subId];
 
-            if (!detail || !detail.transformers || !detail.db_transformers) {
-                // If this substation's data hasn't been fetched via Expansion yet, we can't get exact MW
-                anyLoading = true;
-                return;
-            }
-
-            bay.transformers?.forEach(transformerObj => {
-                const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
-                const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                if (dbTx) {
-                    const expectedName = `TX T${dbTx.transformer_no}`;
-                    const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
-                    if (tx && tx.load_mw != null) {
-                        total += parseFloat(tx.load_mw);
-                    }
-                }
-            });
-        });
-
-        if (anyLoading && total === 0) return "Loading...";
-        return formatMW(total);
-    };
-    const calculateRegionalMW = (stage, region) => {
-        if (!stage || !region) return 0;
-        let total = 0;
-
-        stage.transformer_bays?.forEach(bay => {
-            const subId = bay.relay_substation_id;
-            const sub = substations.find(s => s.substation_id === subId);
-            if (!sub || sub.region !== region) return;
-
-            const detail = detailedSubstations[subId];
             if (!detail || !detail.transformers || !detail.db_transformers) return;
 
             bay.transformers?.forEach(transformerObj => {
@@ -852,14 +1009,112 @@ const LoadSheddingDesigner = () => {
             });
         });
 
-        return total.toFixed(2);
+        // Add network pockets MW
+        const pockets = getEffectiveStagePockets(stage, stageIdx);
+        pockets.forEach(card => {
+            total += (card.total_p_mw || 0);
+        });
+
+        return total;
+    };
+
+    const calculateTransformerMW = (stage) => {
+        if (!stage) return 0;
+        let total = 0;
+
+        stage.transformer_bays?.forEach(bay => {
+            const subId = bay.relay_substation_id;
+            const detail = detailedSubstations[subId];
+
+            if (!detail || !detail.transformers || !detail.db_transformers) return;
+
+            bay.transformers?.forEach(transformerObj => {
+                const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
+                const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
+                if (dbTx) {
+                    const expectedName = `TX T${dbTx.transformer_no}`;
+                    const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                    if (tx && tx.load_mw != null) {
+                        total += parseFloat(tx.load_mw);
+                    }
+                }
+            });
+        });
+
+        return total;
+    };
+    const calculateRegionalMW = (stage, region) => {
+        if (!stage) return 0;
+        
+        // Use a local map for this stage to handle overrides correctly
+        const subDataMap = new Map(); // subId -> mw
+
+        // 1. Process standard transformer bays for this stage
+        stage.transformer_bays?.forEach(bay => {
+            const subId = bay.relay_substation_id;
+            const sub = substations.find(s => s.substation_id === subId);
+            if (!sub || (region && sub.region !== region)) return;
+
+            const detail = detailedSubstations[subId];
+            if (!detail || !detail.transformers || !detail.db_transformers) {
+                // Fallback: use substation's total_pload_mw if detailed data not available
+                if (sub.total_pload_mw > 0) {
+                    const bayCount = bay.transformers?.length || 1;
+                    const fallbackMW = parseFloat(sub.total_pload_mw) / bayCount;
+                    subDataMap.set(subId, (subDataMap.get(subId) || 0) + fallbackMW);
+                }
+                return;
+            }
+
+            if (!subDataMap.has(subId)) subDataMap.set(subId, 0);
+            let subMW = subDataMap.get(subId);
+
+            bay.transformers?.forEach(transformerObj => {
+                const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
+                const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
+                if (dbTx) {
+                    const expectedName = `TX T${dbTx.transformer_no}`;
+                    const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                    if (tx && tx.load_mw != null) {
+                        subMW += parseFloat(tx.load_mw);
+                    }
+                }
+            });
+            subDataMap.set(subId, subMW);
+        });
+
+        // 2. Process Network Pockets for this stage
+        const pockets = getEffectiveStagePockets(stage, stages.indexOf(stage));
+        pockets.forEach(card => {
+            (card.pocket_substations || []).forEach(subId => {
+                const sub = substations.find(s => s.substation_id === subId);
+                if (sub && (!region || sub.region === region)) {
+                    // Pocket assignment drops the entire substation, so it overrides any transformer bays
+                    // Use per-substation MW if available, otherwise distribute total evenly
+                    const subMW = card.substation_mw?.[subId]?.total_p_mw;
+                    if (subMW != null && subMW > 0) {
+                        subDataMap.set(subId, parseFloat(subMW));
+                    } else if (card.total_p_mw && card.pocket_substations?.length > 0) {
+                        subDataMap.set(subId, parseFloat(card.total_p_mw) / card.pocket_substations.length);
+                    }
+                }
+            });
+        });
+
+        // 3. Sum up the results for this region
+        let total = 0;
+        subDataMap.forEach(mw => {
+            total += mw;
+        });
+
+        return total;
     };
 
     const getOverallRegionalSpiralData = () => {
         if (!gridData || !gridData.regional_breakdown) return [];
         return gridData.regional_breakdown.map(reg => {
             const target_mw = (targetPercentage / 100) * reg.total_pload_mw;
-            const assigned_mw = stages.reduce((sum, s) => sum + Number(calculateRegionalMW(s, reg.region) || 0), 0);
+            const assigned_mw = stages.reduce((sum, s) => sum + (calculateRegionalMW(s, reg.region) || 0), 0);
             return {
                 region: reg.region,
                 target_mw,
@@ -874,17 +1129,17 @@ const LoadSheddingDesigner = () => {
             const potential_mw = substations
                 .filter(sub => {
                     if (sub.region !== reg.region || !sub.has_active_relay) return false;
-                    // Check if this substation has any active relay that sheds transformers
+                    // Check if this substation has any active relay that sheds transformers OR has incoming branches
                     const subRelays = relays.filter(r => 
                         (r.substation_id === sub.substation_id || r.substation === sub.substation_id) && 
                         r.is_active && 
-                        r.load_transformers && r.load_transformers.length > 0
+                        ((r.load_transformers && r.load_transformers.length > 0) || (r.incoming_branches && r.incoming_branches.length > 0))
                     );
                     return subRelays.length > 0;
                 })
                 .reduce((sum, sub) => sum + (parseFloat(sub.total_pload_mw) || 0), 0);
             
-            const assigned_mw = stages.reduce((sum, s) => sum + Number(calculateRegionalMW(s, reg.region) || 0), 0);
+            const assigned_mw = stages.reduce((sum, s) => sum + (calculateRegionalMW(s, reg.region) || 0), 0);
             
             return {
                 region: reg.region,
@@ -892,6 +1147,100 @@ const LoadSheddingDesigner = () => {
                 assigned_mw
             };
         });
+    };
+
+    const getAssignedSubstationMetrics = (stageArray, includePockets = false) => {
+        const assignedSubMap = new Map();
+
+        // 1. Process standard transformer bays
+        stageArray.forEach(stage => {
+            stage.transformer_bays?.forEach(bay => {
+                const subId = bay.relay_substation_id;
+                const subIdTrim = subId?.toString().trim().toUpperCase();
+                if (!subId) return;
+
+                if (!assignedSubMap.has(subId)) assignedSubMap.set(subId, { isCritical: false, mw: 0 });
+                const subData = assignedSubMap.get(subId);
+
+                const bayHasCritical = bay.transformers?.some(tObj => {
+                    const tIdVal = typeof tObj === 'object' ? tObj.id : tObj;
+                    const numId = Number(tIdVal);
+                    return criticalAssets.some(ca => (ca.load_transformers || []).includes(numId));
+                });
+                if (bayHasCritical) subData.isCritical = true;
+
+                // Fallback check: if substation itself is critical in the list
+                if (!subData.isCritical && criticalAssets.some(ca => {
+                    const caSub = (ca.substation_id || ca.substation)?.toString().trim().toUpperCase();
+                    return caSub === subIdTrim;
+                })) {
+                    subData.isCritical = true;
+                }
+
+                const detail = detailedSubstations[subId];
+                if (detail && detail.transformers && detail.db_transformers) {
+                    bay.transformers?.forEach(tObj => {
+                        const tId = typeof tObj === 'object' ? tObj.id : tObj;
+                        const dbTx = detail.db_transformers.find(t => String(t.id) === String(tId));
+                        if (dbTx) {
+                            const expectedName = `TX T${dbTx.transformer_no}`;
+                            const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                            if (tx && tx.load_mw != null) {
+                                subData.mw += parseFloat(tx.load_mw);
+                            }
+                        }
+                    });
+                }
+            });
+        });
+
+        // 2. Process overriding Network Pockets
+        if (includePockets) {
+            stageArray.forEach(stage => {
+                const pockets = getEffectiveStagePockets(stage, stages.indexOf(stage));
+                pockets.forEach(card => {
+                    if (card.pocket_substations && card.pocket_substations.length > 0) {
+                        card.pocket_substations.forEach(subId => {
+                            const subIdTrim = subId?.toString().trim().toUpperCase();
+                            if (!assignedSubMap.has(subId)) assignedSubMap.set(subId, { isCritical: false, mw: 0 });
+                            const subData = assignedSubMap.get(subId);
+                            
+                            if (criticalAssets.some(ca => {
+                                const caSub = (ca.substation_id || ca.substation)?.toString().trim().toUpperCase();
+                                return caSub === subIdTrim;
+                            })) {
+                                subData.isCritical = true;
+                            }
+                            
+                            // Use per-substation MW if available (newly computed), otherwise distribute total evenly
+                            const subMW = card.substation_mw?.[subId]?.total_p_mw;
+                            if (subMW != null && subMW > 0) {
+                                subData.mw = parseFloat(subMW);
+                            } else if (card.total_p_mw && card.pocket_substations?.length > 0) {
+                                // Fallback: distribute total MW evenly among pocket substations
+                                subData.mw = parseFloat(card.total_p_mw) / card.pocket_substations.length;
+                            }
+                        });
+                    }
+                });
+            });
+        }
+
+        let totalSubs = 0;
+        let totalMW = 0;
+        let criticalSubs = 0;
+        let criticalMW = 0;
+
+        assignedSubMap.forEach(data => {
+            totalSubs++;
+            totalMW += data.mw;
+            if (data.isCritical) {
+                criticalSubs++;
+                criticalMW += data.mw;
+            }
+        });
+
+        return { totalSubs, totalMW, criticalSubs, criticalMW };
     };
 
     const getStageRegionalSpiralData = (stage) => {
@@ -1334,7 +1683,7 @@ const LoadSheddingDesigner = () => {
                                     </h4>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                         <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>
-                                            {calculateTotalMW(stages[activeStageIdx])} {calculateTotalMW(stages[activeStageIdx]) === "Loading..." ? "" : "MW"}
+                                            {formatMW(calculateTransformerMW(stages[activeStageIdx]))} MW
                                         </div>
                                     </div>
                                 </div>
@@ -1369,7 +1718,8 @@ const LoadSheddingDesigner = () => {
                                             }
                                             hasCriticalAsset = bay.transformers?.some(txObj => {
                                                 const tId = typeof txObj === 'object' ? txObj.id : txObj;
-                                                return criticalAssets.some(ca => ca.load_transformers && ca.load_transformers.includes(Number(tId)));
+                                                const tidVal = typeof tId === 'object' ? tId.id : tId;
+                                                return criticalAssets.some(ca => ca.load_transformers && ca.load_transformers.includes(Number(tidVal)));
                                             }) || false;
                                         }
 
@@ -1383,7 +1733,7 @@ const LoadSheddingDesigner = () => {
                                                 <div style={{ fontSize: '0.7rem', fontWeight: 600, fontFamily: 'monospace', color: '#fff' }}>{subId}</div>
                                                 <div style={{
                                                     fontSize: '0.65rem',
-                                                    color: hasCriticalAsset ? '#EF4444' : 'var(--accent-cyan)',
+                                                    color: hasCriticalAsset ? '#F97316' : 'var(--accent-cyan)',
                                                     fontWeight: 600,
                                                     paddingLeft: '0.2rem',
                                                     borderLeft: '1px solid rgba(0, 255, 163, 0.2)',
@@ -1393,7 +1743,7 @@ const LoadSheddingDesigner = () => {
                                                 }}>
                                                     {infoDisplay}
                                                     {hasCriticalAsset && (
-                                                        <FiAlertCircle size={10} style={{ color: '#EF4444' }} title="Contains Critical Asset" />
+                                                        <FiAlertCircle size={10} style={{ color: '#F97316' }} title="Contains Critical Asset" />
                                                     )}
                                                 </div>
                                                 <button
@@ -1438,7 +1788,8 @@ const LoadSheddingDesigner = () => {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                         <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>
                                             {(() => {
-                                                const lockedMW = pocketCards.reduce((sum, card) => sum + (card.total_p_mw || 0), 0);
+                                                const pockets = stages[activeStageIdx]?.computed_pockets || [];
+                                                const lockedMW = pockets.reduce((sum, card) => sum + (card.total_p_mw || 0), 0);
                                                 const previewMW = pocketPreview?.total_p_mw || 0;
                                                 const totalMW = lockedMW + previewMW;
                                                 return `${formatMW(totalMW)} MW`;
@@ -1447,88 +1798,60 @@ const LoadSheddingDesigner = () => {
                                     </div>
                                 </div>
 
-                                {/* POCKET CARDS */}
-                                {pocketCards.map((card, idx) => (
+                                { (stages[activeStageIdx]?.computed_pockets || []).map((card, idx) => (
                                     <div key={card.id} style={{
-                                        background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.08) 0%, rgba(0, 229, 255, 0.04) 100%)',
-                                        border: '1px solid rgba(0, 229, 255, 0.25)',
-                                        borderRadius: '12px',
-                                        padding: '1rem',
+                                        background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.07) 0%, rgba(0, 229, 255, 0.025) 100%)',
+                                        border: '1px solid rgba(0, 229, 255, 0.18)',
+                                        borderRadius: '10px',
+                                        padding: '0.7rem 0.8rem',
                                         display: 'flex',
                                         flexDirection: 'column',
-                                        gap: '0.75rem'
+                                        gap: '0.55rem',
+                                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)'
                                     }}>
-                                        {/* Header */}
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
                                                 <FaCodeBranch size={14} style={{ color: 'var(--accent-cyan)' }} />
-                                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
                                                     Pocket {idx + 1}
                                                 </span>
                                             </div>
-                                            <div style={{ display: 'flex', gap: '1rem' }}>
-                                                <div style={{ textAlign: 'center' }}>
-                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>Load</div>
-                                                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                                                        {formatMW(card.total_p_mw ?? 0)} MW
-                                                    </div>
-                                                </div>
-                                                <div style={{ textAlign: 'center' }}>
-                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>Subs</div>
-                                                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                                                        {card.pocket_substations?.length ?? 0}
-                                                    </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                                <div style={{
+                                                    padding: '3px 8px',
+                                                    borderRadius: '999px',
+                                                    background: 'rgba(0, 229, 255, 0.10)',
+                                                    border: '1px solid rgba(0, 229, 255, 0.16)',
+                                                    fontSize: '0.68rem',
+                                                    fontWeight: 700,
+                                                    color: 'var(--accent-cyan)',
+                                                    whiteSpace: 'nowrap'
+                                                }}>
+                                                    {formatMW(card.total_p_mw ?? 0)} MW
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* Branch Pills */}
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
-                                            {card.branchGroups.map((grp, gIdx) => (
-                                                <div key={gIdx} style={{
-                                                    display: 'flex', alignItems: 'center', gap: '0.3rem',
-                                                    padding: '0.15rem 0.4rem 0.15rem 0.3rem', borderRadius: '12px',
-                                                    background: 'rgba(0, 229, 255, 0.08)', border: '1px solid rgba(0, 229, 255, 0.2)'
-                                                }}>
-                                                    <FaCodeBranch size={8} style={{ color: 'var(--accent-cyan)' }} />
-                                                    <span style={{ fontSize: '0.7rem', fontWeight: 600, fontFamily: 'monospace', color: '#fff' }}>{grp.subId}</span>
-                                                    <span style={{ fontSize: '0.65rem', color: 'var(--accent-cyan)', paddingLeft: '0.2rem', borderLeft: '1px solid rgba(0, 229, 255, 0.2)' }}>
-                                                        {`${grp.voltage} | ${grp.branches.sort().join(', ')}`}
-                                                    </span>
-                                                </div>
-                                            ))}
+                                        <div style={{
+                                            fontSize: '0.68rem',
+                                            color: 'rgba(255,255,255,0.82)',
+                                            lineHeight: 1.4,
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis'
+                                        }}>
+                                            <span style={{ color: '#d7fbff', fontWeight: 700 }}>
+                                                {card.branchGroups?.map(grp => grp.subId).join(', ') || `Pocket ${idx + 1}`}
+                                            </span>
+                                            <span style={{ color: 'rgba(255,255,255,0.28)', padding: '0 8px' }}>|</span>
+                                            <span style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                                                {card.branchGroups?.map(grp => grp.branches.join(', ')).join('  •  ') || '-'}
+                                            </span>
+                                            <span style={{ color: 'rgba(255,255,255,0.28)', padding: '0 8px' }}>|</span>
+                                            <span style={{ color: 'rgba(255,255,255,0.7)' }}>
+                                                {(card.pocket_substation_details || card.pocket_substations || []).map(sub => sub.substation_id || sub).join(', ')}
+                                            </span>
                                         </div>
-
-                                        {/* Substations */}
-                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                                            {card.pocket_substations.map(sub => (
-                                                <span key={sub.substation_id} style={{
-                                                    padding: '4px 10px', borderRadius: '6px',
-                                                    background: 'rgba(0, 229, 255, 0.12)',
-                                                    border: '1px solid rgba(0, 229, 255, 0.25)',
-                                                    fontSize: '0.75rem', color: 'var(--accent-cyan)', fontWeight: 500
-                                                }}>
-                                                    {sub.name || sub.substation_id}
-                                                    {sub.p_mw != null && <span style={{ opacity: 0.7, marginLeft: '4px' }}>({formatMW(sub.p_mw)} MW)</span>}
-                                                </span>
-                                            ))}
-                                        </div>
-
-                                        {/* Remove button */}
-                                        <button
-                                            onClick={() => setPocketCards(prev => prev.filter(c => c.id !== card.id))}
-                                            style={{
-                                                background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)',
-                                                color: '#EF4444', cursor: 'pointer',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
-                                                padding: '4px 10px', borderRadius: '6px',
-                                                fontSize: '0.7rem', transition: 'all 0.2s', alignSelf: 'flex-start'
-                                            }}
-                                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)'; }}
-                                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'; }}
-                                        >
-                                            <X size={12} /> Remove Pocket
-                                        </button>
                                     </div>
                                 ))}
 
@@ -1619,14 +1942,15 @@ const LoadSheddingDesigner = () => {
                                                     })}
                                                 </div>
 
+                                                {!fetchingPocket && pocketPreview?.warning && (
+                                                    <div style={{ fontSize: '0.75rem', color: '#FFAB00', marginTop: '0.75rem' }}>
+                                                        {pocketPreview.warning}
+                                                    </div>
+                                                )}
+
                                                 {/* Preview / Fallback Lock Pocket section */}
                                                 {pocketPreview && !pocketPreview.error && (pocketPreview.warning || pocketPreview.pocket_substations?.length === 0) && (
                                                     <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(0, 229, 255, 0.1)' }}>
-                                                        {pocketPreview.warning && (
-                                                            <div style={{ fontSize: '0.75rem', color: '#FFAB00', marginBottom: '0.5rem' }}>
-                                                                {pocketPreview.warning}
-                                                            </div>
-                                                        )}
                                                         {pocketPreview.pocket_substations?.length > 0 && (
                                                             <div style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', marginBottom: '0.5rem', fontWeight: 600 }}>
                                                                 Preview: {pocketPreview.pocket_substations.length} substations ({formatMW(pocketPreview.total_p_mw ?? 0)} MW)
@@ -1647,16 +1971,24 @@ const LoadSheddingDesigner = () => {
                                                                         groups[key].branches.push(parts.slice(1).join('_'));
                                                                     }
                                                                 });
-                                                                setPocketCards(prev => [...prev, {
+                                                                const newPocket = {
                                                                     id: Date.now(),
                                                                     branches: [...branches],
                                                                     branchGroups: Object.values(groups),
                                                                     pocket_substations: pocketPreview.pocket_substations || [],
+                                                                    pocket_substation_details: pocketPreview.pocket_substation_details || [],
                                                                     total_p_mw: pocketPreview.total_p_mw || 0,
+                                                                    substation_mw: (pocketPreview.pocket_substation_details || []).reduce((acc, sub) => {
+                                                                        acc[sub.substation_id] = { total_p_mw: sub.p_mw, total_q_mvar: sub.q_mvar };
+                                                                        return acc;
+                                                                    }, {}),
                                                                     total_q_mvar: pocketPreview.total_q_mvar || 0
-                                                                }]);
+                                                                };
                                                                 const newStages = [...stages];
-                                                                newStages[activeStageIdx] = { ...newStages[activeStageIdx], pocket_branches: [] };
+                                                                const active = { ...newStages[activeStageIdx] };
+                                                                active.computed_pockets = [...(active.computed_pockets || []), newPocket];
+                                                                active.pocket_branches = [];
+                                                                newStages[activeStageIdx] = active;
                                                                 setStages(newStages);
                                                                 setPocketPreview(null);
                                                             }}
@@ -1745,7 +2077,7 @@ const LoadSheddingDesigner = () => {
                                             onChange={(e) => setSearchTerm(e.target.value)}
                                             style={{
                                                 width: '100%',
-                                                padding: '0.525rem 1rem 0.525rem 2.5rem',
+                                                padding: '0.525rem 2.5rem 0.525rem 2.5rem',
                                                 background: 'rgba(255,255,255,0.03)',
                                                 border: '1px solid rgba(255,255,255,0.08)',
                                                 borderRadius: '8px',
@@ -1765,6 +2097,41 @@ const LoadSheddingDesigner = () => {
                                                 e.target.style.boxShadow = 'none';
                                             }}
                                         />
+                                        {searchTerm && (
+                                            <button
+                                                onClick={() => setSearchTerm('')}
+                                                type="button"
+                                                style={{
+                                                    position: 'absolute',
+                                                    right: '0.625rem',
+                                                    top: '50%',
+                                                    transform: 'translateY(-50%)',
+                                                    width: '24px',
+                                                    height: '24px',
+                                                    borderRadius: '999px',
+                                                    border: 'none',
+                                                    background: 'rgba(255,255,255,0.06)',
+                                                    color: 'var(--text-secondary)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s ease',
+                                                    padding: 0,
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
+                                                    e.currentTarget.style.color = '#EF4444';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                                                    e.currentTarget.style.color = 'var(--text-secondary)';
+                                                }}
+                                                aria-label="Clear search"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                                 <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -1857,10 +2224,11 @@ const LoadSheddingDesigner = () => {
                                             const rId = `relay-${relay.id}`;
                                             const isExpanded = expandedNodes.has(rId);
 
-                                            let assignedStageLabel = null;
+                                            // Only check transformer assignment for relay header checkbox
+                                            let transformerAssignedStage = null;
                                             for (const stage of stages) {
                                                 if (stage.transformer_bays && stage.transformer_bays.some(bay => String(bay.relay) === String(relay.id))) {
-                                                    assignedStageLabel = stage.label || `Stage ${stage.stage_number}`;
+                                                    transformerAssignedStage = stage.label || `Stage ${stage.stage_number}`;
                                                     break;
                                                 }
                                             }
@@ -1868,7 +2236,8 @@ const LoadSheddingDesigner = () => {
                                             let totalMw = 0;
                                             const detail = detailedSubstations[sub.substation_id];
 
-                                            (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).forEach(transformerId => {
+                                            (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).forEach(txVal => {
+                                                const transformerId = typeof txVal === 'object' ? txVal.id : txVal;
                                                 if (detail && detail.transformers && detail.db_transformers) {
                                                     const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
                                                     if (dbTx) {
@@ -1881,67 +2250,130 @@ const LoadSheddingDesigner = () => {
                                                 }
                                             });
 
+                                            const hasIncomingBranches = (relay.incoming_branches || []).length > 0;
+
                                             // Check if this relay contains any critical assets
-                                            const hasCriticalAsset = (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).some(transformerId => {
+                                            const hasCriticalAsset = (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).some(txVal => {
+                                                const transformerId = typeof txVal === 'object' ? txVal.id : txVal;
                                                 return criticalAssets.some(ca => ca.load_transformers && ca.load_transformers.includes(Number(transformerId)));
                                             });
 
+                                            // Group incoming branches by voltage
+                                            const relayBranches = relay.incoming_branches || [];
+
+                                            const stageHasBranch = (stage, fullId) => {
+                                                if ((stage.pocket_branches || []).includes(fullId)) return true;
+                                                return (stage.computed_pockets || []).some(pocket => (pocket.branches || []).includes(fullId));
+                                            };
+
+                                            // Check branch assignment per voltage
+                                            const getBranchAssignmentStage = () => {
+                                                for (const stage of stages) {
+                                                    const allAssigned = relayBranches.length > 0 && relayBranches.every(b => {
+                                                        const bayId = typeof b === 'object' ? b.bay_id : b;
+                                                        const fullId = bayId.includes('_') ? bayId : `${sub.substation_id}_${bayId}`;
+                                                        return stageHasBranch(stage, fullId);
+                                                    });
+                                                    if (allAssigned) {
+                                                        return stage.label || `Stage ${stage.stage_number}`;
+                                                    }
+                                                }
+                                                return null;
+                                            };
+
+                                            const toggleAllBranches = () => {
+                                                const branchIds = relayBranches.map(b => {
+                                                    const bayId = typeof b === 'object' ? b.bay_id : b;
+                                                    return String(bayId || '');
+                                                });
+
+                                                setStages(prevStages => prevStages.map((stage, idx) => {
+                                                    if (idx !== activeStageIdx) return stage;
+                                                    const existing = stage.pocket_branches || [];
+                                                    const allAssigned = branchIds.every(id => existing.includes(id));
+                                                    const pocketContainsAll = (stage.computed_pockets || []).some(pocket =>
+                                                        branchIds.every(id => (pocket.branches || []).includes(id))
+                                                    );
+
+                                                    if (pocketContainsAll) {
+                                                        return {
+                                                            ...stage,
+                                                            computed_pockets: (stage.computed_pockets || []).filter(pocket =>
+                                                                !branchIds.every(id => (pocket.branches || []).includes(id))
+                                                            ),
+                                                        };
+                                                    }
+
+                                                    return {
+                                                        ...stage,
+                                                        pocket_branches: allAssigned
+                                                            ? existing.filter(id => !branchIds.includes(id))
+                                                            : [...new Set([...existing, ...branchIds])],
+                                                    };
+                                                }));
+                                            };
+
+                                            const hasTransformers = (relay.load_transformers || []).length > 0;
+
                                             return (
                                                 <div key={relay.id} style={{ display: 'flex', flexDirection: 'column' }}>
-                                                    <div
-                                                        onClick={() => handleExpandRelay(relay.id, sub.substation_id)}
-                                                        style={{
-                                                            padding: '0.4rem 0.5rem', paddingLeft: `${0.5 + paddingLevel * 1}rem`,
-                                                            cursor: 'pointer', borderRadius: '4px', transition: 'background 0.2s'
-                                                        }}
-                                                        className="hover-glow"
-                                                    >
-                                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                                                            <div style={{ height: '18px', display: 'flex', alignItems: 'center' }}>
-                                                                {isExpanded ? <ChevronDown size={14} color="var(--accent-cyan)" /> : <ChevronRight size={14} color="var(--accent-cyan)" />}
-                                                            </div>
-                                                            <div
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (!assignedStageLabel) addTransformerToStage(relay);
-                                                                }}
-                                                                style={{ height: '18px', display: 'flex', alignItems: 'center' }}
-                                                            >
-                                                                {assignedStageLabel ? <CheckSquare size={14} color="var(--text-secondary)" /> : <Square size={14} color="var(--accent-cyan)" />}
-                                                            </div>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                                    <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: assignedStageLabel ? 'var(--text-secondary)' : 'var(--accent-cyan)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                        {relay.relay_name?.replace(' System', '') || 'Relay'}
-                                                                    </span>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                        {hasCriticalAsset && (
-                                                                            <FiAlertCircle size={12} style={{ color: '#EF4444' }} title="Contains Critical Asset" />
-                                                                        )}
-                                                                        <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--accent-cyan)', whiteSpace: 'nowrap' }}>
-                                                                            {formatMW(totalMw)} MW
-                                                                        </span>
-                                                                    </div>
+                                                    {hasTransformers && (
+                                                        <div
+                                                            onClick={() => handleExpandRelay(relay.id, sub.substation_id)}
+                                                            style={{
+                                                                padding: '0.4rem 0.5rem', paddingLeft: `${0.5 + paddingLevel * 1}rem`,
+                                                                cursor: 'pointer', borderRadius: '4px', transition: 'background 0.2s'
+                                                            }}
+                                                            className="hover-glow"
+                                                        >
+                                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                                                                <div style={{ height: '18px', display: 'flex', alignItems: 'center' }}>
+                                                                    {isExpanded ? <ChevronDown size={14} color="var(--accent-cyan)" /> : <ChevronRight size={14} color="var(--accent-cyan)" />}
                                                                 </div>
-                                                                {assignedStageLabel && (
-                                                                    <div style={{
-                                                                        fontSize: '0.6rem',
-                                                                        color: '#FFAB00',
-                                                                        fontStyle: 'italic',
-                                                                        marginTop: '2px',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'flex-start'
-                                                                    }}>
-                                                                        <span style={{ lineHeight: '1.2' }}>Assigned: {assignedStageLabel}</span>
+                                                                <div
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (!transformerAssignedStage) addTransformerToStage(relay);
+                                                                    }}
+                                                                    style={{ height: '18px', display: 'flex', alignItems: 'center' }}
+                                                                >
+                                                                    {transformerAssignedStage ? <CheckSquare size={14} color="var(--text-secondary)" /> : <Square size={14} color="var(--accent-cyan)" />}
+                                                                </div>
+                                                                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: transformerAssignedStage ? 'var(--text-secondary)' : 'var(--accent-cyan)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                            {relay.relay_name?.replace(' System', '') || 'Relay'}
+                                                                        </span>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                            {hasCriticalAsset && (
+                                                                                <FiAlertCircle size={12} style={{ color: '#F97316' }} title="Contains Critical Asset" />
+                                                                            )}
+                                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--accent-cyan)', whiteSpace: 'nowrap' }}>
+                                                                                {formatMW(totalMw)} MW
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
-                                                                )}
+                                                                    {transformerAssignedStage && (
+                                                                        <div style={{
+                                                                            fontSize: '0.6rem',
+                                                                            color: '#FFAB00',
+                                                                            fontStyle: 'italic',
+                                                                            marginTop: '2px',
+                                                                            display: 'inline-flex',
+                                                                            alignItems: 'flex-start'
+                                                                        }}>
+                                                                            <span style={{ lineHeight: '1.2' }}>Assigned: {transformerAssignedStage}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                    {isExpanded && (
+                                                    )}
+                                                    {(hasTransformers ? isExpanded : true) && (
                                                         <div style={{ paddingBottom: '8px' }}>
-                                                            {(Array.isArray(relay.load_transformers) ? relay.load_transformers : []).map(transformerId => {
-                                                                let txLabel = `T-Bay ${transformerId}`;
+                                                            {(Array.isArray(relay.load_transformers) ? relay.load_transformers : []).map(txVal => {
+                                                                const transformerId = typeof txVal === "object" ? txVal.id : txVal;
+                                                                let txLabel = typeof txVal === "object" && txVal.bay_id ? txVal.bay_id : `T-Bay ${transformerId}`;
                                                                 let txMw = 0;
 
                                                                 if (detail && detail.db_transformers) {
@@ -1955,7 +2387,11 @@ const LoadSheddingDesigner = () => {
                                                                 }
 
                                                                 const isTxAssigned = (stages[activeStageIdx]?.transformer_bays || []).some(tb => 
-                                                                    tb.relay === relay.id && tb.transformers.some(t => String(t.id) === String(transformerId))
+                                                                    String(tb.relay) === String(relay.id) && 
+                                                                    tb.transformers.some(t => {
+                                                                        const tId = typeof t === 'object' ? t.id : t;
+                                                                        return String(tId) === String(transformerId);
+                                                                    })
                                                                 );
 
                                                                 return (
@@ -1977,7 +2413,7 @@ const LoadSheddingDesigner = () => {
                                                                             <FaBolt size={10} style={{ opacity: isTxAssigned ? 1 : 0.5 }} />
                                                                             <span style={{ fontWeight: isTxAssigned ? 700 : 400 }}>{txLabel}</span>
                                                                         </div>
-                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                                             <span style={{ fontFamily: 'monospace' }}>{formatMW(txMw)} MW</span>
                                                                             {isTxAssigned && <CheckSquare size={12} color="var(--accent-cyan)" />}
                                                                         </div>
@@ -1986,39 +2422,119 @@ const LoadSheddingDesigner = () => {
                                                             })}
 
                                                             {/* Incoming Branches */}
-                                                            {(relay.incoming_branches || []).length > 0 && (
+                                                            {relayBranches.length > 0 && (
                                                                 <div style={{ paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: '4px' }}>
-                                                                    <div style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', paddingLeft: `${1.5 + paddingLevel * 1}rem`, marginBottom: '2px' }}>
-                                                                        INCOMING BRANCHES
-                                                                    </div>
-                                                                    {(relay.incoming_branches || []).map(branch => {
-                                                                        const localPrefix = `${sub.substation_id}_`;
-                                                                        const bayId = typeof branch === 'object' ? branch.bay_id : branch;
-                                                                        const displayId = bayId?.startsWith(localPrefix) ? bayId.replace(localPrefix, '') : bayId;
-                                                                        const isAssigned = (stages[activeStageIdx]?.pocket_branches || []).includes(bayId);
+                                                                    {(() => {
+                                                                        const assignedStage = getBranchAssignmentStage();
+                                                                        const assignedCount = relayBranches.filter(b => {
+                                                                            const bayId = typeof b === 'object' ? b.bay_id : b;
+                                                                            const fullId = bayId.includes('_') ? bayId : `${sub.substation_id}_${bayId}`;
+                                                                            return stageHasBranch(stages[activeStageIdx] || {}, fullId);
+                                                                        }).length;
+                                                                        const allAssigned = assignedCount === relayBranches.length;
+
                                                                         return (
-                                                                            <div
-                                                                                key={typeof branch === 'object' ? branch.id : branch}
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    toggleBranchInStage(bayId, sub.substation_id);
-                                                                                }}
-                                                                                style={{
-                                                                                    display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0.5rem',
-                                                                                    paddingLeft: `${1.5 + paddingLevel * 1}rem`, fontSize: '0.7rem',
-                                                                                    color: isAssigned ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                                                            <div style={{ marginBottom: '4px' }}>
+                                                                                {/* Incoming Branches Header */}
+                                                                                <div
+                                                                                    style={{
+                                                                                    padding: '0.2rem 0.5rem',
+                                                                                    paddingLeft: `${(hasTransformers ? 1.5 : 0.5) + paddingLevel * 1}rem`,
                                                                                     cursor: 'pointer',
+                                                                                    borderRadius: '4px',
+                                                                                    background: allAssigned ? 'rgba(0, 229, 255, 0.08)' : 'transparent',
                                                                                 }}
-                                                                                className="hover-glow"
-                                                                            >
-                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                                    <FaCodeBranch size={10} style={{ opacity: 0.5 }} />
-                                                                                    <span style={{ fontWeight: isAssigned ? 700 : 400 }}>{displayId}</span>
+                                                                                className="hover-glow">
+                                                                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                                                                                        {!hasTransformers && (
+                                                                                            <div
+                                                                                                onClick={(e) => {
+                                                                                                    e.stopPropagation();
+                                                                                                    toggleNode(rId);
+                                                                                                }}
+                                                                                                style={{ height: '18px', display: 'flex', alignItems: 'center' }}
+                                                                                            >
+                                                                                                {isExpanded ? <ChevronDown size={14} color="var(--accent-cyan)" /> : <ChevronRight size={14} color="var(--accent-cyan)" />}
+                                                                                            </div>
+                                                                                        )}
+                                                                                        <div
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                toggleAllBranches();
+                                                                                            }}
+                                                                                            style={{ height: '18px', display: 'flex', alignItems: 'center' }}
+                                                                                        >
+                                                                                            {allAssigned ? <CheckSquare size={12} color="var(--accent-cyan)" /> : <Square size={12} color="var(--accent-cyan)" />}
+                                                                                        </div>
+                                                                                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                                                <span
+                                                                                                    style={{
+                                                                                                        fontSize: '0.7rem',
+                                                                                                        fontWeight: 600,
+                                                                                                        color: allAssigned ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.4)'
+                                                                                                    }}
+                                                                                                    onClick={() => {
+                                                                                                        if (!hasTransformers) toggleNode(rId);
+                                                                                                    }}
+                                                                                                >
+                                                                                                    INCOMING BRANCHES
+                                                                                                </span>
+                                                                                                <span style={{
+                                                                                                    fontSize: '0.65rem',
+                                                                                                    color: 'rgba(255,255,255,0.25)'
+                                                                                                }}>
+                                                                                                    [{assignedCount}/{relayBranches.length}]
+                                                                                                </span>
+                                                                                            </div>
+                                                                                            {assignedStage && (
+                                                                                                <div style={{
+                                                                                                    fontSize: '0.6rem',
+                                                                                                    color: '#FFAB00',
+                                                                                                    fontStyle: 'italic',
+                                                                                                    marginTop: '2px',
+                                                                                                    display: 'inline-flex',
+                                                                                                    alignItems: 'flex-start'
+                                                                                                }}>
+                                                                                                    <span style={{ lineHeight: '1.2' }}>Assigned: {assignedStage}</span>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </div>
-                                                                                {isAssigned && <CheckSquare size={12} color="var(--accent-cyan)" />}
+
+                                                                                {/* Individual Branches - Simple click like transformers */}
+                                                                                {(hasTransformers || isExpanded) && relayBranches.map(branch => {
+                                                                                    const bayId = typeof branch === 'object' ? branch.bay_id : branch;
+                                                                                    const bayIdStr = String(bayId || '');
+                                                                                    const localPrefix = `${sub.substation_id}_`;
+                                                                                    const displayId = bayIdStr.startsWith(localPrefix) ? bayIdStr.replace(localPrefix, '') : bayIdStr;
+                                                                                    const fullId = bayIdStr.includes('_') ? bayIdStr : `${sub.substation_id}_${bayIdStr}`;
+                                                                                    const isAssigned = stageHasBranch(stages[activeStageIdx] || {}, fullId);
+
+                                                                                    return (
+                                                                                        <div
+                                                                                            key={typeof branch === 'object' ? branch.id : branch}
+                                                                                            onClick={() => toggleBranchInStage(bayId, sub.substation_id)}
+                                                                                            style={{
+                                                                                                display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0.5rem',
+                                                                                                paddingLeft: `${(hasTransformers ? 2.5 : 1.5) + paddingLevel * 1}rem`, fontSize: '0.7rem',
+                                                                                                color: isAssigned ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                                                                                cursor: 'pointer',
+                                                                                            }}
+                                                                                            className="hover-glow"
+                                                                                        >
+                                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                                {isAssigned ? <CheckSquare size={12} color="var(--accent-cyan)" /> : <Square size={12} color="var(--accent-cyan)" />}
+                                                                                                <FaCodeBranch size={10} style={{ opacity: isAssigned ? 1 : 0.5 }} />
+                                                                                                <span style={{ fontWeight: isAssigned ? 700 : 400 }}>{displayId}</span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
                                                                             </div>
                                                                         );
-                                                                    })}
+                                                                    })()}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -2208,9 +2724,9 @@ const LoadSheddingDesigner = () => {
                                     return (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                             {conflictGroups.map((group, idx) => (
-                                                <div key={idx} style={{ padding: '1rem', borderRadius: '8px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+                                                <div key={idx} style={{ padding: '1rem', borderRadius: '8px', background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.25)' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                                                        <FiAlertCircle size={16} style={{ color: '#EF4444' }} />
+                                                        <FiAlertCircle size={16} style={{ color: '#F97316' }} />
                                                         <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fff' }}>{group.subId}</span>
                                                     </div>
                                                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '1.75rem' }}>
@@ -2636,6 +3152,26 @@ const LoadSheddingDesigner = () => {
                                             {calculateRemainingTargetMW() > 0 ? '+' : ''}{formatMW(calculateRemainingTargetMW())} MW
                                         </span>
                                     </div>
+
+                                    {(() => {
+                                        const metrics = getAssignedSubstationMetrics(stages, true);
+                                        return (
+                                            <>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Substations Assigned</span>
+                                                    <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 700, color: '#fff' }}>
+                                                        {metrics.totalSubs} <span style={{fontSize:'0.6rem', color: 'rgba(255,255,255,0.5)', marginLeft:'4px', opacity: 0.7}}>({formatMW(metrics.totalMW)} MW)</span>
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.65rem', color: '#F97316', textTransform: 'uppercase' }}>Of which are Critical</span>
+                                                    <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 700, color: '#F97316' }}>
+                                                        {metrics.criticalSubs} <span style={{fontSize:'0.65rem', color: '#F97316', marginLeft:'6px', fontWeight: 500, opacity: 0.9}}>({formatMW(metrics.criticalMW)} MW)</span>
+                                                    </span>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
 
                                 <BulletChart 
@@ -2687,19 +3223,58 @@ const LoadSheddingDesigner = () => {
                         </h4>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {stages.map((stage, idx) => {
-                                const stageAssigned = calculateTotalMW(stage);
-                                const stageAssignedVal = stageAssigned === "Loading..." ? 0 : parseFloat(stageAssigned);
+                                const stageAssignedVal = calculateTotalMW(stage);
                                 
                                 return (
                                     <div key={stage.id} style={{ padding: '1rem 1.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: activeStageIdx === idx ? '1px solid var(--accent-cyan)' : '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '3rem', alignItems: 'center' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <BulletChart 
-                                                label={`${stage.label} Target vs Assigned`} 
-                                                actual={Number(stageAssignedVal) || 0} 
-                                                target={Number(stage.target_mw) || 0} 
-                                                unit="MW" 
-                                                color={activeStageIdx === idx ? 'var(--accent-cyan)' : '#3B82F6'} 
-                                            />
+                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <h5 style={{ margin: 0, fontSize: '0.8rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <span style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem' }}>#{stage.stage_number}</span>
+                                                    {stage.label}
+                                                </h5>
+                                                <button 
+                                                    onClick={() => {
+                                                        setEditingStageIdx(idx);
+                                                        setNewStageLabel(stage.label);
+                                                        setNewStageNumber(stage.stage_number);
+                                                        setNewStageTargetMW(stage.target_mw || 0);
+                                                        setNewStageSettings(stage.setting_ids || []);
+                                                        setShowCreateStageModal(true);
+                                                    }}
+                                                    style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px' }}
+                                                    title="Edit Stage"
+                                                >
+                                                    <FiEdit2 size={12} />
+                                                </button>
+                                            </div>
+                                            
+                                            {(() => {
+                                                const sm = getAssignedSubstationMetrics([stage], true);
+                                                return (
+                                                    <div style={{ display: 'flex', gap: '1rem', background: 'rgba(0,0,0,0.2)', padding: '0.5rem', borderRadius: '6px', border: sm.criticalSubs > 0 ? '1px solid rgba(249, 115, 22, 0.3)' : '1px solid rgba(255,255,255,0.05)' }}>
+                                                        <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Subs Assigned</span>
+                                                            <span style={{ fontSize: '0.8rem', fontFamily: 'monospace', fontWeight: 700, color: '#fff' }}>{sm.totalSubs} <span style={{fontSize:'0.55rem', color: 'rgba(255,255,255,0.4)', marginLeft:'2px', opacity: 0.6}}>({formatMW(sm.totalMW)}MW)</span></span>
+                                                        </div>
+                                                        <div style={{ width: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
+                                                        <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: '0.6rem', color: '#F97316', textTransform: 'uppercase' }}>Critical Subs</span>
+                                                            <span style={{ fontSize: '0.8rem', fontFamily: 'monospace', fontWeight: 700, color: '#F97316' }}>{sm.criticalSubs} <span style={{fontSize:'0.6rem', color: '#F97316', marginLeft:'2px', fontWeight: 500, opacity: 0.9}}>({formatMW(sm.criticalMW)}MW)</span></span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                                <BulletChart 
+                                                    label="Target vs Assigned" 
+                                                    actual={Number(stageAssignedVal) || 0} 
+                                                    target={Number(stage.target_mw) || 0} 
+                                                    unit="MW" 
+                                                    color={activeStageIdx === idx ? 'var(--accent-cyan)' : '#3B82F6'} 
+                                                />
+                                            </div>
                                         </div>
                                         <div style={{ width: '40%', display: 'flex', flexDirection: 'column' }}>
                                             <h5 style={{ margin: 0, fontSize: '0.65rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Regional Distribution</h5>

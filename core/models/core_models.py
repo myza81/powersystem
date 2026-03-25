@@ -759,12 +759,14 @@ class LoadSheddingPocketBay(models.Model):
 
         totals = service.compute_load_totals(isolated_substations) if isolated_substations else {
             "isolated_total_p_mw": 0.0,
+            "isolated_substation_load_totals": {},
         }
 
         self.topology_cache = {
             "snapshot_id": str(snapshot.id),
             "isolated_substations": isolated_substations,
             "mw": totals["isolated_total_p_mw"],
+            "substation_mw": totals.get("isolated_substation_load_totals", {}),
             "computed_at": timezone.now().isoformat(),
         }
         self.topology_valid = len(alerts) == 0

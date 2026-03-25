@@ -250,7 +250,8 @@ class TopologyViewSet(viewsets.ViewSet):
                     "q_mvar": round(loads.get("total_q_mvar", 0.0), 2),
                 })
 
-            result["pocket_substations"] = pocket_list
+            result["pocket_substations"] = isolated  # String IDs for compatibility
+            result["pocket_substation_details"] = pocket_list  # Full objects with metadata
             result["total_p_mw"] = round(load_totals["isolated_total_p_mw"], 2)
             result["total_q_mvar"] = round(load_totals["isolated_total_q_mvar"], 2)
 

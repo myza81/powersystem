@@ -251,8 +251,8 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', alignItems: 'flex-start' }}>
                                 {filteredIBs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No branches available for {targetV}kV.</div>}
                                 {filteredIBs.map((ib) => {
-                                    const checked = (assetForm.incoming_branches || []).includes(ib.id);
-                                    const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && r.incoming_branches.includes(ib.id));
+                                    const checked = (assetForm.incoming_branches || []).some(b => (typeof b === 'object' ? b.id : b) === ib.id);
+                                    const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && (r.incoming_branches || []).some(b => (typeof b === 'object' ? b.id : b) === ib.id));
                                     const isClaimed = !!OWNER;
 
                                     return (
@@ -351,7 +351,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
         </div >
     );
 };
-const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, status, loading }) => {
+const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstationRefresh, status, loading }) => {
     const [formData, setFormData] = useState(substation || {
         mnemonic: '',
         name: '',
@@ -509,6 +509,17 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, status, loa
             const endpoint = endpointMap[type];
             const payload = { ...assetForm, substation: substation.substation_id };
 
+            // Ensure we are only sending clean scalar IDs for M2M relationships (Write-Simple)
+            if (payload.load_transformers) {
+                payload.load_transformers = payload.load_transformers.map(t => typeof t === 'object' ? t.id : t);
+            }
+            if (payload.auto_transformers) {
+                payload.auto_transformers = payload.auto_transformers.map(t => typeof t === 'object' ? t.id : t);
+            }
+            if (payload.incoming_branches) {
+                payload.incoming_branches = payload.incoming_branches.map(b => typeof b === 'object' ? b.id : b);
+            }
+
             if (editingAsset?.data?.id) {
                 await api.patch(`/${endpoint}/${editingAsset.data.id}/`, payload);
             } else {
@@ -517,6 +528,9 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, status, loa
 
             resetAssetForm();
             await fetchAssets();
+            if (onSubstationRefresh) {
+                await onSubstationRefresh(substation.substation_id);
+            }
             setAssetStatus({ type: 'success', msg: 'Asset saved successfully.' });
         } catch (err) {
             let msg = 'Failed to save asset.';
@@ -542,6 +556,9 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, status, loa
             };
             await api.delete(`/${endpointMap[type]}/${id}/`);
             await fetchAssets();
+            if (onSubstationRefresh) {
+                await onSubstationRefresh(substation.substation_id);
+            }
             setAssetStatus({ type: 'success', msg: 'Asset deleted.' });
         } catch (err) {
             setAssetStatus({ type: 'error', msg: 'Failed to delete asset.' });
@@ -552,7 +569,8 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, status, loa
     const renderBaysGrouped = (bayIds, fullBaysList, type, isActive) => {
         if (!bayIds || bayIds.length === 0) return null;
 
-        const selectedBays = fullBaysList.filter(b => bayIds.includes(b.id));
+        const normalizedBayIds = bayIds.map(bay => typeof bay === 'object' ? bay.id : bay);
+        const selectedBays = fullBaysList.filter(b => normalizedBayIds.includes(b.id));
         if (selectedBays.length === 0) return null;
 
         const label = type === 'load' ? 'Load Transformer' : type === 'auto' ? 'Auto Transformer' : 'Incoming Branch';

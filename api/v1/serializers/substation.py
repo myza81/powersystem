@@ -161,6 +161,20 @@ class SubstationDetailSerializer(SubstationSerializer):
         return transformers
 
 
+class WritableAssetField(serializers.PrimaryKeyRelatedField):
+    """
+    A field that accepts an ID for writing but returns the full serialized object for reading.
+    Useful for M2M fields where the frontend needs rich metadata but sends simple IDs.
+    """
+    def __init__(self, **kwargs):
+        self.serializer_class = kwargs.pop('serializer_class', None)
+        super().__init__(**kwargs)
+
+    def to_representation(self, value):
+        if self.serializer_class:
+            return self.serializer_class(value, context=self.context).data
+        return super().to_representation(value)
+
 class LoadTransformerSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoadTransformer
@@ -207,7 +221,18 @@ class AutoTransformerSerializer(serializers.ModelSerializer):
 class LoadSheddingRelaySerializer(serializers.ModelSerializer):
     substation_id = serializers.CharField(source='substation.substation_id', read_only=True)
 
-    incoming_branches = IncomingBranchSerializer(many=True, read_only=True)
+    load_transformers = WritableAssetField(
+        queryset=LoadTransformer.objects.all(), many=True, 
+        serializer_class=LoadTransformerSerializer, required=False
+    )
+    incoming_branches = WritableAssetField(
+        queryset=IncomingBranch.objects.all(), many=True, 
+        serializer_class=IncomingBranchSerializer, required=False
+    )
+    auto_transformers = WritableAssetField(
+        queryset=AutoTransformer.objects.all(), many=True, 
+        serializer_class=AutoTransformerSerializer, required=False
+    )
 
     class Meta:
         model = LoadSheddingRelay

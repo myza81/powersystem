@@ -236,6 +236,53 @@ class LoadSheddingPocketBayViewSet(BaseSheddingViewSet):
             queryset = queryset.filter(stage_id=stage)
         return queryset
 
+    @action(detail=False, methods=['post'])
+    def recompute(self, request):
+        """
+        Recompute topology_cache for pocket bays.
+        POST /api/v1/load-shedding-pocket-bays/recompute/
+        Body: { "snapshot_id": "uuid" } (optional, uses active snapshot if not provided)
+        """
+        from core.models import NetworkSnapshot
+        snapshot_id = request.data.get('snapshot_id')
+        
+        if snapshot_id:
+            snapshot = NetworkSnapshot.objects.filter(id=snapshot_id).first()
+        else:
+            snapshot = NetworkSnapshot.objects.order_by('-timestamp').first()
+        
+        if not snapshot:
+            return Response({'error': 'No snapshot found'}, status=404)
+        
+        pocket_ids = request.data.get('pocket_ids')  # Optional: specific pocket IDs
+        queryset = self.get_queryset()
+        if pocket_ids:
+            queryset = queryset.filter(id__in=pocket_ids)
+        
+        results = []
+        for pocket in queryset:
+            try:
+                cache = pocket.compute_topology(snapshot)
+                results.append({
+                    'id': str(pocket.id),
+                    'status': 'success',
+                    'mw': cache.get('mw'),
+                    'substations': cache.get('isolated_substations', []),
+                    'substation_mw': cache.get('substation_mw', {}),
+                })
+            except Exception as e:
+                results.append({
+                    'id': str(pocket.id),
+                    'status': 'error',
+                    'error': str(e),
+                })
+        
+        return Response({
+            'snapshot_id': str(snapshot.id),
+            'recomputed_count': len(results),
+            'results': results,
+        })
+
 
 class LoadSheddingPocketBoundaryViewSet(BaseSheddingViewSet):
     queryset = LoadSheddingPocketBoundary.objects.all()

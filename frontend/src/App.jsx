@@ -190,6 +190,21 @@ const App = () => {
         setLoading(false);
     };
 
+    const handleRefreshSubstation = async (substationId) => {
+        if (!substationId) return;
+        try {
+            const res = await api.get(`/substations/${substationId}/`);
+            const refreshed = res.data;
+            setSubstations(prev => prev.map(s => s.substation_id === substationId ? refreshed : s));
+            setFilteredSubstations(prev => prev.map(s => s.substation_id === substationId ? refreshed : s));
+            if (selectedSub?.substation_id === substationId) {
+                setSelectedSub(refreshed);
+            }
+        } catch (err) {
+            console.error('Failed to refresh substation after asset update', err);
+        }
+    };
+
     const handleBulkUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -468,6 +483,7 @@ const App = () => {
                     <SubstationForm
                         substation={selectedSub}
                         onSave={handleSave}
+                        onSubstationRefresh={handleRefreshSubstation}
                         onCancel={() => setView('list')}
                         onConfigEdit={() => setView('config')}
                         onSLDUpload={handleSLDUpload}
