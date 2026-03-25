@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const Sidebar = ({ currentView, onViewChange }) => {
+const Sidebar = ({ currentView, onViewChange, currentUser, onLogout }) => {
     const [collapsed, setCollapsed] = useState(false);
     const [monitoringExpanded, setMonitoringExpanded] = useState(true);
     const [assetsExpanded, setAssetsExpanded] = useState(true);
@@ -324,13 +324,13 @@ const Sidebar = ({ currentView, onViewChange }) => {
                     </div>
                     {!collapsed && (
                         <div className="user-info">
-                            <div className="user-name">Ijat</div>
-                            <div className="user-role">Administrator</div>
+                            <div className="user-name">{currentUser?.username || 'Guest'}</div>
+                            <div className="user-role">{currentUser?.is_staff ? 'Administrator' : 'User'}</div>
                         </div>
                     )}
                 </div>
-                {!collapsed && (
-                    <button className="logout-btn">
+                {!collapsed && currentUser && (
+                    <button className="logout-btn" onClick={onLogout} title="Logout">
                         <LogOut size={16} />
                     </button>
                 )}

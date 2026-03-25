@@ -495,7 +495,7 @@ class LoadSheddingVersion(models.Model):
 
         self.status = 'active'
         self.published_at = timezone.now()
-        if user:
+        if user and hasattr(user, 'id') and user.id:
             self.published_by = user
         self.is_active = True
 
@@ -506,6 +506,28 @@ class LoadSheddingVersion(models.Model):
         ).exclude(id=self.id).update(is_active=False, status='deactivated')
 
         self.save()
+
+    def unpublish(self):
+        if self.status != 'active' or not self.is_active:
+            return None
+
+        previous_version = LoadSheddingVersion.objects.filter(
+            scheme_type=self.scheme_type,
+            status='deactivated',
+        ).exclude(id=self.id).order_by('-published_at', '-updated_at').first()
+
+        self.status = 'draft'
+        self.is_active = False
+        self.published_at = None
+        self.published_by = None
+        self.save()
+
+        if previous_version:
+            previous_version.status = 'active'
+            previous_version.is_active = True
+            previous_version.save(update_fields=['status', 'is_active'])
+
+        return previous_version
 
 
 class LoadSheddingStage(models.Model):
@@ -615,10 +637,18 @@ class LoadSheddingTransformerBay(models.Model):
         substation_id = self.relay.substation.substation_id
         loads = load_map.get(substation_id, {}).get("loads", [])
 
-        target_ids = set(self.transformers.values_list('bay_id', flat=True))
+        target_bay_ids = set(self.transformers.values_list('bay_id', flat=True))
+        # Normalize: bay_id is composite (e.g. 'TASK132_T1') but snapshot load_id is local (e.g. 'T1')
+        # Strip the substation prefix to match
+        target_local_ids = set()
+        for bid in target_bay_ids:
+            parts = str(bid).split('_', 1)
+            target_local_ids.add(parts[1] if len(parts) > 1 else bid)
+
         total_mw = 0.0
         for load in loads:
-            if load.get("load_id") in target_ids:
+            lid = load.get("load_id", "")
+            if lid in target_local_ids or lid in target_bay_ids:
                 total_mw += float(load.get("p_mw") or 0.0)
 
         self.mw_cache = {

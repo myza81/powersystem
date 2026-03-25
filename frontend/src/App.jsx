@@ -20,6 +20,7 @@ import LoadSheddingViewer from './components/LoadSheddingViewer';
 import LoadSheddingDesigner from './components/LoadSheddingDesigner';
 import CriticalSubstationManager from './components/CriticalSubstationManager';
 import api from './api';
+import LoginForm from './components/LoginForm';
 
 const DEFAULT_FILTERS = {
     region: 'All',
@@ -37,6 +38,10 @@ const App = () => {
     const [substations, setSubstations] = useState([]);
     const [filteredSubstations, setFilteredSubstations] = useState([]);
     const [filterCriteria, setFilterCriteria] = useState(DEFAULT_FILTERS);
+    const [currentUser, setCurrentUser] = useState(null);
+    const [showLoginForm, setShowLoginForm] = useState(false);
+    const [loginError, setLoginError] = useState('');
+    const [loggingIn, setLoggingIn] = useState(false);
 
     // Initialize view from URL or default to 'list'
     const [view, setView] = useState(() => {
@@ -100,6 +105,44 @@ const App = () => {
     useEffect(() => {
         fetchSubstations();
     }, []);
+
+    // Check current user on mount
+    useEffect(() => {
+        const checkUser = async () => {
+            try {
+                const res = await api.get('/users/me/');
+                if (res.data.id) {
+                    setCurrentUser(res.data);
+                }
+            } catch (err) {
+                console.error("Not authenticated");
+            }
+        };
+        checkUser();
+    }, []);
+
+    const handleLogin = async (username, password) => {
+        setLoggingIn(true);
+        setLoginError('');
+        try {
+            const res = await api.post('/users/login/', { username, password });
+            setCurrentUser(res.data);
+            setShowLoginForm(false);
+        } catch (err) {
+            setLoginError(err.response?.data?.error || 'Login failed');
+        } finally {
+            setLoggingIn(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await api.post('/users/logout/');
+        } catch (err) {
+            console.error("Logout error", err);
+        }
+        setCurrentUser(null);
+    };
 
     // Apply Filters whenever criteria or substations change
     useEffect(() => {
@@ -301,7 +344,8 @@ const App = () => {
     };
 
     return (
-        <MainLayout currentView={view} onViewChange={setView}>
+        <>
+        <MainLayout currentView={view} onViewChange={setView} currentUser={currentUser} onLogout={handleLogout}>
             <div className="dashboard-container">
                 {status && (
                     <motion.div
@@ -550,6 +594,22 @@ const App = () => {
 
             </div>
         </MainLayout>
+
+        {(!currentUser || showLoginForm) && (
+            <div style={{
+                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: 9999
+            }}>
+                <LoginForm 
+                    onLogin={handleLogin} 
+                    error={loginError} 
+                    loading={loggingIn}
+                    onClose={() => setShowLoginForm(false)}
+                />
+            </div>
+        )}
+        </>
     );
 };
 

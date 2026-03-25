@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import BulletChart from './BulletChart';
 import CompactRegionalMetrics from './CompactRegionalMetrics';
-import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes, FaCodeBranch, FaLock, FaBullseye, FaGaugeHigh } from 'react-icons/fa6';
+import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes, FaCodeBranch, FaLock, FaBullseye, FaGaugeHigh, FaTableList, FaGear } from 'react-icons/fa6';
 import { FiAlertCircle, FiEdit2 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api';
@@ -90,6 +90,7 @@ const LoadSheddingDesigner = () => {
     const [detailedSubstations, setDetailedSubstations] = useState(() => getInitialState('detailedSubstations', {}));
 
     const [saving, setSaving] = useState(false);
+    const [publishing, setPublishing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [gridData, setGridData] = useState(null);
     const [fetchingAnalytics, setFetchingAnalytics] = useState(false);
@@ -338,18 +339,7 @@ const LoadSheddingDesigner = () => {
                                     total_q_mvar: 0
                                 };
                             }),
-                            pocket_branches: (stageData.pocket_bays || []).flatMap(pb =>
-                                (pb.boundaries || []).flatMap(bound =>
-                                    (bound.branches || []).map(bId => {
-                                        let foundBayId = null;
-                                        relays.forEach(r => {
-                                            const br = (r.incoming_branches || []).find(b => b.id === bId);
-                                            if (br) foundBayId = br.bay_id;
-                                        });
-                                        return foundBayId;
-                                    })
-                                )
-                            ).filter(id => id !== null)
+                            pocket_branches: [] // Do NOT reconstruct from saved pockets — branches are already in computed_pockets[].branches
                         };
                     })
                 );
@@ -809,6 +799,7 @@ const LoadSheddingDesigner = () => {
             }
             sessionStorage.removeItem('ls_draft_state');
             alert("Draft saved successfully!");
+            return vId;
         } catch (err) {
             console.error("Failed to save scheme", err);
             console.error("Save failure details", {
@@ -830,8 +821,48 @@ const LoadSheddingDesigner = () => {
                 }
             }
             alert("Save failed: " + errStr);
+            return null;
         } finally {
             setSaving(false);
+        }
+    };
+
+    const activeVersionMeta = versions.find(v => String(v.id) === String(activeVersionId));
+
+    const handlePublishWorkspace = async () => {
+        setPublishing(true);
+        try {
+            let vId = activeVersionId;
+            if (!vId || !activeVersionMeta || activeVersionMeta.status === 'draft') {
+                vId = await handleSaveWorkspace();
+            }
+
+            if (!vId) return;
+
+            await api.post(`/load-shedding-versions/${vId}/publish/`);
+            await fetchMasterData();
+            window.dispatchEvent(new CustomEvent('load-shedding-published'));
+            alert('Scheme published successfully.');
+        } catch (err) {
+            console.error('Failed to publish scheme', err);
+            alert(`Failed to publish scheme. ${err?.response?.data?.error || err.message}`);
+        } finally {
+            setPublishing(false);
+        }
+    };
+
+    const handleUnpublishWorkspace = async () => {
+        if (!activeVersionId) return;
+        setPublishing(true);
+        try {
+            await api.post(`/load-shedding-versions/${activeVersionId}/unpublish/`);
+            await fetchMasterData();
+            alert('Scheme unpublished successfully. Previous active version restored.');
+        } catch (err) {
+            console.error('Failed to unpublish scheme', err);
+            alert(`Failed to unpublish scheme. ${err?.response?.data?.error || err.message}`);
+        } finally {
+            setPublishing(false);
         }
     };
 
@@ -1514,13 +1545,13 @@ const LoadSheddingDesigner = () => {
                         style={{ padding: '0.5rem 1rem', background: activeTab === 'stages' ? 'rgba(255,255,255,0.1)' : 'transparent', color: activeTab === 'stages' ? '#fff' : 'var(--text-secondary)', border: 'none', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                         onClick={() => setActiveTab('stages')}
                     >
-                        <Layout size={14} /> Stage Designer
+                        <FaLayerGroup size={14} /> Stage Designer
                     </button>
                     <button
                         style={{ padding: '0.5rem 1rem', background: activeTab === 'settings' ? 'rgba(255,255,255,0.1)' : 'transparent', color: activeTab === 'settings' ? '#fff' : 'var(--text-secondary)', border: 'none', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                         onClick={() => setActiveTab('settings')}
                     >
-                        <SettingsIcon size={14} /> Scheme Settings
+                        <FaGear size={14} /> Scheme Settings
                     </button>
                 </div>
             </div>
@@ -1734,13 +1765,14 @@ const LoadSheddingDesigner = () => {
                                     {stages[activeStageIdx]?.setting_ids?.map(sId => {
                                         const setting = globalSettings.find(s => s.id === sId);
                                         if (!setting) return null;
-                                        const unit = setting.scheme_type === 'UVLS' ? 'kV' : 'Hz';
+                                        const isUVLS = setting.scheme_type === 'UVLS';
+                                        const unit = isUVLS ? 'pu' : 'Hz';
                                         return (
                                             <div key={sId} style={{
                                                 fontSize: '0.75rem', color: 'var(--accent-blue)', background: 'rgba(59, 130, 246, 0.15)',
                                                 padding: '4px 10px', borderRadius: '6px', fontWeight: 600, border: '1px solid rgba(59, 130, 246, 0.3)'
                                             }}>
-                                                {setting.threshold}{unit} {setting.time_delay}s
+                                                {setting.threshold}{unit} | {setting.time_delay}s
                                             </div>
                                         );
                                     })}
@@ -2133,8 +2165,8 @@ const LoadSheddingDesigner = () => {
                         {/* Sticky Footer */}
                         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '1rem 1.5rem', background: 'rgba(10, 12, 16, 0.9)', backdropFilter: 'blur(12px)', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FFAB00' }}></div>
-                                Draft Mode Active
+                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: activeVersionMeta?.status === 'active' ? '#10B981' : '#FFAB00' }}></div>
+                                {activeVersionMeta?.status === 'active' ? 'Published Version Active' : 'Draft Mode Active'}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                 <button
@@ -2142,13 +2174,32 @@ const LoadSheddingDesigner = () => {
                                     onClick={() => setShowSummaryModal(true)}
                                     style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
                                 >
-                                    <Layout size={16} /> Summary
+                                    <FaTableList size={16} /> Summary
                                 </button>
+                                {activeVersionMeta?.status === 'active' ? (
+                                    <button
+                                        className="btn-secondary"
+                                        onClick={handleUnpublishWorkspace}
+                                        disabled={publishing}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.25rem', fontSize: '0.85rem', background: 'rgba(255, 171, 0, 0.08)', color: '#FFAB00', border: '1px solid rgba(255, 171, 0, 0.2)', opacity: publishing ? 0.7 : 1 }}
+                                    >
+                                        <RotateCcw size={16} /> {publishing ? 'Unpublishing...' : 'Unpublish'}
+                                    </button>
+                                ) : (
+                                    <button
+                                        className="btn-secondary"
+                                        onClick={handlePublishWorkspace}
+                                        disabled={publishing}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.25rem', fontSize: '0.85rem', background: 'rgba(16, 185, 129, 0.08)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.2)', opacity: publishing ? 0.7 : 1 }}
+                                    >
+                                        <FaShieldHalved size={15} /> {publishing ? 'Publishing...' : 'Publish'}
+                                    </button>
+                                )}
                                 <button
                                     className="btn-primary"
                                     onClick={handleSaveWorkspace}
-                                    disabled={saving}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.5rem', fontSize: '0.85rem', boxShadow: '0 0 20px rgba(0, 229, 255, 0.3)', opacity: saving ? 0.7 : 1 }}
+                                    disabled={saving || publishing}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.5rem', fontSize: '0.85rem', boxShadow: '0 0 20px rgba(0, 229, 255, 0.3)', opacity: (saving || publishing) ? 0.7 : 1 }}
                                 >
                                     {saving ? <RotateCcw size={16} className="animate-spin" /> : <Save size={16} />}
                                     {saving ? 'Saving...' : 'Save Workspace'}
