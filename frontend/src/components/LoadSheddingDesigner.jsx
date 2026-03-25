@@ -95,11 +95,10 @@ const LoadSheddingDesigner = () => {
     const [fetchingAnalytics, setFetchingAnalytics] = useState(false);
     const [pocketPreview, setPocketPreview] = useState(null);
     const [fetchingPocket, setFetchingPocket] = useState(false);
+    const [showSummaryModal, setShowSummaryModal] = useState(false);
 
-    // --- Settings Modal & Tab State ---
-    const [showStageSettingsModal, setShowStageSettingsModal] = useState(false);
-    const [activeStageSettingsTab, setActiveStageSettingsTab] = useState('general'); // 'general' | 'metrics'
-    const [activeGlobalSettingsTab, setActiveGlobalSettingsTab] = useState('tripsettings'); // 'tripsettings' | 'conflict'
+    // --- Settings Tab State ---
+    const [activeGlobalSettingsTab, setActiveGlobalSettingsTab] = useState('ufls'); // 'ufls' | 'uvls' | 'conflict'
 
     // Inline add setting form
     const [newSettingThreshold, setNewSettingThreshold] = useState('');
@@ -731,12 +730,6 @@ const LoadSheddingDesigner = () => {
                 });
                 vId = versionRes.data.id;
                 setActiveVersionId(vId);
-            } else {
-                await api.patch(`/load-shedding-versions/${vId}/`, {
-                    scheme_type: schemeType.includes('UFLS') ? 'UFLS' : (schemeType.includes('UVLS') ? 'UVLS' : 'EMLS'),
-                    review_year: reviewYear,
-                    notes: versionLabel
-                });
             }
 
             // 2. We simply delete all stages for this draft and recreate them to avoid complex diffing logic for now
@@ -759,10 +752,16 @@ const LoadSheddingDesigner = () => {
 
                 // Add transformer bays
                 for (const tb of stage.transformer_bays || []) {
+                    const transformerIds = (tb.transformers || [])
+                        .map(t => (typeof t === 'object' ? t?.id : t))
+                        .filter(Boolean);
+
+                    if (transformerIds.length === 0) continue;
+
                     await api.post('/load-shedding-transformer-bays/', {
                         stage: stageId,
                         relay: tb.relay,
-                        transformers: tb.transformers.map(t => t.id)
+                        transformers: transformerIds
                     });
                 }
 
@@ -799,45 +798,26 @@ const LoadSheddingDesigner = () => {
                             branches: branchIds
                         });
                     }
-                }
-
-                // Also save any "loose" branches not in a pocket yet
-                const looseBranches = stage.pocket_branches || [];
-                if (looseBranches.length > 0) {
-                    const relayGroups = {};
-                    looseBranches.forEach(bayId => {
-                        let foundRelay = null;
-                        let foundBranchId = null;
-                        relays.forEach(r => {
-                            const br = (r.incoming_branches || []).find(b => b.bay_id === bayId);
-                            if (br) {
-                                foundRelay = r;
-                                foundBranchId = br.id;
-                            }
-                        });
-                        if (foundRelay && foundBranchId) {
-                            if (!relayGroups[foundRelay.id]) relayGroups[foundRelay.id] = [];
-                            relayGroups[foundRelay.id].push(foundBranchId);
-                        }
-                    });
 
                     if (Object.keys(relayGroups).length > 0) {
-                        const pbRes = await api.post('/load-shedding-pocket-bays/', { stage: stageId });
-                        const pbId = pbRes.data.id;
-                        for (const [rId, branchIds] of Object.entries(relayGroups)) {
-                            await api.post('/load-shedding-pocket-boundaries/', {
-                                pocket: pbId,
-                                relay: rId,
-                                branches: branchIds
-                            });
-                        }
+                        await api.post('/load-shedding-pocket-bays/recompute/', {
+                            pocket_ids: [pbId]
+                        });
                     }
                 }
+
             }
             sessionStorage.removeItem('ls_draft_state');
             alert("Draft saved successfully!");
         } catch (err) {
             console.error("Failed to save scheme", err);
+            console.error("Save failure details", {
+                url: err?.config?.url,
+                method: err?.config?.method,
+                requestData: err?.config?.data,
+                status: err?.response?.status,
+                responseData: err?.response?.data,
+            });
             // ... (rest of error handling)
 
             // Try to extract useful error message based on DRF format
@@ -865,9 +845,11 @@ const LoadSheddingDesigner = () => {
             return;
         }
 
+        const selectedSchemeType = activeGlobalSettingsTab === 'uvls' ? 'UVLS' : 'UFLS';
+
         try {
             const res = await api.post('/load-shedding-settings/', {
-                scheme_type: schemeType.includes('UFLS') ? 'UFLS' : 'UVLS',
+                scheme_type: selectedSchemeType,
                 threshold: parseFloat(newSettingThreshold),
                 time_delay: parseFloat(newSettingTimeDelay)
             });
@@ -877,14 +859,6 @@ const LoadSheddingDesigner = () => {
             setNewSettingThreshold('');
             setNewSettingTimeDelay('');
 
-            // If we are in the stage modal, auto-assign it
-            if (showStageSettingsModal) {
-                const newStages = [...stages];
-                if (!newStages[activeStageIdx].setting_ids.includes(newSetting.id)) {
-                    newStages[activeStageIdx].setting_ids.push(newSetting.id);
-                    setStages(newStages);
-                }
-            }
         } catch (err) {
             alert("Failed to create setting. " + JSON.stringify(err.response?.data || err.message));
         }
@@ -905,17 +879,6 @@ const LoadSheddingDesigner = () => {
         } catch (err) {
             alert("Failed to delete setting.");
         }
-    };
-
-    const toggleStageSetting = (sId) => {
-        const newStages = [...stages];
-        const currentIds = newStages[activeStageIdx].setting_ids;
-        if (currentIds.includes(sId)) {
-            newStages[activeStageIdx].setting_ids = currentIds.filter(id => id !== sId);
-        } else {
-            newStages[activeStageIdx].setting_ids.push(sId);
-        }
-        setStages(newStages);
     };
 
     // ==========================================
@@ -1257,6 +1220,102 @@ const LoadSheddingDesigner = () => {
                 assigned_mw
             };
         });
+    };
+
+    const compactSubstationMnemonic = (subId) => String(subId || '').replace(/\d+$/, '');
+
+    const getStageSettingCells = (stage) => {
+        const stageSettings = getSortedSettings(
+            (stage?.setting_ids || [])
+                .map(sId => globalSettings.find(s => s.id === sId))
+                .filter(Boolean)
+        );
+
+        return {
+            threshold1: stageSettings[0]?.threshold ?? 'n/a',
+            delay1: stageSettings[0]?.time_delay ?? 'n/a',
+            threshold2: stageSettings[1]?.threshold ?? 'n/a',
+            delay2: stageSettings[1]?.time_delay ?? 'n/a',
+        };
+    };
+
+    const getSummaryRows = () => {
+        const rows = [];
+
+        stages.forEach((stage, stageIdx) => {
+            const settingCells = getStageSettingCells(stage);
+            let stageRowStarted = false;
+
+            (stage.transformer_bays || []).forEach(bay => {
+                const relay = relays.find(r => String(r.id) === String(bay.relay));
+                const sub = substations.find(s => s.substation_id === bay.relay_substation_id);
+                if (!relay || !sub) return;
+
+                const selectedIds = (bay.transformers || []).map(t => typeof t === 'object' ? t.id : t);
+                const selectedTransformers = (relay.load_transformers || []).filter(t => selectedIds.includes(typeof t === 'object' ? t.id : t));
+
+                const assignedFeeder = selectedTransformers.length > 0
+                    ? selectedTransformers.map(t => `T${t.transformer_no}`).join(' & ')
+                    : (bay.transformers || []).map(t => typeof t === 'object' ? `T${t.id}` : `T${t}`).join(' & ');
+
+                const breakerNumber = selectedTransformers
+                    .map(t => t.hv_breaker_number)
+                    .filter(Boolean)
+                    .join(' & ') || 'n/a';
+
+                rows.push({
+                    stageLabel: !stageRowStarted ? stage.label : '',
+                    grid: sub.grid || '',
+                    substationName: sub.name || '',
+                    substationId: sub.substation_id || '',
+                    voltage: sub.voltage || '',
+                    assignedFeeder: assignedFeeder || 'n/a',
+                    breakerNumber,
+                    ...settingCells,
+                });
+                stageRowStarted = true;
+            });
+
+            const pockets = getEffectiveStagePockets(stage, stageIdx);
+            pockets.forEach(card => {
+                (card.branchGroups || []).forEach(group => {
+                    const localSub = substations.find(s => s.substation_id === group.subId);
+                    if (!localSub) return;
+
+                    const fullBranchIds = (card.branches || []).filter(branchId => String(branchId).startsWith(`${group.subId}_`));
+                    const branchObjects = fullBranchIds.map(branchId => {
+                        for (const relay of relays) {
+                            const found = (relay.incoming_branches || []).find(branch => branch.bay_id === branchId);
+                            if (found) return found;
+                        }
+                        return null;
+                    }).filter(Boolean);
+
+                    const assignedFeeder = branchObjects.length > 0
+                        ? branchObjects.map(branch => `${compactSubstationMnemonic(branch.to_substation)} ${branch.ckt_id}`).join(' & ')
+                        : (group.branches || []).join(' & ');
+
+                    const breakerNumber = branchObjects
+                        .map(branch => branch.breaker_number)
+                        .filter(Boolean)
+                        .join(' & ') || 'n/a';
+
+                    rows.push({
+                        stageLabel: !stageRowStarted ? stage.label : '',
+                        grid: localSub.grid || '',
+                        substationName: localSub.name || '',
+                        substationId: localSub.substation_id || '',
+                        voltage: localSub.voltage || '',
+                        assignedFeeder: assignedFeeder || 'n/a',
+                        breakerNumber,
+                        ...settingCells,
+                    });
+                    stageRowStarted = true;
+                });
+            });
+        });
+
+        return rows;
     };
 
     const isStaff = currentUser?.is_staff || false;
@@ -1609,8 +1668,35 @@ const LoadSheddingDesigner = () => {
                                         }}
                                         onClick={() => setActiveStageIdx(idx)}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                            <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{stage.label}</div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: 0, flex: 1 }}>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: 600 }}>{stage.label}</div>
+                                            {!!stage.setting_ids?.length && (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                                                    {stage.setting_ids.map(sId => {
+                                                        const setting = globalSettings.find(s => s.id === sId);
+                                                        if (!setting) return null;
+                                                        return (
+                                                            <div
+                                                                key={sId}
+                                                                style={{
+                                                                    fontSize: '0.55rem',
+                                                                    color: activeStageIdx === idx ? '#062b22' : 'var(--accent-cyan)',
+                                                                    background: activeStageIdx === idx ? 'rgba(0, 255, 163, 0.95)' : 'rgba(0, 229, 255, 0.10)',
+                                                                    padding: '3px 8px',
+                                                                    borderRadius: '999px',
+                                                                    fontWeight: 700,
+                                                                    border: activeStageIdx === idx ? '1px solid rgba(0, 255, 163, 0.95)' : '1px solid rgba(0, 229, 255, 0.22)',
+                                                                    lineHeight: 1,
+                                                                    whiteSpace: 'nowrap',
+                                                                    boxShadow: activeStageIdx === idx ? '0 0 0 1px rgba(0,0,0,0.08) inset' : 'none'
+                                                                }}
+                                                            >
+                                                                {setting.label.replace(', ', ' | ')}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                             <button style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', padding: '4px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleOpenEditStage(idx); }}>
@@ -1660,18 +1746,7 @@ const LoadSheddingDesigner = () => {
                                     })}
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                {schemeType !== 'EMLS' && (
-                                    <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.75rem', fontSize: '0.75rem', position: 'relative' }} onClick={() => setShowStageSettingsModal(true)}>
-                                        <SettingsIcon size={14} /> Stage Settings
-                                        {stages[activeStageIdx]?.setting_ids?.length > 0 && (
-                                            <div style={{ position: 'absolute', top: '-4px', right: '-4px', background: 'var(--accent-cyan)', color: '#000', borderRadius: '50%', width: '16px', height: '16px', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                                                {stages[activeStageIdx].setting_ids.length}
-                                            </div>
-                                        )}
-                                    </button>
-                                )}
-                            </div>
+                            <div style={{ display: 'flex', gap: '0.5rem' }} />
                         </div>
 
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '4rem' }}>
@@ -1829,6 +1904,41 @@ const LoadSheddingDesigner = () => {
                                                 }}>
                                                     {formatMW(card.total_p_mw ?? 0)} MW
                                                 </div>
+                                                <button
+                                                    onClick={() => {
+                                                        const newStages = [...stages];
+                                                        const active = { ...newStages[activeStageIdx] };
+                                                        active.computed_pockets = (active.computed_pockets || []).filter(c => c.id !== card.id);
+                                                        newStages[activeStageIdx] = active;
+                                                        setStages(newStages);
+                                                    }}
+                                                    style={{
+                                                        width: '22px',
+                                                        height: '22px',
+                                                        borderRadius: '999px',
+                                                        border: '1px solid rgba(239, 68, 68, 0.18)',
+                                                        background: 'rgba(239, 68, 68, 0.08)',
+                                                        color: 'rgba(239, 68, 68, 0.9)',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        padding: 0,
+                                                        transition: 'all 0.2s ease'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.16)';
+                                                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.28)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
+                                                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.18)';
+                                                    }}
+                                                    aria-label={`Delete pocket ${idx + 1}`}
+                                                    type="button"
+                                                >
+                                                    <X size={12} />
+                                                </button>
                                             </div>
                                         </div>
 
@@ -2026,15 +2136,24 @@ const LoadSheddingDesigner = () => {
                                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FFAB00' }}></div>
                                 Draft Mode Active
                             </div>
-                            <button
-                                className="btn-primary"
-                                onClick={handleSaveWorkspace}
-                                disabled={saving}
-                                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.5rem', fontSize: '0.85rem', boxShadow: '0 0 20px rgba(0, 229, 255, 0.3)', opacity: saving ? 0.7 : 1 }}
-                            >
-                                {saving ? <RotateCcw size={16} className="animate-spin" /> : <Save size={16} />}
-                                {saving ? 'Saving...' : 'Save Workspace'}
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <button
+                                    className="btn-secondary"
+                                    onClick={() => setShowSummaryModal(true)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
+                                >
+                                    <Layout size={16} /> Summary
+                                </button>
+                                <button
+                                    className="btn-primary"
+                                    onClick={handleSaveWorkspace}
+                                    disabled={saving}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.5rem', fontSize: '0.85rem', boxShadow: '0 0 20px rgba(0, 229, 255, 0.3)', opacity: saving ? 0.7 : 1 }}
+                                >
+                                    {saving ? <RotateCcw size={16} className="animate-spin" /> : <Save size={16} />}
+                                    {saving ? 'Saving...' : 'Save Workspace'}
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -2604,23 +2723,32 @@ const LoadSheddingDesigner = () => {
                         <div className="glass-card" style={{ padding: '2rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
                                 <div>
-                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Global Stage Settings</h3>
-                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Manage Trip Settings for UFLS and UVLS schemes. Settings are shared globally.</p>
+                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Configuration Settings</h3>
+                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Manage global scheme configurations such as UFLS settings, UVLS settings, logic rules, and other shared setup controls.</p>
                                 </div>
                             </div>
 
                             {/* SETTINGS TABS */}
                             <div style={{ display: 'flex', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.5rem' }}>
-                                <div onClick={() => setActiveGlobalSettingsTab('tripsettings')} style={{ padding: '0.75rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', color: activeGlobalSettingsTab === 'tripsettings' ? 'var(--accent-cyan)' : 'var(--text-secondary)', borderBottom: activeGlobalSettingsTab === 'tripsettings' ? '2px solid var(--accent-cyan)' : '2px solid transparent', transition: 'all 0.2s' }}>
-                                    Trip Settings
+                                <div onClick={() => setActiveGlobalSettingsTab('ufls')} style={{ padding: '0.75rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', color: activeGlobalSettingsTab === 'ufls' ? 'var(--accent-cyan)' : 'var(--text-secondary)', borderBottom: activeGlobalSettingsTab === 'ufls' ? '2px solid var(--accent-cyan)' : '2px solid transparent', transition: 'all 0.2s' }}>
+                                    UFLS Settings
+                                </div>
+                                <div onClick={() => setActiveGlobalSettingsTab('uvls')} style={{ padding: '0.75rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', color: activeGlobalSettingsTab === 'uvls' ? 'var(--accent-cyan)' : 'var(--text-secondary)', borderBottom: activeGlobalSettingsTab === 'uvls' ? '2px solid var(--accent-cyan)' : '2px solid transparent', transition: 'all 0.2s' }}>
+                                    UVLS Settings
                                 </div>
                                 <div onClick={() => setActiveGlobalSettingsTab('conflict')} style={{ padding: '0.75rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', color: activeGlobalSettingsTab === 'conflict' ? 'var(--accent-cyan)' : 'var(--text-secondary)', borderBottom: activeGlobalSettingsTab === 'conflict' ? '2px solid var(--accent-cyan)' : '2px solid transparent', transition: 'all 0.2s' }}>
                                     Critical Substation Conflict
                                 </div>
                             </div>
 
-                            {activeGlobalSettingsTab === 'tripsettings' ? (
+                            {activeGlobalSettingsTab !== 'conflict' ? (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '2rem' }}>
+                                {(() => {
+                                    const selectedSchemeType = activeGlobalSettingsTab === 'uvls' ? 'UVLS' : 'UFLS';
+                                    const thresholdUnit = selectedSchemeType === 'UVLS' ? 'p.u.' : 'Hz';
+                                    const settingsForTab = getSortedSettings(globalSettings.filter(s => s.scheme_type === selectedSchemeType));
+                                    return (
+                                        <>
                                 {/* Left: Datatable */}
                                 <div style={{ gridColumn: 'span 8' }}>
                                     <div style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', overflow: 'hidden' }}>
@@ -2628,20 +2756,16 @@ const LoadSheddingDesigner = () => {
                                             <thead>
                                                 <tr style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                                                     <th style={{ padding: '1rem', fontWeight: 600 }}>Label</th>
-                                                    <th style={{ padding: '1rem', fontWeight: 600 }}>Type</th>
                                                     <th style={{ padding: '1rem', fontWeight: 600 }}>Threshold</th>
                                                     <th style={{ padding: '1rem', fontWeight: 600 }}>Time Delay</th>
                                                     {isStaff && <th style={{ padding: '1rem', fontWeight: 600, textAlign: 'right' }}>Actions</th>}
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {getSortedSettings(globalSettings.filter(s => s.scheme_type === schemeType)).map(s => (
+                                                {settingsForTab.map(s => (
                                                     <tr key={s.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }}>
                                                         <td style={{ padding: '1rem', fontWeight: 500 }}>{s.label}</td>
-                                                        <td style={{ padding: '1rem' }}>
-                                                            <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 500 }}>{s.scheme_type}</span>
-                                                        </td>
-                                                        <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{s.threshold} {s.scheme_type === 'UVLS' ? 'p.u.' : 'Hz'}</td>
+                                                        <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{s.threshold} {thresholdUnit}</td>
                                                         <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{s.time_delay} s</td>
                                                         {isStaff && (
                                                             <td style={{ padding: '1rem', textAlign: 'right' }}>
@@ -2652,9 +2776,9 @@ const LoadSheddingDesigner = () => {
                                                         )}
                                                     </tr>
                                                 ))}
-                                                {globalSettings.length === 0 && (
+                                                {settingsForTab.length === 0 && (
                                                     <tr>
-                                                        <td colSpan="5" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No settings defined.</td>
+                                                        <td colSpan="4" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No settings defined.</td>
                                                     </tr>
                                                 )}
                                             </tbody>
@@ -2665,11 +2789,11 @@ const LoadSheddingDesigner = () => {
                                 {/* Right: Add Form */}
                                 <div style={{ gridColumn: 'span 4' }}>
                                     <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '1.5rem', position: 'sticky', top: 0 }}>
-                                        <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: '0 0 1rem 0' }}>Add New Setting</h4>
+                                        <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: '0 0 1rem 0' }}>Add New {selectedSchemeType} Setting</h4>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                             <div>
-                                                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold ({schemeType === 'UVLS' ? 'p.u.' : 'Hz'})</label>
-                                                <input type="number" step="0.01" className="dark-input" style={{ width: '100%' }} value={newSettingThreshold} onChange={e => setNewSettingThreshold(e.target.value)} placeholder="e.g. 49.2" />
+                                                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold ({thresholdUnit})</label>
+                                                <input type="number" step="0.01" className="dark-input" style={{ width: '100%' }} value={newSettingThreshold} onChange={e => setNewSettingThreshold(e.target.value)} placeholder={selectedSchemeType === 'UVLS' ? 'e.g. 0.85' : 'e.g. 49.2'} />
                                             </div>
                                             <div>
                                                 <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Time Delay (Seconds)</label>
@@ -2686,6 +2810,9 @@ const LoadSheddingDesigner = () => {
                                         )}
                                     </div>
                                 </div>
+                                        </>
+                                    );
+                                })()}
                             </div>
                             ) : (
                             <div style={{ padding: '1rem 0' }}>
@@ -2744,9 +2871,9 @@ const LoadSheddingDesigner = () => {
                 )
             }
 
-            {/* STAGE SETTINGS MODAL */}
+            {/* CREATE STAGE MODAL */}
             <AnimatePresence>
-                {showStageSettingsModal && (
+                {showSummaryModal && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -2765,188 +2892,66 @@ const LoadSheddingDesigner = () => {
                             animate={{ y: 0, opacity: 1, scale: 1 }}
                             exit={{ y: 20, opacity: 0, scale: 0.95 }}
                             className="glass-card"
-                            style={{ width: '800px', maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', padding: 0 }}
+                            style={{ width: '1400px', maxWidth: '96vw', maxHeight: '86vh', display: 'flex', flexDirection: 'column', padding: 0 }}
                         >
-                            <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
-                                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Stage Configuration</h3>
-                                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Configure settings and targets for {stages[activeStageIdx]?.label || `Stage ${stages[activeStageIdx]?.stage_number}`}</p>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Assignment Summary</h3>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Workbook-style summary using Stage Label, Grid, Substation, feeder, breaker, and setting columns.</p>
                                 </div>
-                                <button onClick={() => setShowStageSettingsModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}>
+                                <button onClick={() => setShowSummaryModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}>
                                     <X size={20} />
                                 </button>
                             </div>
-
-                            {/* TABS HEADER */}
-                            <div style={{ display: 'flex', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                <div
-                                    onClick={() => setActiveStageSettingsTab('general')}
-                                    style={{
-                                        padding: '0.75rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-                                        color: activeStageSettingsTab === 'general' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                                        borderBottom: activeStageSettingsTab === 'general' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    Trip Settings
+                            <div style={{ padding: '1rem 1.5rem 1.5rem 1.5rem', overflow: 'auto' }}>
+                                <div style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', overflow: 'hidden' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                        <thead>
+                                            <tr style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                                                <th style={{ padding: '0.85rem' }}>Stage Label</th>
+                                                <th style={{ padding: '0.85rem' }}>Grid</th>
+                                                <th style={{ padding: '0.85rem' }}>Substation Name</th>
+                                                <th style={{ padding: '0.85rem' }}>Substation id</th>
+                                                <th style={{ padding: '0.85rem' }}>Voltage</th>
+                                                <th style={{ padding: '0.85rem' }}>Assigned feeder</th>
+                                                <th style={{ padding: '0.85rem' }}>Breaker number</th>
+                                                <th style={{ padding: '0.85rem' }}>Threshold Setting 1</th>
+                                                <th style={{ padding: '0.85rem' }}>Time Delay 1</th>
+                                                <th style={{ padding: '0.85rem' }}>Threshold Setting 2</th>
+                                                <th style={{ padding: '0.85rem' }}>Time Delay 2</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {getSummaryRows().map((row, idx) => (
+                                                <tr key={`${row.substationId}-${row.assignedFeeder}-${idx}`} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                                    <td style={{ padding: '0.85rem', fontWeight: 600 }}>{row.stageLabel}</td>
+                                                    <td style={{ padding: '0.85rem' }}>{row.grid}</td>
+                                                    <td style={{ padding: '0.85rem' }}>{row.substationName}</td>
+                                                    <td style={{ padding: '0.85rem', fontFamily: 'monospace' }}>{row.substationId}</td>
+                                                    <td style={{ padding: '0.85rem' }}>{row.voltage}</td>
+                                                    <td style={{ padding: '0.85rem' }}>{row.assignedFeeder}</td>
+                                                    <td style={{ padding: '0.85rem' }}>{row.breakerNumber}</td>
+                                                    <td style={{ padding: '0.85rem', fontFamily: 'monospace' }}>{row.threshold1}</td>
+                                                    <td style={{ padding: '0.85rem', fontFamily: 'monospace' }}>{row.delay1}</td>
+                                                    <td style={{ padding: '0.85rem', fontFamily: 'monospace' }}>{row.threshold2}</td>
+                                                    <td style={{ padding: '0.85rem', fontFamily: 'monospace' }}>{row.delay2}</td>
+                                                </tr>
+                                            ))}
+                                            {getSummaryRows().length === 0 && (
+                                                <tr>
+                                                    <td colSpan="11" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                                        No assignments available to summarize.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <div
-                                    onClick={() => setActiveStageSettingsTab('metrics')}
-                                    style={{
-                                        padding: '0.75rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-                                        color: activeStageSettingsTab === 'metrics' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                                        borderBottom: activeStageSettingsTab === 'metrics' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    Regional Targets
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-                                {activeStageSettingsTab === 'general' ? (
-                                    <>
-                                        {/* Left list of existing settings */}
-                                        <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
-                                            <h4 style={{ fontSize: '0.85rem', color: 'var(--accent-cyan)', marginBottom: '1rem', marginTop: 0 }}>Available {schemeType} Settings</h4>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                                {getSortedSettings(globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS'))).map(s => {
-                                                    const isSelected = (stages[activeStageIdx]?.setting_ids || []).includes(s.id);
-                                                    return (
-                                                        <div
-                                                            key={s.id}
-                                                            onClick={() => toggleStageSetting(s.id)}
-                                                            style={{
-                                                                padding: '1rem',
-                                                                borderRadius: '8px',
-                                                                border: isSelected ? '1px solid var(--accent-cyan)' : '1px solid rgba(255,255,255,0.1)',
-                                                                background: isSelected ? 'rgba(0, 255, 163, 0.05)' : 'rgba(255,255,255,0.02)',
-                                                                cursor: 'pointer',
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                                transition: 'all 0.2s'
-                                                            }}
-                                                        >
-                                                            <div>
-                                                                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{s.label}</div>
-                                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontFamily: 'monospace', marginTop: '4px' }}>{s.threshold} {s.scheme_type === 'UFLS' ? 'Hz' : 'pu'} • {s.time_delay}s</div>
-                                                            </div>
-                                                            <div style={{ width: '20px', height: '20px', borderRadius: '4px', border: isSelected ? 'none' : '1px solid var(--text-secondary)', background: isSelected ? 'var(--accent-cyan)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                                {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                })}
-                                                {globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS')).length === 0 && (
-                                                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px' }}>
-                                                        No existing settings found for {schemeType}. Add one to the right.
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Right quick-add form */}
-                                        <div style={{ width: '250px', padding: '1.5rem', background: 'rgba(0,0,0,0.2)' }}>
-                                            <h4 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', marginTop: 0 }}>Quick Add New Setting</h4>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                <div>
-                                                    <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold ({schemeType === 'UVLS' ? 'pu' : 'Hz'})</label>
-                                                    <input type="number" step="0.01" className="dark-input" style={{ width: '100%' }} value={newSettingThreshold} onChange={e => setNewSettingThreshold(e.target.value)} />
-                                                </div>
-                                                <div>
-                                                    <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Delay (s)</label>
-                                                    <input type="number" step="0.1" className="dark-input" style={{ width: '100%' }} value={newSettingTimeDelay} onChange={e => setNewSettingTimeDelay(e.target.value)} />
-                                                </div>
-                                                <button className="btn-secondary" onClick={handleAddNewSetting} style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)' }}>
-                                                    <Plus size={14} /> Add & Assign
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    /* METRICS TAB */
-                                    <div style={{ flex: 1, padding: '2rem', display: 'flex', flexDirection: 'column', gap: '2rem', overflowY: 'auto' }}>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                                            <div>
-                                                <h4 style={{ fontSize: '0.9rem', color: '#fff', marginBottom: '1rem' }}>Configuration</h4>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                    <div>
-                                                        <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Target Load Shedding (MW)</label>
-                                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                            <input
-                                                                type="number"
-                                                                className="dark-input"
-                                                                style={{ flex: 1, fontSize: '1rem', fontWeight: 600, color: 'var(--accent-cyan)' }}
-                                                                value={stages[activeStageIdx]?.target_mw || 0}
-                                                                onChange={(e) => {
-                                                                    const newStages = [...stages];
-                                                                    newStages[activeStageIdx].target_mw = parseFloat(e.target.value) || 0;
-                                                                    setStages(newStages);
-                                                                }}
-                                                            />
-                                                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '0 1rem', display: 'flex', alignItems: 'center', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                                                MW
-                                                            </div>
-                                                        </div>
-                                                        {gridData?.total_pload_mw > 0 && (
-                                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '8px' }}>
-                                                                Equivalent to <strong>{((stages[activeStageIdx]?.target_mw || 0) / gridData.total_pload_mw * 100).toFixed(2)}%</strong> of total system demand ({formatMW(gridData.total_pload_mw)} MW)
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div style={{ padding: '1rem', background: 'rgba(0, 229, 255, 0.05)', borderRadius: '8px', border: '1px solid rgba(0, 229, 255, 0.1)' }}>
-                                                        <div style={{ fontSize: '0.75rem', color: '#fff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '4px' }}>
-                                                            <Shield size={14} color="var(--accent-cyan)" /> Fairness Calculation
-                                                        </div>
-                                                        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: 0 }}>
-                                                            Regional targets are automatically calculated based on the regional share of total demand.
-                                                            Each region should ideally contribute the same percentage as the overall target.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <h4 style={{ fontSize: '0.9rem', color: '#fff', marginBottom: '1.25rem' }}>Regional Distribution</h4>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                                    {gridData?.regional_breakdown?.map(reg => {
-                                                        const overallRatio = (stages[activeStageIdx]?.target_mw || 0) / (gridData.total_pload_mw || 1);
-                                                        const regionalTarget = reg.total_pload_mw * overallRatio;
-                                                        const regionalActual = calculateRegionalMW(stages[activeStageIdx], reg.region);
-
-                                                        return (
-                                                            <BulletChart
-                                                                key={reg.region}
-                                                                label={reg.region}
-                                                                actual={regionalActual}
-                                                                target={regionalTarget}
-                                                                max={Math.max(reg.total_pload_mw * 0.4, regionalTarget * 1.5)} // Scale slightly larger than target
-                                                                color={
-                                                                    reg.region === 'North' ? '#F43F5E' :
-                                                                        reg.region === 'Central' ? '#3B82F6' :
-                                                                            reg.region === 'South' ? '#10B981' : '#F59E0B'
-                                                                }
-                                                            />
-                                                        );
-                                                    })}
-                                                    {!gridData && (
-                                                        <div style={{ opacity: 0.5, fontSize: '0.8rem', textAlign: 'center', padding: '2rem' }}>
-                                                            {fetchingAnalytics ? "Fetching analytics..." : "Load analysis data unavailable."}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         </motion.div>
                     </motion.div>
                 )}
-            </AnimatePresence>
 
-            {/* CREATE STAGE MODAL */}
-            <AnimatePresence>
                 {showCreateStageModal && (
                     <motion.div
                         initial={{ opacity: 0 }}

@@ -412,13 +412,12 @@ class LoadSheddingSetting(models.Model):
 
     def build_label(self):
         unit = 'Hz' if self.scheme_type == LoadSheddingSchemeType.UFLS else 'pu'
-        threshold = f"{self.threshold:g}"
+        threshold = f"{self.threshold:.1f}" if float(self.threshold).is_integer() else f"{self.threshold:g}"
         time_delay = f"{self.time_delay:g}"
-        return f"{threshold}{unit}_{time_delay}s"
+        return f"{threshold}{unit}, {time_delay}s"
 
     def save(self, *args, **kwargs):
-        if not self.label:
-            self.label = self.build_label()
+        self.label = self.build_label()
         super().save(*args, **kwargs)
 
 
