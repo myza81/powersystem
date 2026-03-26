@@ -55,7 +55,7 @@ __all__ = [
     'LoadSheddingStage',
     'LoadSheddingStageSetting',
     'LoadSheddingTransformerBay',
-    'LoadSheddingSpurBay',
+    'LoadSheddingPocketBay',
     'LoadSheddingPocketBoundary',
     'LoadSheddingSchemeType',
     'NetworkSnapshot',
