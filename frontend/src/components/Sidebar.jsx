@@ -8,7 +8,9 @@ import {
     LineChart,
     Settings,
     LogOut,
+    LogIn,
     User,
+    Ghost,
     ChevronDown,
     Menu,
     List,
@@ -20,7 +22,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const Sidebar = ({ currentView, onViewChange, currentUser, onLogout }) => {
+const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin }) => {
     const [collapsed, setCollapsed] = useState(false);
     const [monitoringExpanded, setMonitoringExpanded] = useState(true);
     const [assetsExpanded, setAssetsExpanded] = useState(true);
@@ -319,20 +321,39 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout }) => {
             {/* Footer / User Profile */}
             <div className="sidebar-footer">
                 <div className="user-profile">
-                    <div className="avatar">
-                        <User size={20} />
+                    <div className="avatar" style={currentUser?.is_anonymous ? { borderColor: 'rgba(255,255,255,0.15)' } : {}}>
+                        {currentUser?.is_anonymous
+                            ? <Ghost size={18} color="var(--text-secondary)" />
+                            : <User size={20} />}
                     </div>
                     {!collapsed && (
                         <div className="user-info">
-                            <div className="user-name">{currentUser?.username || 'Guest'}</div>
-                            <div className="user-role">{currentUser?.is_staff ? 'Administrator' : 'User'}</div>
+                            <div className="user-name">
+                                {currentUser?.is_anonymous ? 'Anonymous' : (currentUser?.username || 'Guest')}
+                            </div>
+                            <div className="user-role" style={currentUser?.is_anonymous ? { color: 'rgba(255,255,255,0.3)' } : {}}>
+                                {currentUser?.is_anonymous ? 'Guest Access' : (currentUser?.is_staff ? 'Administrator' : 'User')}
+                            </div>
                         </div>
                     )}
                 </div>
-                {!collapsed && currentUser && (
-                    <button className="logout-btn" onClick={onLogout} title="Logout">
-                        <LogOut size={16} />
-                    </button>
+                {!collapsed && (
+                    currentUser?.is_anonymous ? (
+                        <button
+                            className="login-sidebar-btn"
+                            onClick={onShowLogin}
+                            title="Sign In"
+                        >
+                            <LogIn size={15} />
+                            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Sign In</span>
+                        </button>
+                    ) : (
+                        currentUser && (
+                            <button className="logout-btn" onClick={onLogout} title="Logout">
+                                <LogOut size={16} />
+                            </button>
+                        )
+                    )
                 )}
             </div>
         </motion.div>

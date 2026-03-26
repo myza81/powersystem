@@ -24,21 +24,32 @@ DEFAULT_EXPORT_MODELS = [
     'core.IncomingBranch',
     'core.IncomingBranchAlias',
     'core.AutoTransformer',
+    'core.CriticalCategory',
+    'core.CriticalSource',
+    'core.CriticalAsset',
     'core.LoadSheddingRelay',
     'core.LoadSheddingSetting',
+    'core.LoadSheddingVersion',
+    'core.LoadSheddingStage',
+    'core.LoadSheddingStageSetting',
+    'core.LoadSheddingTransformerBay',
+    'core.LoadSheddingPocketBay',
+    'core.LoadSheddingPocketBoundary',
 ]
 
 def _get_latest_master_update_ts():
+    from django.apps import apps
     candidates = []
-    candidates.append(Substation.objects.aggregate(ts=Max('updated_at'))['ts'])
-    candidates.append(LoadTransformer.objects.aggregate(ts=Max('updated_at'))['ts'])
-    candidates.append(IncomingBranch.objects.aggregate(ts=Max('updated_at'))['ts'])
-    candidates.append(AutoTransformer.objects.aggregate(ts=Max('updated_at'))['ts'])
-    from core.models import LoadSheddingRelay, LoadSheddingSetting
-    candidates.append(LoadSheddingRelay.objects.aggregate(ts=Max('updated_at'))['ts'])
-    candidates.append(LoadSheddingSetting.objects.aggregate(ts=Max('updated_at'))['ts'])
-    latest = max([c for c in candidates if c is not None], default=None)
-    return latest
+    for model_str in DEFAULT_EXPORT_MODELS:
+        try:
+            model = apps.get_model(model_str)
+            ts = model.objects.aggregate(ts=Max('updated_at'))['ts']
+            if ts:
+                candidates.append(ts)
+        except Exception as e:
+            logger.warning(f"Could not get updated_at for {model_str}: {e}")
+    
+    return max(candidates, default=None)
 
 def _backup_master_fixture():
     os.makedirs(BACKUP_DIR, exist_ok=True)
@@ -163,14 +174,37 @@ class DatabaseImportView(APIView):
             backup_path = _backup_master_fixture()
 
             if reset_master:
-                from core.models import LoadSheddingRelay, LoadSheddingSetting
+                # Delete in reverse order to respect dependencies
+                # (e.g., delete child models before parent models)
+                from core.models import (
+                    LoadSheddingPocketBoundary, LoadSheddingPocketBay, LoadSheddingTransformerBay,
+                    LoadSheddingStageSetting, LoadSheddingStage, LoadSheddingVersion,
+                    LoadSheddingSetting, LoadSheddingRelay, CriticalAsset, CriticalSource,
+                    CriticalCategory, IncomingBranchAlias, IncomingBranch, AutoTransformer,
+                    LoadTransformer, Substation
+                )
+                
+                # Group 1: Schemes & Bays
+                LoadSheddingPocketBoundary.objects.all().delete()
+                LoadSheddingPocketBay.objects.all().delete()
+                LoadSheddingTransformerBay.objects.all().delete()
+                LoadSheddingStageSetting.objects.all().delete()
+                LoadSheddingStage.objects.all().delete()
+                LoadSheddingVersion.objects.all().delete()
+                
+                # Group 2: Critical Assets
+                CriticalAsset.objects.all().delete()
+                CriticalSource.objects.all().delete()
+                CriticalCategory.objects.all().delete()
+
+                # Group 3: Core Infrastructure
                 IncomingBranchAlias.objects.all().delete()
                 IncomingBranch.objects.all().delete()
-                LoadTransformer.objects.all().delete()
                 AutoTransformer.objects.all().delete()
-                Substation.objects.all().delete()
+                LoadTransformer.objects.all().delete()
                 LoadSheddingRelay.objects.all().delete()
                 LoadSheddingSetting.objects.all().delete()
+                Substation.objects.all().delete()
 
             call_command('loaddata', FIXTURE_PATH)
             recompute_state = request.data.get('recompute_state', True)

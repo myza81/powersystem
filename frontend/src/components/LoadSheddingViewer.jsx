@@ -11,7 +11,11 @@ import {
     Users,
     Table,
     FileText,
+    Unlock,
+    TriangleAlert,
+    FileSpreadsheet,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { FaBolt, FaCodeBranch, FaShieldHalved, FaLayerGroup, FaCircleNodes, FaTableList } from 'react-icons/fa6';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api';
@@ -113,6 +117,8 @@ const LoadSheddingViewer = () => {
     const [search, setSearch] = useState('');
     const [expandedStages, setExpandedStages] = useState({});
     const [showSummaryModal, setShowSummaryModal] = useState(false);
+    const [showUnpublishModal, setShowUnpublishModal] = useState(false);
+    const [unpublishing, setUnpublishing] = useState(false);
 
     // Only show published versions (active + deactivated)
     const publishedVersions = useMemo(() =>
@@ -175,6 +181,7 @@ const LoadSheddingViewer = () => {
         return () => window.removeEventListener('load-shedding-published', handler);
     }, []);
 
+
     // ==========================================
     // COMPUTED METRICS
     // ==========================================
@@ -234,25 +241,41 @@ const LoadSheddingViewer = () => {
     const getSummaryRows = () => {
         const rows = [];
         stageDetails.forEach(stage => {
+            const settingCells = {
+                threshold1: stage.settings?.[0]?.threshold ?? 'n/a',
+                delay1: stage.settings?.[0]?.time_delay ?? 'n/a',
+                threshold2: stage.settings?.[1]?.threshold ?? 'n/a',
+                delay2: stage.settings?.[1]?.time_delay ?? 'n/a',
+            };
+
             // Transformer Bays
             (stage.transformer_bays || []).forEach(bay => {
                 const sub = substations.find(s => s.substation_id === bay.relay_substation_id);
                 const relay = relays.find(r => r.id === bay.relay);
-                const assignedFr = (bay.transformers || []).map(t => {
-                    const dbTx = relay?.load_transformers?.find(dt => dt.id === (typeof t === 'object' ? t.id : t));
-                    return dbTx ? `T${dbTx.transformer_no}` : (typeof t === 'object' ? `T${t.id}` : `T${t}`);
-                }).join(' & ');
+                const selectedIds = (bay.transformers || []).map(t => typeof t === 'object' ? t.id : t);
+                const selectedTransformers = (relay?.load_transformers || []).filter(t => selectedIds.includes(typeof t === 'object' ? t.id : t));
+
+                const assignedFeeder = selectedTransformers.length > 0
+                    ? selectedTransformers.map(t => `T${t.transformer_no}`).join(' & ')
+                    : (bay.transformers || []).map(t => typeof t === 'object' ? `T${t.id}` : `T${t}`).join(' & ');
+
+                const breakerNumber = selectedTransformers
+                    .map(t => t.lv_breaker_number)
+                    .filter(Boolean)
+                    .join(' & ') || 'n/a';
+
+                const voltageRaw = selectedTransformers.map(t => t.lv_voltage).filter(Boolean);
+                const voltage = voltageRaw.length > 0 ? [...new Set(voltageRaw)].join(' & ') : '';
 
                 rows.push({
-                    stage: stage.label,
-                    grid: sub?.grid || '—',
-                    substation: sub?.name || bay.relay_substation_name || '—',
-                    substationId: bay.relay_substation_id,
-                    type: 'TX',
-                    feeder: assignedFr,
-                    mw: bay.mw_cache?.mw || 0,
-                    threshold: stage.settings?.[0]?.threshold || '—',
-                    delay: stage.settings?.[0]?.time_delay || '—'
+                    stageLabel: stage.label,
+                    grid: sub?.grid || '',
+                    substationName: sub?.name || bay.relay_substation_name || '',
+                    substationId: sub?.substation_id || bay.relay_substation_id || '',
+                    voltage: voltage || sub?.voltage || '',
+                    assignedFeeder: assignedFeeder || 'n/a',
+                    breakerNumber,
+                    ...settingCells,
                 });
             });
             // Pocket Bays
@@ -260,15 +283,14 @@ const LoadSheddingViewer = () => {
                 (pocket.boundaries || []).forEach(boundary => {
                     const sub = substations.find(s => s.substation_id === boundary.relay_substation_id);
                     rows.push({
-                        stage: stage.label,
-                        grid: sub?.grid || '—',
-                        substation: sub?.name || boundary.relay_substation_name || '—',
-                        substationId: boundary.relay_substation_id,
-                        type: 'Pocket',
-                        feeder: `Boundary: ${boundary.relay_name}`,
-                        mw: pocket.topology_cache?.mw || 0,
-                        threshold: stage.settings?.[0]?.threshold || '—',
-                        delay: stage.settings?.[0]?.time_delay || '—'
+                        stageLabel: stage.label,
+                        grid: sub?.grid || '',
+                        substationName: sub?.name || boundary.relay_substation_name || '',
+                        substationId: sub?.substation_id || boundary.relay_substation_id || '',
+                        voltage: sub?.voltage || '',
+                        assignedFeeder: `Boundary: ${boundary.relay_name}`,
+                        breakerNumber: 'n/a',
+                        ...settingCells,
                     });
                 });
             });
@@ -276,25 +298,67 @@ const LoadSheddingViewer = () => {
         return rows;
     };
 
+    const handleUnpublish = async () => {
+        if (!selectedScheme) return;
+        setUnpublishing(true);
+        try {
+            await api.post(`/load-shedding-versions/${selectedScheme.id}/unpublish/`);
+            setShowUnpublishModal(false);
+            window.dispatchEvent(new CustomEvent('load-shedding-published'));
+            await fetchVersions();
+        } catch (err) {
+            console.error('Failed to unpublish', err);
+            alert(`Failed to unpublish: ${err?.response?.data?.error || err.message}`);
+        } finally {
+            setUnpublishing(false);
+        }
+    };
+
     const handleExportCSV = () => {
         const rows = getSummaryRows();
         if (rows.length === 0) return;
-        const headers = ['Stage', 'Grid', 'Substation', 'Substation ID', 'Type', 'Feeder/Boundary', 'MW', 'Threshold', 'Delay'];
+        const schemeType = selectedScheme?.scheme_type || 'LoadShedding';
+        const fileName = `${schemeType}_${selectedScheme?.review_year}_v${selectedScheme?.version}`;
+        const headers = ['Stage', 'Grid', 'Substation', 'Substation ID', 'Voltage', 'Assigned feeder', 'Breaker number', 'Threshold Setting 1', 'Time Delay 1', 'Threshold Setting 2', 'Time Delay 2'];
         const csvContent = [
             headers.join(','),
             ...rows.map(r => [
-                r.stage, r.grid, `"${r.substation}"`, r.substationId, r.type, `"${r.feeder}"`, r.mw, r.threshold, r.delay
+                r.stageLabel, r.grid, `"${r.substationName}"`, r.substationId, r.voltage, `"${r.assignedFeeder}"`, r.breakerNumber, r.threshold1, r.delay1, r.threshold2, r.delay2
             ].join(','))
         ].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
-        link.setAttribute("download", `load_shedding_summary_${selectedScheme?.review_year}_v${selectedScheme?.version}.csv`);
+        link.setAttribute("download", `${fileName}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const handleExportExcel = () => {
+        const rows = getSummaryRows();
+        if (rows.length === 0) return;
+        
+        const schemeType = selectedScheme?.scheme_type || 'LoadShedding';
+        const fileName = `${schemeType}_${selectedScheme?.review_year}_v${selectedScheme?.version}`;
+        
+        const disclaimer = `⚠ UNCONTROLLED COPY - For internal use only. Verify against the published system before acting.`;
+        const versionInfo = `${schemeType} Scheme: ${selectedScheme?.review_year} v${selectedScheme?.version} | Exported: ${new Date().toLocaleString()}`;
+        const headers = ['Stage', 'Grid', 'Substation', 'Substation ID', 'Voltage', 'Assigned feeder', 'Breaker number', 'Threshold Setting 1', 'Time Delay 1', 'Threshold Setting 2', 'Time Delay 2'];
+        const data = rows.map(r => [
+            r.stageLabel, r.grid, r.substationName, r.substationId, r.voltage, r.assignedFeeder, r.breakerNumber, r.threshold1, r.delay1, r.threshold2, r.delay2
+        ]);
+        
+        const ws = XLSX.utils.aoa_to_sheet([[disclaimer], [versionInfo], headers, ...data]);
+        
+        // Style the disclaimer rows
+        ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
+        
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, schemeType);
+        XLSX.writeFile(wb, `${fileName}.xlsx`);
     };
 
     const getStageMW = (stage) => {
@@ -397,14 +461,7 @@ const LoadSheddingViewer = () => {
                     </div>
 
                     {/* Right: Version Selector */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <button
-                            className="btn-secondary"
-                            onClick={() => setShowSummaryModal(true)}
-                            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 15px', height: '38px', borderRadius: '8px', fontSize: '0.8rem' }}
-                        >
-                            <FaTableList size={14} /> Summary
-                        </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <select
                             className="input-field"
                             value={selectedScheme?.id || ''}
@@ -555,15 +612,54 @@ const LoadSheddingViewer = () => {
                 <div style={{ flex: 1 }} />
 
                 <button
-                    className="btn-secondary"
-                    onClick={handleExportCSV}
-                    style={{
-                        display: 'flex', alignItems: 'center', gap: '6px',
-                        borderRadius: '8px', padding: '0 14px', fontSize: '0.8rem', height: '36px',
+                    onClick={() => setShowSummaryModal(true)}
+                    style={{ 
+                        background: 'rgba(0, 229, 255, 0.08)',
+                        backdropFilter: 'blur(10px)',
+                        border: '1px solid rgba(0, 229, 255, 0.25)',
+                        color: 'var(--accent-cyan)',
+                        padding: '6px 14px', 
+                        borderRadius: '8px', 
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                        whiteSpace: 'nowrap',
+                        height: '36px',
+                    }}
+                    onMouseEnter={(e) => { 
+                        e.currentTarget.style.background = 'rgba(0, 229, 255, 0.15)'; 
+                        e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.5)';
+                        e.currentTarget.style.boxShadow = '0 0 15px rgba(0, 229, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.2)';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={(e) => { 
+                        e.currentTarget.style.background = 'rgba(0, 229, 255, 0.08)'; 
+                        e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.25)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+                        e.currentTarget.style.transform = 'translateY(0)';
                     }}
                 >
-                    <Download size={14} /> Export
+                    <FaTableList size={13} style={{ opacity: 0.9 }} />
+                    <span>Table View</span>
                 </button>
+
+                {selectedScheme?.is_active && (
+                    <button
+                        className="unpublish-btn"
+                        onClick={() => setShowUnpublishModal(true)}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            borderRadius: '8px', padding: '0 14px', fontSize: '0.8rem', height: '36px',
+                        }}
+                    >
+                        <Unlock size={14} /> Unpublish
+                    </button>
+                )}
             </div>
 
             {/* ======================================== */}
@@ -815,9 +911,24 @@ const LoadSheddingViewer = () => {
                                     <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Workbook-style view of all {getVersionDisplayLabel(selectedScheme)} assignments.</p>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                    <button onClick={handleExportCSV} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '34px', fontSize: '0.8rem' }}>
-                                        <FileText size={14} /> Export CSV
-                                    </button>
+                                    <div style={{ position: 'relative' }}>
+                                        <button
+                                            onClick={handleExportCSV}
+                                            className="btn-secondary"
+                                            style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '34px', fontSize: '0.8rem' }}
+                                        >
+                                            <FileText size={14} /> Export CSV
+                                        </button>
+                                    </div>
+                                    <div style={{ position: 'relative' }}>
+                                        <button
+                                            onClick={handleExportExcel}
+                                            className="btn-secondary"
+                                            style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '34px', fontSize: '0.8rem' }}
+                                        >
+                                            <FileSpreadsheet size={14} /> Export Excel
+                                        </button>
+                                    </div>
                                     <button onClick={() => setShowSummaryModal(false)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff', padding: '6px', borderRadius: '6px', cursor: 'pointer' }}>
                                         <X size={20} />
                                     </button>
@@ -833,39 +944,144 @@ const LoadSheddingViewer = () => {
                                             <th style={{ padding: '0.75rem' }}>Grid</th>
                                             <th style={{ padding: '0.75rem' }}>Substation</th>
                                             <th style={{ padding: '0.75rem' }}>Substation ID</th>
-                                            <th style={{ padding: '0.75rem' }}>Type</th>
-                                            <th style={{ padding: '0.75rem' }}>Feeder / Boundary</th>
-                                            <th style={{ padding: '0.75rem' }}>MW</th>
-                                            <th style={{ padding: '0.75rem' }}>Threshold</th>
-                                            <th style={{ padding: '0.75rem' }}>Delay</th>
+                                            <th style={{ padding: '0.75rem' }}>Voltage</th>
+                                            <th style={{ padding: '0.75rem' }}>Assigned feeder</th>
+                                            <th style={{ padding: '0.75rem' }}>Breaker number</th>
+                                            <th style={{ padding: '0.75rem' }}>Threshold Setting 1</th>
+                                            <th style={{ padding: '0.75rem' }}>Time Delay 1</th>
+                                            <th style={{ padding: '0.75rem' }}>Threshold Setting 2</th>
+                                            <th style={{ padding: '0.75rem' }}>Time Delay 2</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {getSummaryRows().length === 0 ? (
                                             <tr>
-                                                <td colSpan="9" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No assignments found.</td>
+                                                <td colSpan="11" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No assignments found.</td>
                                             </tr>
                                         ) : getSummaryRows().map((row, idx) => (
                                             <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
-                                                <td style={{ padding: '0.75rem', fontWeight: 600 }}>{row.stage}</td>
+                                                <td style={{ padding: '0.75rem', fontWeight: 600 }}>{row.stageLabel}</td>
                                                 <td style={{ padding: '0.75rem' }}>{row.grid}</td>
-                                                <td style={{ padding: '0.75rem' }}>{row.substation}</td>
+                                                <td style={{ padding: '0.75rem' }}>{row.substationName}</td>
                                                 <td style={{ padding: '0.75rem', fontFamily: 'monospace' }}>{row.substationId}</td>
-                                                <td style={{ padding: '0.75rem' }}>
-                                                    <span style={{ 
-                                                        background: row.type === 'TX' ? 'rgba(0, 229, 255, 0.1)' : 'rgba(167, 139, 250, 0.1)',
-                                                        color: row.type === 'TX' ? 'var(--accent-cyan)' : '#a78bfa',
-                                                        padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700
-                                                    }}>{row.type}</span>
-                                                </td>
-                                                <td style={{ padding: '0.75rem' }}>{row.feeder}</td>
-                                                <td style={{ padding: '0.75rem', fontWeight: 700, textAlign: 'right' }}>{formatMW(row.mw)}</td>
-                                                <td style={{ padding: '0.75rem', color: 'var(--accent-cyan)' }}>{row.threshold}</td>
-                                                <td style={{ padding: '0.75rem', color: 'var(--accent-cyan)' }}>{row.delay}</td>
+                                                <td style={{ padding: '0.75rem' }}>{row.voltage}</td>
+                                                <td style={{ padding: '0.75rem' }}>{row.assignedFeeder}</td>
+                                                <td style={{ padding: '0.75rem' }}>{row.breakerNumber}</td>
+                                                <td style={{ padding: '0.75rem', fontFamily: 'monospace' }}>{row.threshold1}</td>
+                                                <td style={{ padding: '0.75rem', fontFamily: 'monospace' }}>{row.delay1}</td>
+                                                <td style={{ padding: '0.75rem', fontFamily: 'monospace' }}>{row.threshold2}</td>
+                                                <td style={{ padding: '0.75rem', fontFamily: 'monospace' }}>{row.delay2}</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ======================================== */}
+            {/* UNPUBLISH CONFIRMATION MODAL             */}
+            {/* ======================================== */}
+            <AnimatePresence>
+                {showUnpublishModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        style={{
+                            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                            background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
+                            zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            padding: '2rem',
+                        }}
+                        onClick={() => !unpublishing && setShowUnpublishModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.92, y: 16 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.92, y: 16 }}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                                background: 'rgba(20, 24, 30, 0.98)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                borderRadius: '16px',
+                                padding: '2rem',
+                                maxWidth: '460px',
+                                width: '100%',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '1.5rem',
+                                boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+                            }}
+                        >
+                            {/* Icon + Title */}
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+                                <div style={{
+                                    width: '44px', height: '44px', borderRadius: '10px',
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    flexShrink: 0, color: '#f87171',
+                                }}>
+                                    <TriangleAlert size={20} />
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>Unpublish Active Scheme?</div>
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                                        This will revert <strong style={{ color: '#fff' }}>{getVersionDisplayLabel(selectedScheme)}</strong> back to a draft,
+                                        removing it from the active system. The previous published version (if any) will be automatically restored.
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Warning Banner */}
+                            <div style={{
+                                background: 'rgba(239, 68, 68, 0.06)',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                borderRadius: '8px',
+                                padding: '0.75rem 1rem',
+                                fontSize: '0.8rem',
+                                color: '#fca5a5',
+                                lineHeight: 1.5,
+                            }}>
+                                ⚠ The unpublished version will appear as a new draft in the Stage Designer, where it can be edited or discarded.
+                            </div>
+
+                            {/* Actions */}
+                            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                                <button
+                                    onClick={() => setShowUnpublishModal(false)}
+                                    disabled={unpublishing}
+                                    style={{
+                                        background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                                        color: 'var(--text-secondary)', padding: '0.6rem 1.25rem',
+                                        borderRadius: '8px', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500,
+                                        fontFamily: 'inherit',
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleUnpublish}
+                                    disabled={unpublishing}
+                                    style={{
+                                        background: unpublishing ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.85)',
+                                        border: '1px solid rgba(239, 68, 68, 0.5)',
+                                        color: '#fff', padding: '0.6rem 1.5rem',
+                                        borderRadius: '8px', cursor: unpublishing ? 'not-allowed' : 'pointer',
+                                        fontSize: '0.875rem', fontWeight: 600,
+                                        display: 'flex', alignItems: 'center', gap: '6px',
+                                        fontFamily: 'inherit', transition: 'all 0.2s',
+                                    }}
+                                >
+                                    {unpublishing ? (
+                                        <><RefreshCw size={14} className="animate-spin" /> Unpublishing...</>
+                                    ) : (
+                                        <><Unlock size={14} /> Confirm Unpublish</>
+                                    )}
+                                </button>
                             </div>
                         </motion.div>
                     </motion.div>

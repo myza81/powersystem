@@ -39,7 +39,7 @@ from api.v1.views.shedding import (
     LoadSheddingPocketBoundaryViewSet,
 )
 from api.v1.views.topology import TopologyViewSet
-from api.v1.views.users import CurrentUserView, LoginView, LogoutView
+from api.v1.views.users import CurrentUserView, LoginView, LogoutView, RegisterView
 
 router = DefaultRouter()
 router.register(r'substations', SubstationViewSet)
@@ -66,6 +66,7 @@ urlpatterns = [
     path('api/v1/users/me/', CurrentUserView.as_view(), name='current-user'),
     path('api/v1/users/login/', LoginView.as_view(), name='login'),
     path('api/v1/users/logout/', LogoutView.as_view(), name='logout'),
+    path('api/v1/users/register/', RegisterView.as_view(), name='register'),
     path('api/v1/', include(router.urls)),
 ]
 

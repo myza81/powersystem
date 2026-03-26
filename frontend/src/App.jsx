@@ -34,12 +34,17 @@ const DEFAULT_FILTERS = {
     transformerYear: 'All'
 };
 
+// Anonymous sentinel — used when the user skips login
+const ANONYMOUS_USER = { id: null, username: 'Anonymous', is_staff: false, is_superuser: false, is_anonymous: true };
+
 const App = () => {
     const [substations, setSubstations] = useState([]);
     const [filteredSubstations, setFilteredSubstations] = useState([]);
     const [filterCriteria, setFilterCriteria] = useState(DEFAULT_FILTERS);
     const [currentUser, setCurrentUser] = useState(null);
-    const [showLoginForm, setShowLoginForm] = useState(false);
+    // authResolved: false while /users/me/ is in-flight; prevents login flash for returning users
+    const [authResolved, setAuthResolved] = useState(false);
+    const [showLogin, setShowLogin] = useState(false);
     const [loginError, setLoginError] = useState('');
     const [loggingIn, setLoggingIn] = useState(false);
 
@@ -106,17 +111,20 @@ const App = () => {
         fetchSubstations();
     }, []);
 
-    // Check current user on mount
+    // Check current user on mount — resolve auth before rendering anything
     useEffect(() => {
         const checkUser = async () => {
             try {
                 const res = await api.get('/users/me/');
                 if (res.data.id) {
                     setCurrentUser(res.data);
+                    setAuthResolved(true);
+                    return;
                 }
             } catch (err) {
-                console.error("Not authenticated");
+                // 401 = not authenticated, fall through to show login
             }
+            setAuthResolved(true); // show login page
         };
         checkUser();
     }, []);
@@ -127,12 +135,25 @@ const App = () => {
         try {
             const res = await api.post('/users/login/', { username, password });
             setCurrentUser(res.data);
-            setShowLoginForm(false);
+            setShowLogin(false);
+            setLoginError('');
         } catch (err) {
-            setLoginError(err.response?.data?.error || 'Login failed');
+            setLoginError(err.response?.data?.error || 'Invalid credentials. Please try again.');
         } finally {
             setLoggingIn(false);
         }
+    };
+
+    const handleAnonymous = () => {
+        setCurrentUser(ANONYMOUS_USER);
+        setShowLogin(false);
+        setLoginError('');
+    };
+
+    const handleShowLogin = () => {
+        setCurrentUser(null);
+        setShowLogin(true);
+        setLoginError('');
     };
 
     const handleLogout = async () => {
@@ -142,6 +163,7 @@ const App = () => {
             console.error("Logout error", err);
         }
         setCurrentUser(null);
+        setShowLogin(true);
     };
 
     // Apply Filters whenever criteria or substations change
@@ -343,9 +365,40 @@ const App = () => {
         }
     };
 
+    // ── Auth gate: show loading, login page, or the app ──────────────────────
+    if (!authResolved) {
+        return (
+            <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '100vw', height: '100vh', background: 'var(--bg-deep)',
+                flexDirection: 'column', gap: '1rem',
+            }}>
+                <div style={{
+                    width: 44, height: 44,
+                    borderRadius: '50%',
+                    border: '3px solid rgba(0,229,255,0.15)',
+                    borderTop: '3px solid var(--accent-cyan)',
+                    animation: 'spin 0.8s linear infinite',
+                }} />
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Connecting…</span>
+            </div>
+        );
+    }
+
+    if (!currentUser || showLogin) {
+        return (
+            <LoginForm
+                onLogin={handleLogin}
+                onAnonymous={handleAnonymous}
+                error={loginError}
+                loading={loggingIn}
+            />
+        );
+    }
+
     return (
         <>
-        <MainLayout currentView={view} onViewChange={setView} currentUser={currentUser} onLogout={handleLogout}>
+        <MainLayout currentView={view} onViewChange={setView} currentUser={currentUser} onLogout={handleLogout} onShowLogin={handleShowLogin}>
             <div className="dashboard-container">
                 {status && (
                     <motion.div
@@ -594,21 +647,6 @@ const App = () => {
 
             </div>
         </MainLayout>
-
-        {(!currentUser || showLoginForm) && (
-            <div style={{
-                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                zIndex: 9999
-            }}>
-                <LoginForm 
-                    onLogin={handleLogin} 
-                    error={loginError} 
-                    loading={loggingIn}
-                    onClose={() => setShowLoginForm(false)}
-                />
-            </div>
-        )}
         </>
     );
 };

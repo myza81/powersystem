@@ -3,8 +3,63 @@ from rest_framework.response import Response
 from rest_framework import permissions, status
 from rest_framework.authentication import SessionAuthentication
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
 from django.conf import settings
 import os
+
+
+class RegisterView(APIView):
+    """
+    Self-registration endpoint.
+
+    Disabled by default — user accounts are provisioned via Django admin.
+    To enable, set ALLOW_SELF_REGISTRATION = True in settings.py.
+
+    Future implementation notes:
+      - Validate username uniqueness
+      - Enforce password strength rules
+      - Optionally send a verification email
+      - Return the same user payload as LoginView on success
+    """
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        if not getattr(settings, 'ALLOW_SELF_REGISTRATION', False):
+            return Response(
+                {
+                    "message": "Self-registration is not enabled. Contact your administrator.",
+                    "code": "REGISTRATION_DISABLED",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        # ── Future implementation ──────────────────────────────────────────────
+        username = request.data.get('username', '').strip()
+        password = request.data.get('password', '')
+        email = request.data.get('email', '').strip()
+
+        if not username or not password:
+            return Response(
+                {"error": "Username and password are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if User.objects.filter(username=username).exists():
+            return Response(
+                {"error": "Username already taken"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        user = User.objects.create_user(username=username, password=password, email=email)
+        login(request, user)
+        return Response({
+            "id": user.id,
+            "username": user.username,
+            "is_staff": user.is_staff,
+            "is_superuser": user.is_superuser,
+            "message": "Account created successfully",
+        }, status=status.HTTP_201_CREATED)
 
 
 class LoginView(APIView):

@@ -21,6 +21,7 @@ import {
     CheckSquare,
     RefreshCw,
     BarChart,
+    TriangleAlert,
     ShieldAlert, Cpu, CheckCircle2, Loader2, ArrowLeft, ZoomIn, ZoomOut, Network, Maximize2, Minimize2, MapPin, Eye, Filter, EyeOff, List, Layers, Unlock, Database, Building2, TrendingUp, Download, Settings2, ListChecks, Pause, ArrowUpRight, Check, Activity, BarChart2, CheckCircle, Navigation, Anchor, MousePointerClick, Move
 } from 'lucide-react';
 import BulletChart from './BulletChart';
@@ -829,6 +830,7 @@ const LoadSheddingDesigner = () => {
 
     const activeVersionMeta = versions.find(v => String(v.id) === String(activeVersionId));
 
+
     const handlePublishWorkspace = async () => {
         setPublishing(true);
         try {
@@ -846,21 +848,6 @@ const LoadSheddingDesigner = () => {
         } catch (err) {
             console.error('Failed to publish scheme', err);
             alert(`Failed to publish scheme. ${err?.response?.data?.error || err.message}`);
-        } finally {
-            setPublishing(false);
-        }
-    };
-
-    const handleUnpublishWorkspace = async () => {
-        if (!activeVersionId) return;
-        setPublishing(true);
-        try {
-            await api.post(`/load-shedding-versions/${activeVersionId}/unpublish/`);
-            await fetchMasterData();
-            alert('Scheme unpublished successfully. Previous active version restored.');
-        } catch (err) {
-            console.error('Failed to unpublish scheme', err);
-            alert(`Failed to unpublish scheme. ${err?.response?.data?.error || err.message}`);
         } finally {
             setPublishing(false);
         }
@@ -1290,7 +1277,7 @@ const LoadSheddingDesigner = () => {
                     : (bay.transformers || []).map(t => typeof t === 'object' ? `T${t.id}` : `T${t}`).join(' & ');
 
                 const breakerNumber = selectedTransformers
-                    .map(t => t.hv_breaker_number)
+                    .map(t => t.lv_breaker_number)
                     .filter(Boolean)
                     .join(' & ') || 'n/a';
 
@@ -1426,40 +1413,125 @@ const LoadSheddingDesigner = () => {
                             padding: '1.5rem',
                             display: 'flex',
                             flexDirection: 'column',
-                            border: '1px solid rgba(255, 171, 0, 0.3)',
-                            background: 'linear-gradient(180deg, rgba(255, 171, 0, 0.05) 0%, rgba(0,0,0,0.4) 100%)'
+                            border: hasDrafts && drafts.length > 1
+                                ? '1px solid rgba(251, 191, 36, 0.4)'
+                                : '1px solid rgba(255, 171, 0, 0.3)',
+                            background: hasDrafts && drafts.length > 1
+                                ? 'linear-gradient(180deg, rgba(251, 191, 36, 0.07) 0%, rgba(0,0,0,0.4) 100%)'
+                                : 'linear-gradient(180deg, rgba(255, 171, 0, 0.05) 0%, rgba(0,0,0,0.4) 100%)'
                         }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: drafts.length > 1 ? '0.75rem' : '1.5rem' }}>
                             <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(255, 171, 0, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFAB00' }}>
                                 <FaFolderTree size={20} />
                             </div>
-                            <div>
-                                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#fff' }}>Resume Active Drafts</h3>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#fff' }}>Resume Active Drafts</h3>
+                                    {hasDrafts && (
+                                        <span style={{
+                                            fontSize: '0.65rem', fontWeight: 800,
+                                            background: drafts.length > 1 ? 'rgba(251, 191, 36, 0.2)' : 'rgba(255, 171, 0, 0.15)',
+                                            color: drafts.length > 1 ? '#fbbf24' : '#FFAB00',
+                                            border: `1px solid ${drafts.length > 1 ? 'rgba(251, 191, 36, 0.4)' : 'rgba(255, 171, 0, 0.3)'}`,
+                                            padding: '2px 7px', borderRadius: '999px',
+                                        }}>
+                                            {drafts.length}
+                                        </span>
+                                    )}
+                                </div>
                                 <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>Continue working on an existing design.</p>
                             </div>
                         </div>
 
+                        {/* Multi-draft conflict banner */}
+                        {drafts.length > 1 && (
+                            <div className="draft-conflict-banner" style={{ marginBottom: '1rem' }}>
+                                <TriangleAlert size={13} style={{ flexShrink: 0, color: '#fbbf24' }} />
+                                <span>Multiple drafts detected — select which one to continue.</span>
+                            </div>
+                        )}
+
                         {hasDrafts ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1, overflowY: 'auto', maxHeight: '300px', paddingRight: '0.5rem' }}>
-                                {drafts.map(v => (
-                                    <div key={v.id} style={{ padding: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                            <div>
-                                                <div style={{ fontSize: '0.7rem', color: '#FFAB00', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '2px' }}>{v.scheme_type} {v.review_year} v{v.version}</div>
-                                                <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>{v.notes || 'Unnamed Document'}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1, overflowY: 'auto', maxHeight: '320px', paddingRight: '0.5rem' }}>
+                                {drafts.map(v => {
+                                    const stageCount = v.stages?.length ?? '—';
+                                    const wasUnpublished = !!v.notes && v.notes.startsWith('Unpublished from');
+                                    const isMulti = drafts.length > 1;
+                                    return (
+                                        <div key={v.id} style={{
+                                            padding: isMulti ? '1.1rem' : '1rem',
+                                            background: isMulti ? 'rgba(251, 191, 36, 0.04)' : 'rgba(0,0,0,0.3)',
+                                            borderRadius: '8px',
+                                            border: isMulti
+                                                ? '1px solid rgba(251, 191, 36, 0.18)'
+                                                : '1px solid rgba(255,255,255,0.05)',
+                                            display: 'flex', flexDirection: 'column', gap: '0.75rem',
+                                        }}>
+                                            {/* Draft Meta */}
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '3px' }}>
+                                                        <span style={{ fontSize: '0.7rem', color: '#FFAB00', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                                                            {v.scheme_type} {v.review_year} v{v.version}
+                                                        </span>
+                                                        {wasUnpublished && (
+                                                            <span style={{
+                                                                fontSize: '0.6rem', fontWeight: 700,
+                                                                background: 'rgba(239, 68, 68, 0.1)',
+                                                                border: '1px solid rgba(239, 68, 68, 0.25)',
+                                                                color: '#f87171', padding: '1px 6px', borderRadius: '4px',
+                                                            }}>
+                                                                Unpublished
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {v.notes || 'Unnamed Document'}
+                                                    </div>
+                                                    {isMulti && (
+                                                        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                                                                {stageCount} stage{stageCount !== 1 ? 's' : ''}
+                                                            </span>
+                                                            {v.created_at && (
+                                                                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                                                                    Created {new Date(v.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                <button
+                                                    className="btn-secondary"
+                                                    style={{
+                                                        flex: 1, fontSize: '0.75rem', padding: '0.45rem',
+                                                        justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '5px',
+                                                        background: isMulti ? 'rgba(255, 171, 0, 0.1)' : 'rgba(255,255,255,0.05)',
+                                                        color: isMulti ? '#FFAB00' : '#fff',
+                                                        border: isMulti ? '1px solid rgba(255, 171, 0, 0.25)' : undefined,
+                                                        fontWeight: isMulti ? 600 : 400,
+                                                    }}
+                                                    onClick={() => handleResumeDraft(v.id)}
+                                                >
+                                                    <FolderOpen size={12} /> Open
+                                                </button>
+                                                <button
+                                                    className="btn-secondary"
+                                                    style={{ padding: '0.45rem 0.65rem', background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center' }}
+                                                    onClick={() => handleDeleteDraft(v.id)}
+                                                    title="Delete this draft"
+                                                >
+                                                    <Trash2 size={12} />
+                                                </button>
                                             </div>
                                         </div>
-                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                            <button className="btn-secondary" style={{ flex: 1, fontSize: '0.75rem', padding: '0.4rem', justifyContent: 'center', background: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => handleResumeDraft(v.id)}>
-                                                <FolderOpen size={12} style={{ marginRight: '4px' }} /> Resume
-                                            </button>
-                                            <button className="btn-secondary" style={{ padding: '0.4rem 0.6rem', background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', border: 'none' }} onClick={() => handleDeleteDraft(v.id)}>
-                                                <Trash2 size={12} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
@@ -1468,6 +1540,7 @@ const LoadSheddingDesigner = () => {
                             </div>
                         )}
                     </div>
+
 
                     {/* Action 3: Published Versions */}
                     <div
