@@ -1,0 +1,2 @@
+Columns in core_networksnapshot: ['id', 'name', 'description', 'timestamp', 'base_mva', 'frequency', 'source_file', 'metadata', 'created_by_id', 'activated_at', 'is_active', 'import_type', 'topology_version_id']
+PASS: created_by_id exists.

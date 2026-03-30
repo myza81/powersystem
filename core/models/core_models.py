@@ -437,6 +437,7 @@ class LoadSheddingVersion(models.Model):
     scheme_type = models.CharField(max_length=10, choices=LoadSheddingSchemeType.choices)
     review_year = models.IntegerField(help_text="The year this version is for (e.g. 2024)")
     version = models.DecimalField(max_digits=5, decimal_places=1, default=0.0)
+    target_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=60.0, help_text="The target load shedding percentage goal (e.g. 60.00)")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     is_active = models.BooleanField(default=False, help_text="Whether this is the currently enforced version")
     published_at = models.DateTimeField(null=True, blank=True)

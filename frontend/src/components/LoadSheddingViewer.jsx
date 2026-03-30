@@ -205,15 +205,32 @@ const LoadSheddingViewer = () => {
             });
             (stage.pocket_bays || []).forEach(pocket => {
                 const mw = pocket.topology_cache?.mw || 0;
+                const subMWMap = pocket.topology_cache?.substation_mw || {};
                 totalMW += mw;
                 totalPockets++;
+                
                 (pocket.topology_cache?.isolated_substations || []).forEach(subId => {
                     substationSet.add(subId);
                     const sub = substations.find(s => s.substation_id === subId);
                     if (sub) {
-                        // For pockets, we distribute the total MW evenly among isolated subs for regional breakdown if per-sub MW not available
-                        const perSubMW = mw / (pocket.topology_cache?.isolated_substations?.length || 1);
-                        regionalAssigned[sub.region] = (regionalAssigned[sub.region] || 0) + perSubMW;
+                        // Use per-substation MW if available in cache, otherwise distribute proportionally to total substation load
+                        let assignedToSub = 0;
+                        if (subMWMap[subId]?.total_p_mw != null) {
+                            assignedToSub = subMWMap[subId].total_p_mw;
+                        } else {
+                            // FALLBACK: Proportional distribution based on total_pload_mw of substations in the pocket
+                            const totalLoadInPocket = (pocket.topology_cache?.isolated_substations || []).reduce((sum, sId) => {
+                                const s = substations.find(srv => srv.substation_id === sId);
+                                return sum + (parseFloat(s?.total_pload_mw) || 0);
+                            }, 0);
+                            
+                            if (totalLoadInPocket > 0) {
+                                assignedToSub = ((parseFloat(sub.total_pload_mw) || 0) / totalLoadInPocket) * mw;
+                            } else {
+                                assignedToSub = mw / (pocket.topology_cache?.isolated_substations?.length || 1);
+                            }
+                        }
+                        regionalAssigned[sub.region] = (regionalAssigned[sub.region] || 0) + assignedToSub;
                     }
                 });
             });
@@ -230,7 +247,9 @@ const LoadSheddingViewer = () => {
 
     const regionalSpiralData = useMemo(() => {
         if (!gridData?.regional_breakdown) return [];
-        const targetPercent = selectedScheme?.target_percentage || 60;
+        const targetPercent = selectedScheme?.target_percentage != null 
+            ? parseFloat(selectedScheme.target_percentage) 
+            : (selectedScheme?.scheme_type === 'UVLS' ? 15 : 60);
         return gridData.regional_breakdown.map(reg => ({
             region: reg.region,
             target_mw: (targetPercent / 100) * reg.total_pload_mw,

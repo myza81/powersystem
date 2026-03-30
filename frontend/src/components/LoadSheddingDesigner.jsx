@@ -558,26 +558,33 @@ const LoadSheddingDesigner = () => {
             fullId = `${localSubstationId}_${fullId}`;
         }
 
-        setStages(prevStages => prevStages.map((stage, idx) => {
-            if (idx !== activeStageIdx) return stage;
-            const existing = stage.pocket_branches || [];
-            const isAdded = existing.includes(fullId);
-            const pocketContainingBranch = (stage.computed_pockets || []).find(pocket => (pocket.branches || []).includes(fullId));
-
-            if (pocketContainingBranch) {
-                return {
-                    ...stage,
-                    computed_pockets: (stage.computed_pockets || []).filter(pocket => pocket.id !== pocketContainingBranch.id),
-                };
+        setStages(prevStages => {
+            const assignment = getBranchAssignmentInfo(fullId, prevStages);
+            if (assignment && assignment.stageIdx !== activeStageIdx) {
+                return prevStages;
             }
 
-            return {
-                ...stage,
-                pocket_branches: isAdded
-                    ? existing.filter(id => id !== fullId)
-                    : [...existing, fullId],
-            };
-        }));
+            return prevStages.map((stage, idx) => {
+                if (idx !== activeStageIdx) return stage;
+                const existing = stage.pocket_branches || [];
+                const isAdded = existing.includes(fullId);
+                const pocketContainingBranch = (stage.computed_pockets || []).find(pocket => (pocket.branches || []).includes(fullId));
+
+                if (pocketContainingBranch) {
+                    return {
+                        ...stage,
+                        computed_pockets: (stage.computed_pockets || []).filter(pocket => pocket.id !== pocketContainingBranch.id),
+                    };
+                }
+
+                return {
+                    ...stage,
+                    pocket_branches: isAdded
+                        ? existing.filter(id => id !== fullId)
+                        : [...existing, fullId],
+                };
+            });
+        });
     };
 
     const toggleTransformerInStage = (relay, transformerVal) => {
@@ -669,6 +676,23 @@ const LoadSheddingDesigner = () => {
         };
     };
 
+    const stageContainsBranch = (stage, fullBranchId) => {
+        if (!stage || !fullBranchId) return false;
+        if ((stage.pocket_branches || []).includes(fullBranchId)) return true;
+        return (stage.computed_pockets || []).some(pocket => (pocket.branches || []).includes(fullBranchId));
+    };
+
+    const getBranchAssignmentInfo = (fullBranchId, stageList = stages) => {
+        if (!fullBranchId) return null;
+        for (let idx = 0; idx < stageList.length; idx++) {
+            const stage = stageList[idx];
+            if (stageContainsBranch(stage, fullBranchId)) {
+                return { stageIdx: idx, stage };
+            }
+        }
+        return null;
+    };
+
     const getEffectiveStagePockets = (stage, stageIdx) => {
         const pockets = stage?.computed_pockets || [];
         if (stageIdx !== activeStageIdx) return pockets;
@@ -716,6 +740,7 @@ const LoadSheddingDesigner = () => {
                 const versionRes = await api.post('/load-shedding-versions/', {
                     scheme_type: schemeType.includes('UFLS') ? 'UFLS' : (schemeType.includes('UVLS') ? 'UVLS' : 'EMLS'),
                     review_year: reviewYear,
+                    target_percentage: targetPercentage,
                     notes: versionLabel,
                     status: 'draft'
                 });
@@ -1071,12 +1096,24 @@ const LoadSheddingDesigner = () => {
                 const sub = substations.find(s => s.substation_id === subId);
                 if (sub && (!region || sub.region === region)) {
                     // Pocket assignment drops the entire substation, so it overrides any transformer bays
-                    // Use per-substation MW if available, otherwise distribute total evenly
+                    // Use per-substation MW if available, otherwise distribute total proportionally to each substation's total load
                     const subMW = card.substation_mw?.[subId]?.total_p_mw;
                     if (subMW != null && subMW > 0) {
                         subDataMap.set(subId, parseFloat(subMW));
                     } else if (card.total_p_mw && card.pocket_substations?.length > 0) {
-                        subDataMap.set(subId, parseFloat(card.total_p_mw) / card.pocket_substations.length);
+                        // FALLBACK: Proportional distribution based on the substation's actual load share within the pocket
+                        const totalLoadInPocket = card.pocket_substations.reduce((sum, sId) => {
+                            const s = substations.find(sub => sub.substation_id === sId);
+                            return sum + (parseFloat(s?.total_pload_mw) || 0);
+                        }, 0);
+                        
+                        if (totalLoadInPocket > 0) {
+                            const subLoad = parseFloat(sub?.total_pload_mw) || 0;
+                            subDataMap.set(subId, (subLoad / totalLoadInPocket) * parseFloat(card.total_p_mw));
+                        } else {
+                            // Last resort: even distribution
+                            subDataMap.set(subId, parseFloat(card.total_p_mw) / card.pocket_substations.length);
+                        }
                     }
                 }
             });
@@ -1773,7 +1810,12 @@ const LoadSheddingDesigner = () => {
                                         onClick={() => setActiveStageIdx(idx)}
                                     >
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: 0, flex: 1 }}>
-                                            <div style={{ fontSize: '0.75rem', fontWeight: 600 }}>{stage.label}</div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ fontSize: '0.75rem', fontWeight: 600 }}>{stage.label}</div>
+                                                <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', fontWeight: 800, color: activeStageIdx === idx ? 'var(--accent-cyan)' : 'rgba(0, 229, 255, 0.4)' }}>
+                                                    {formatMW(calculateTotalMW(stage, idx))} MW
+                                                </div>
+                                            </div>
                                             {!!stage.setting_ids?.length && (
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
                                                     {stage.setting_ids.map(sId => {
@@ -1851,7 +1893,14 @@ const LoadSheddingDesigner = () => {
                                     })}
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '0.5rem' }} />
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                    <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Aggregate</span>
+                                    <span style={{ fontSize: '1.1rem', fontFamily: 'monospace', fontWeight: 800, color: 'var(--accent-cyan)' }}>
+                                        {formatMW(calculateTotalMW(stages[activeStageIdx], activeStageIdx))} MW
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
                         <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '4rem' }}>
@@ -2504,10 +2553,7 @@ const LoadSheddingDesigner = () => {
                                             // Group incoming branches by voltage
                                             const relayBranches = relay.incoming_branches || [];
 
-                                            const stageHasBranch = (stage, fullId) => {
-                                                if ((stage.pocket_branches || []).includes(fullId)) return true;
-                                                return (stage.computed_pockets || []).some(pocket => (pocket.branches || []).includes(fullId));
-                                            };
+                                            const stageHasBranch = (stage, fullId) => stageContainsBranch(stage, fullId);
 
                                             // Check branch assignment per voltage
                                             const getBranchAssignmentStage = () => {
@@ -2525,35 +2571,46 @@ const LoadSheddingDesigner = () => {
                                             };
 
                                             const toggleAllBranches = () => {
-                                                const branchIds = relayBranches.map(b => {
-                                                    const bayId = typeof b === 'object' ? b.bay_id : b;
-                                                    return String(bayId || '');
-                                                });
+                                                setStages(prevStages => {
+                                                    const branchIds = relayBranches.map(b => {
+                                                        const bayId = typeof b === 'object' ? b.bay_id : b;
+                                                        return String(bayId || '');
+                                                    });
 
-                                                setStages(prevStages => prevStages.map((stage, idx) => {
-                                                    if (idx !== activeStageIdx) return stage;
-                                                    const existing = stage.pocket_branches || [];
-                                                    const allAssigned = branchIds.every(id => existing.includes(id));
-                                                    const pocketContainsAll = (stage.computed_pockets || []).some(pocket =>
-                                                        branchIds.every(id => (pocket.branches || []).includes(id))
-                                                    );
+                                                    const eligibleBranchIds = branchIds.filter(id => {
+                                                        const assignment = getBranchAssignmentInfo(id.includes('_') ? id : `${sub.substation_id}_${id}`, prevStages);
+                                                        return !assignment || assignment.stageIdx === activeStageIdx;
+                                                    }).map(id => (id.includes('_') ? id : `${sub.substation_id}_${id}`));
 
-                                                    if (pocketContainsAll) {
-                                                        return {
-                                                            ...stage,
-                                                            computed_pockets: (stage.computed_pockets || []).filter(pocket =>
-                                                                !branchIds.every(id => (pocket.branches || []).includes(id))
-                                                            ),
-                                                        };
+                                                    if (eligibleBranchIds.length === 0) {
+                                                        return prevStages;
                                                     }
 
-                                                    return {
-                                                        ...stage,
-                                                        pocket_branches: allAssigned
-                                                            ? existing.filter(id => !branchIds.includes(id))
-                                                            : [...new Set([...existing, ...branchIds])],
-                                                    };
-                                                }));
+                                                    return prevStages.map((stage, idx) => {
+                                                        if (idx !== activeStageIdx) return stage;
+                                                        const existing = stage.pocket_branches || [];
+                                                        const allAssigned = eligibleBranchIds.every(id => existing.includes(id));
+                                                        const pocketContainsAll = (stage.computed_pockets || []).some(pocket =>
+                                                            eligibleBranchIds.every(id => (pocket.branches || []).includes(id))
+                                                        );
+
+                                                        if (pocketContainsAll) {
+                                                            return {
+                                                                ...stage,
+                                                                computed_pockets: (stage.computed_pockets || []).filter(pocket =>
+                                                                    !eligibleBranchIds.every(id => (pocket.branches || []).includes(id))
+                                                                ),
+                                                            };
+                                                        }
+
+                                                        return {
+                                                            ...stage,
+                                                            pocket_branches: allAssigned
+                                                                ? existing.filter(id => !eligibleBranchIds.includes(id))
+                                                                : [...new Set([...existing, ...eligibleBranchIds])],
+                                                        };
+                                                    });
+                                                });
                                             };
 
                                             const hasTransformers = (relay.load_transformers || []).length > 0;
@@ -2669,12 +2726,28 @@ const LoadSheddingDesigner = () => {
                                                                 <div style={{ paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: '4px' }}>
                                                                     {(() => {
                                                                         const assignedStage = getBranchAssignmentStage();
-                                                                        const assignedCount = relayBranches.filter(b => {
+                                                                        let assignedCount = 0;
+                                                                        let assignableCount = 0;
+                                                                        let lockedElsewhereCount = 0;
+
+                                                                        relayBranches.forEach(b => {
                                                                             const bayId = typeof b === 'object' ? b.bay_id : b;
-                                                                            const fullId = bayId.includes('_') ? bayId : `${sub.substation_id}_${bayId}`;
-                                                                            return stageHasBranch(stages[activeStageIdx] || {}, fullId);
-                                                                        }).length;
-                                                                        const allAssigned = assignedCount === relayBranches.length;
+                                                                            const bayIdStr = String(bayId || '');
+                                                                            const fullId = bayIdStr.includes('_') ? bayIdStr : `${sub.substation_id}_${bayIdStr}`;
+                                                                            const assignment = getBranchAssignmentInfo(fullId);
+                                                                            const isAssignable = !assignment || assignment.stageIdx === activeStageIdx;
+
+                                                                            if (isAssignable) {
+                                                                                assignableCount += 1;
+                                                                                if (stageHasBranch(stages[activeStageIdx] || {}, fullId)) {
+                                                                                    assignedCount += 1;
+                                                                                }
+                                                                            } else {
+                                                                                lockedElsewhereCount += 1;
+                                                                            }
+                                                                        });
+
+                                                                        const allAssigned = assignableCount > 0 && assignedCount === assignableCount;
 
                                                                         return (
                                                                             <div style={{ marginBottom: '4px' }}>
@@ -2742,6 +2815,15 @@ const LoadSheddingDesigner = () => {
                                                                                                     <span style={{ lineHeight: '1.2' }}>Assigned: {assignedStage}</span>
                                                                                                 </div>
                                                                                             )}
+                                                                                            {lockedElsewhereCount > 0 && (
+                                                                                                <div style={{
+                                                                                                    fontSize: '0.6rem',
+                                                                                                    color: '#F97316',
+                                                                                                    marginTop: '2px'
+                                                                                                }}>
+                                                                                                    {lockedElsewhereCount} assigned to other stages
+                                                                                                </div>
+                                                                                            )}
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
@@ -2753,25 +2835,46 @@ const LoadSheddingDesigner = () => {
                                                                                     const localPrefix = `${sub.substation_id}_`;
                                                                                     const displayId = bayIdStr.startsWith(localPrefix) ? bayIdStr.replace(localPrefix, '') : bayIdStr;
                                                                                     const fullId = bayIdStr.includes('_') ? bayIdStr : `${sub.substation_id}_${bayIdStr}`;
-                                                                                    const isAssigned = stageHasBranch(stages[activeStageIdx] || {}, fullId);
+                                                                                    const branchAssignment = getBranchAssignmentInfo(fullId) || null;
+                                                                                    const isAssignedHere = branchAssignment?.stageIdx === activeStageIdx;
+                                                                                    const isLockedElsewhere = Boolean(branchAssignment && branchAssignment.stageIdx !== activeStageIdx);
+                                                                                    const assignedStageLabel = branchAssignment
+                                                                                        ? (branchAssignment.stage?.label || `Stage ${branchAssignment.stage?.stage_number || (branchAssignment.stageIdx + 1)}`)
+                                                                                        : null;
+                                                                                    const rowColor = isLockedElsewhere
+                                                                                        ? 'rgba(255,255,255,0.35)'
+                                                                                        : (isAssignedHere ? 'var(--accent-cyan)' : 'var(--text-secondary)');
 
                                                                                     return (
                                                                                         <div
                                                                                             key={typeof branch === 'object' ? branch.id : branch}
-                                                                                            onClick={() => toggleBranchInStage(bayId, sub.substation_id)}
+                                                                                            onClick={() => {
+                                                                                                if (isLockedElsewhere) return;
+                                                                                                toggleBranchInStage(bayId, sub.substation_id);
+                                                                                            }}
                                                                                             style={{
-                                                                                                display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0.5rem',
+                                                                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.2rem 0.5rem',
                                                                                                 paddingLeft: `${(hasTransformers ? 2.5 : 1.5) + paddingLevel * 1}rem`, fontSize: '0.7rem',
-                                                                                                color: isAssigned ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                                                                                                cursor: 'pointer',
+                                                                                                color: rowColor,
+                                                                                                cursor: isLockedElsewhere ? 'not-allowed' : 'pointer',
+                                                                                                opacity: isLockedElsewhere ? 0.65 : 1,
                                                                                             }}
                                                                                             className="hover-glow"
                                                                                         >
                                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                                                {isAssigned ? <CheckSquare size={12} color="var(--accent-cyan)" /> : <Square size={12} color="var(--accent-cyan)" />}
-                                                                                                <FaCodeBranch size={10} style={{ opacity: isAssigned ? 1 : 0.5 }} />
-                                                                                                <span style={{ fontWeight: isAssigned ? 700 : 400 }}>{displayId}</span>
+                                                                                                {isLockedElsewhere ? (
+                                                                                                    <Lock size={12} color="rgba(255,255,255,0.5)" />
+                                                                                                ) : (
+                                                                                                    isAssignedHere ? <CheckSquare size={12} color="var(--accent-cyan)" /> : <Square size={12} color="var(--accent-cyan)" />
+                                                                                                )}
+                                                                                                <FaCodeBranch size={10} style={{ opacity: isAssignedHere ? 1 : 0.5 }} />
+                                                                                                <span style={{ fontWeight: isAssignedHere ? 700 : 400 }}>{displayId}</span>
                                                                                             </div>
+                                                                                            {isLockedElsewhere && assignedStageLabel && (
+                                                                                                <span style={{ fontSize: '0.6rem', color: '#FFAB00', fontWeight: 600 }}>
+                                                                                                    Assigned to {assignedStageLabel}
+                                                                                                </span>
+                                                                                            )}
                                                                                         </div>
                                                                                     );
                                                                                 })}
@@ -3357,7 +3460,7 @@ const LoadSheddingDesigner = () => {
                                 return (
                                     <div key={stage.id} style={{ padding: '1rem 1.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: activeStageIdx === idx ? '1px solid var(--accent-cyan)' : '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '3rem', alignItems: 'center' }}>
                                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%' }}>
                                                 <h5 style={{ margin: 0, fontSize: '0.8rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                     <span style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem' }}>#{stage.stage_number}</span>
                                                     {stage.label}
@@ -3376,6 +3479,11 @@ const LoadSheddingDesigner = () => {
                                                 >
                                                     <FiEdit2 size={12} />
                                                 </button>
+                                                
+                                                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Aggregate MW</span>
+                                                    <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 800, color: 'var(--accent-cyan)' }}>{formatMW(stageAssignedVal)}</span>
+                                                </div>
                                             </div>
                                             
                                             {(() => {

@@ -151,7 +151,7 @@ class LoadSheddingVersionSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoadSheddingVersion
         fields = [
-            'id', 'scheme_type', 'review_year', 'version', 'status', 'is_active',
+            'id', 'scheme_type', 'review_year', 'version', 'target_percentage', 'status', 'is_active',
             'published_at', 'published_by', 'created_by', 'created_by_name',
             'created_at', 'updated_at', 'notes',
             'stages',
