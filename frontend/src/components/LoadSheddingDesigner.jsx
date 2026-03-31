@@ -746,6 +746,12 @@ const LoadSheddingDesigner = () => {
                 });
                 vId = versionRes.data.id;
                 setActiveVersionId(vId);
+            } else {
+                // Update target_percentage and notes for existing draft
+                await api.patch(`/load-shedding-versions/${vId}/`, {
+                    target_percentage: targetPercentage,
+                    notes: versionLabel
+                });
             }
 
             // 2. We simply delete all stages for this draft and recreate them to avoid complex diffing logic for now
