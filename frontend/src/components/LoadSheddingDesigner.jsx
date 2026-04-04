@@ -201,53 +201,8 @@ const LoadSheddingDesigner = () => {
                     const data = res.data;
                     setPocketPreview(data);
 
-                    const canAutoCreate = !data.error && !data.warning && (data.pocket_substations || []).length > 0;
-                    if (canAutoCreate) {
-                        const groupKey = (subId, voltage) => `${subId}||${voltage || ''}`;
-                        const groups = {};
-                        activeBranches.forEach(fullId => {
-                            const parts = String(fullId).split('_');
-                            if (parts.length >= 3) {
-                                const localSub = parts[0];
-                                const voltageValue = substations.find(s => s.substation_id === localSub)?.voltage;
-                                const key = groupKey(localSub, voltageValue);
-                                if (!groups[key]) groups[key] = { subId: localSub, voltage: voltageValue ? `${voltageValue}kV` : '', branches: [] };
-                                groups[key].branches.push(parts.slice(1).join('_'));
-                            }
-                        });
+                    // Removed auto-create allowing users to stack multiple boundaries before explicitly committing
 
-                        setStages(prevStages => prevStages.map((stage, idx) => {
-                            if (idx !== activeStageIdx) return stage;
-
-                            const existingPocket = (stage.computed_pockets || []).find(p =>
-                                (p.branches || []).length === activeBranches.length &&
-                                (p.branches || []).every(branchId => activeBranches.includes(branchId))
-                            );
-                            if (existingPocket) {
-                                return { ...stage, pocket_branches: [] };
-                            }
-
-                            const newPocket = {
-                                id: Date.now(),
-                                branches: [...activeBranches],
-                                branchGroups: Object.values(groups),
-                                pocket_substations: data.pocket_substations || [],
-                                pocket_substation_details: data.pocket_substation_details || [],
-                                total_p_mw: data.total_p_mw || 0,
-                                substation_mw: (data.pocket_substation_details || []).reduce((acc, sub) => {
-                                    acc[sub.substation_id] = { total_p_mw: sub.p_mw, total_q_mvar: sub.q_mvar };
-                                    return acc;
-                                }, {}),
-                                total_q_mvar: data.total_q_mvar || 0,
-                            };
-
-                            return {
-                                ...stage,
-                                computed_pockets: [...(stage.computed_pockets || []), newPocket],
-                                pocket_branches: [],
-                            };
-                        }));
-                    }
                 }
             })
             .catch(() => {
@@ -879,6 +834,23 @@ const LoadSheddingDesigner = () => {
         } catch (err) {
             console.error('Failed to publish scheme', err);
             alert(`Failed to publish scheme. ${err?.response?.data?.error || err.message}`);
+        } finally {
+            setPublishing(false);
+        }
+    };
+
+    const handleUnpublishWorkspace = async () => {
+        setPublishing(true);
+        try {
+            if (!activeVersionId) return;
+
+            await api.post(`/load-shedding-versions/${activeVersionId}/unpublish/`);
+            await fetchMasterData();
+            window.dispatchEvent(new CustomEvent('load-shedding-published'));
+            alert('Scheme unpublished successfully.');
+        } catch (err) {
+            console.error('Failed to unpublish scheme', err);
+            alert(`Failed to unpublish scheme. ${err?.response?.data?.error || err.message}`);
         } finally {
             setPublishing(false);
         }
@@ -2227,8 +2199,8 @@ const LoadSheddingDesigner = () => {
                                                     </div>
                                                 )}
 
-                                                {/* Preview / Fallback Lock Pocket section */}
-                                                {pocketPreview && !pocketPreview.error && (pocketPreview.warning || pocketPreview.pocket_substations?.length === 0) && (
+                                                {/* Preview / Lock Pocket section */}
+                                                {pocketPreview && !pocketPreview.error && (
                                                     <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(0, 229, 255, 0.1)' }}>
                                                         {pocketPreview.pocket_substations?.length > 0 && (
                                                             <div style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', marginBottom: '0.5rem', fontWeight: 600 }}>
@@ -2281,7 +2253,7 @@ const LoadSheddingDesigner = () => {
                                                             onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(0, 255, 163, 0.25)'; }}
                                                             onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(0, 255, 163, 0.15)'; }}
                                                         >
-                                                            <FaLock size={12} /> Lock Anyway
+                                                            <FaLock size={12} /> { pocketPreview.pocket_substations?.length > 0 && !pocketPreview.warning ? `Create Pocket (${pocketPreview.pocket_substations.length} sub${pocketPreview.pocket_substations.length > 1 ? 's' : ''})` : 'Lock Anyway' }
                                                         </button>
                                                     </div>
                                                 )}

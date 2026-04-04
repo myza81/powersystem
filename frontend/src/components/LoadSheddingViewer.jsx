@@ -305,13 +305,30 @@ const LoadSheddingViewer = () => {
                 const singlePocketRows = [];
                 (pocket.boundaries || []).forEach(boundary => {
                     const sub = substations.find(s => s.substation_id === boundary.relay_substation_id);
+                    
+                    const compactSubstationMnemonic = (subId) => String(subId || '').replace(/\d+$/, '');
+                    const relay = relays.find(r => r.id === boundary.relay);
+                    const selectedIds = (boundary.branches || []).map(b => typeof b === 'object' ? b.id : b);
+                    const branchObjects = (relay?.incoming_branches || []).filter(b => selectedIds.includes(typeof b === 'object' ? b.id : b));
+
+                    const assignedFeeder = branchObjects.length > 0
+                        ? branchObjects.map(branch => `${compactSubstationMnemonic(branch.to_substation)} ${branch.ckt_id}`).join(' & ')
+                        : (boundary.frozen_assets && boundary.frozen_assets.length > 0)
+                            ? boundary.frozen_assets.map(a => `${compactSubstationMnemonic(a.to_sub)} ${a.ckt_id}`).join(' & ')
+                            : `Boundary: ${boundary.relay_name}`;
+
+                    const breakerNumber = branchObjects
+                        .map(branch => branch.breaker_number)
+                        .filter(Boolean)
+                        .join(' & ') || 'n/a';
+
                     singlePocketRows.push({
                         grid: sub?.grid || '',
                         substationName: sub?.name || boundary.relay_substation_name || '',
                         substationId: sub?.substation_id || boundary.relay_substation_id || '',
                         voltage: sub?.voltage || '',
-                        assignedFeeder: `Boundary: ${boundary.relay_name}`,
-                        breakerNumber: 'n/a',
+                        assignedFeeder: assignedFeeder || 'n/a',
+                        breakerNumber: breakerNumber,
                         ...settingCells,
                     });
                 });
