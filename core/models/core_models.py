@@ -612,12 +612,18 @@ class LoadSheddingTransformerBay(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     stage = models.ForeignKey(LoadSheddingStage, on_delete=models.CASCADE, related_name='transformer_bays')
-    relay = models.ForeignKey(LoadSheddingRelay, on_delete=models.CASCADE, related_name='target_transformer_bays')
-    transformers = models.ManyToManyField(LoadTransformer, related_name='load_shedding_transformer_bays')
+    relay = models.ForeignKey(LoadSheddingRelay, on_delete=models.SET_NULL, null=True, blank=True, related_name='target_transformer_bays')
+    transformers = models.ManyToManyField(LoadTransformer, related_name='load_shedding_transformer_bays', blank=True)
     mw_cache = models.JSONField(null=True, blank=True, help_text='{"snapshot_id": "...", "mw": 18.4, "computed_at": "..."}')
+    
+    frozen_relay_name = models.CharField(max_length=150, blank=True)
+    frozen_substation_id = models.CharField(max_length=50, blank=True)
+    frozen_substation_name = models.CharField(max_length=150, blank=True)
+    frozen_assets = models.JSONField(default=list, blank=True)  # List of transformer NOs or IDs
 
     def __str__(self):
-        return f"TX Bay @ {self.relay.substation.substation_id} ({self.stage})"
+        sub_id = self.relay.substation.substation_id if self.relay else self.frozen_substation_id
+        return f"TX Bay @ {sub_id} ({self.stage})"
 
     def clean(self):
         """
@@ -637,16 +643,19 @@ class LoadSheddingTransformerBay(models.Model):
 
         service = TopologyService(snapshot)
         load_map = service.get_load_transformers_by_substation()
-        substation_id = self.relay.substation.substation_id
+        substation_id = self.relay.substation.substation_id if self.relay else self.frozen_substation_id
         loads = load_map.get(substation_id, {}).get("loads", [])
 
-        target_bay_ids = set(self.transformers.values_list('bay_id', flat=True))
-        # Normalize: bay_id is composite (e.g. 'TASK132_T1') but snapshot load_id is local (e.g. 'T1')
-        # Strip the substation prefix to match
         target_local_ids = set()
-        for bid in target_bay_ids:
-            parts = str(bid).split('_', 1)
-            target_local_ids.add(parts[1] if len(parts) > 1 else bid)
+        if self.frozen_assets:
+            target_local_ids.update(self.frozen_assets)
+        elif self.transformers.exists():
+            target_bay_ids = set(self.transformers.values_list('bay_id', flat=True))
+            # Normalize: bay_id is composite (e.g. 'TASK132_T1') but snapshot load_id is local (e.g. 'T1')
+            # Strip the substation prefix to match
+            for bid in target_bay_ids:
+                parts = str(bid).split('_', 1)
+                target_local_ids.add(parts[1] if len(parts) > 1 else bid)
 
         total_mw = 0.0
         for load in loads:
@@ -709,11 +718,15 @@ class LoadSheddingPocketBay(models.Model):
         from collections import defaultdict
         grouped = defaultdict(list)
         
-        # Iterate over all branches across all boundaries
         for boundary in self.boundaries.prefetch_related('branches__substation', 'branches__to_substation').all():
-            for branch in boundary.branches.all():
-                key = (branch.substation.substation_id, branch.to_substation.substation_id)
-                grouped[key].append(branch.ckt_id)
+            if boundary.frozen_assets:
+                for asset in boundary.frozen_assets:
+                    key = (asset['from_sub'], asset['to_sub'])
+                    grouped[key].append(asset['ckt_id'])
+            else:
+                for branch in boundary.branches.all():
+                    key = (branch.substation.substation_id, branch.to_substation.substation_id)
+                    grouped[key].append(branch.ckt_id)
 
         cuts = []
         for (from_sub, to_sub), ckt_ids in grouped.items():
@@ -743,12 +756,15 @@ class LoadSheddingPocketBay(models.Model):
         # --- Validation 1: check each boundary branch exists in active topology ---
         valid_branches = []
         for boundary in self.boundaries.prefetch_related('branches__substation', 'branches__to_substation').all():
-            for branch in boundary.branches.all():
-                from_sub = branch.substation.substation_id
-                to_sub = branch.to_substation.substation_id
-                ckt_id = branch.ckt_id
+            assets_to_check = boundary.frozen_assets if boundary.frozen_assets else [
+                {'from_sub': b.substation.substation_id, 'to_sub': b.to_substation.substation_id, 'ckt_id': b.ckt_id} 
+                for b in boundary.branches.all()
+            ]
+            for asset in assets_to_check:
+                from_sub = asset['from_sub']
+                to_sub = asset['to_sub']
+                ckt_id = asset['ckt_id']
 
-                # TopologyBranch connects buses; we match via the bus→substation mapping
                 exists = TopologyBranch.objects.filter(
                     topology_version=snapshot.topology_version,
                     ckt_id=ckt_id,
@@ -769,7 +785,7 @@ class LoadSheddingPocketBay(models.Model):
                         f"no longer present in active topology."
                     )
                 else:
-                    valid_branches.append(branch)
+                    valid_branches.append(asset)
 
         # --- Validation 2: compute island from all cuts (even partial) ---
         service = TopologyService(snapshot)
@@ -781,7 +797,7 @@ class LoadSheddingPocketBay(models.Model):
             hint = ""
             if valid_branches:
                 b = valid_branches[0]
-                hint = f" Verify boundary branch at {b.substation.substation_id}."
+                hint = f" Verify boundary branch at {b.get('from_sub', '')}."
             elif cuts:
                 hint = f" Verify boundary branch at {cuts[0]['from_substation_id']}."
             alerts.append(
@@ -821,8 +837,13 @@ class LoadSheddingPocketBoundary(models.Model):
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     pocket = models.ForeignKey(LoadSheddingPocketBay, on_delete=models.CASCADE, related_name='boundaries')
-    relay = models.ForeignKey(LoadSheddingRelay, on_delete=models.CASCADE, related_name='target_pocket_boundaries')
-    branches = models.ManyToManyField(IncomingBranch, related_name='load_shedding_pocket_boundaries')
+    relay = models.ForeignKey(LoadSheddingRelay, on_delete=models.SET_NULL, null=True, blank=True, related_name='target_pocket_boundaries')
+    branches = models.ManyToManyField(IncomingBranch, related_name='load_shedding_pocket_boundaries', blank=True)
+    
+    frozen_relay_name = models.CharField(max_length=150, blank=True)
+    frozen_substation_id = models.CharField(max_length=50, blank=True)
+    frozen_substation_name = models.CharField(max_length=150, blank=True)
+    frozen_assets = models.JSONField(default=list, blank=True)  # List of dicts representing branches
 
     class Meta:
         verbose_name = "Load Shedding Pocket Boundary"
@@ -842,4 +863,5 @@ class LoadSheddingPocketBoundary(models.Model):
             raise ValidationError("Selected branches must belong to the relay's incoming branches.")
 
     def __str__(self):
-        return f"Boundary @ {self.relay.substation.substation_id} for Pocket ({self.pocket})"
+        sub_id = self.relay.substation.substation_id if self.relay else self.frozen_substation_id
+        return f"Boundary @ {sub_id} for Pocket ({self.pocket})"

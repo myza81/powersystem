@@ -98,13 +98,51 @@ class LoadSheddingStageSerializer(serializers.ModelSerializer):
 
 
 class LoadSheddingPocketBoundarySerializer(serializers.ModelSerializer):
-    relay_substation_id = serializers.CharField(source='relay.substation.substation_id', read_only=True)
-    relay_substation_name = serializers.CharField(source='relay.substation.name', read_only=True)
-    relay_name = serializers.CharField(source='relay.relay_name', read_only=True)
+    relay_substation_id = serializers.SerializerMethodField()
+    relay_substation_name = serializers.SerializerMethodField()
+    relay_name = serializers.SerializerMethodField()
 
     class Meta:
         model = LoadSheddingPocketBoundary
-        fields = ['id', 'pocket', 'relay', 'relay_substation_id', 'relay_substation_name', 'relay_name', 'branches']
+        fields = ['id', 'pocket', 'relay', 'relay_substation_id', 'relay_substation_name', 'relay_name', 'branches', 'frozen_assets']
+
+    def get_relay_substation_id(self, obj):
+        return obj.relay.substation.substation_id if obj.relay else obj.frozen_substation_id
+        
+    def get_relay_substation_name(self, obj):
+        return obj.relay.substation.name if obj.relay else obj.frozen_substation_name
+        
+    def get_relay_name(self, obj):
+        return obj.relay.relay_name if obj.relay else obj.frozen_relay_name
+
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        self._freeze_metadata(instance)
+        instance.save(update_fields=['frozen_relay_name', 'frozen_substation_id', 'frozen_substation_name', 'frozen_assets'])
+        return instance
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        self._freeze_metadata(instance)
+        instance.save(update_fields=['frozen_relay_name', 'frozen_substation_id', 'frozen_substation_name', 'frozen_assets'])
+        return instance
+
+    def _freeze_metadata(self, instance):
+        if getattr(instance, 'relay', None):
+            instance.frozen_relay_name = getattr(instance.relay, 'relay_name', '')
+            sub = getattr(instance.relay, 'substation', None)
+            if sub:
+                instance.frozen_substation_id = getattr(sub, 'substation_id', '')
+                instance.frozen_substation_name = getattr(sub, 'name', '')
+                
+        assets = []
+        for b in instance.branches.all():
+            assets.append({
+                'from_sub': b.substation.substation_id if getattr(b, 'substation', None) else '',
+                'to_sub': b.to_substation.substation_id if getattr(b, 'to_substation', None) else '',
+                'ckt_id': getattr(b, 'ckt_id', '')
+            })
+        instance.frozen_assets = assets
 
 
 class LoadSheddingPocketBaySerializer(serializers.ModelSerializer):
@@ -120,9 +158,9 @@ class LoadSheddingPocketBaySerializer(serializers.ModelSerializer):
 
 
 class LoadSheddingTransformerBaySerializer(serializers.ModelSerializer):
-    relay_substation_id = serializers.CharField(source='relay.substation.substation_id', read_only=True)
-    relay_substation_name = serializers.CharField(source='relay.substation.name', read_only=True)
-    relay_name = serializers.CharField(source='relay.relay_name', read_only=True)
+    relay_substation_id = serializers.SerializerMethodField()
+    relay_substation_name = serializers.SerializerMethodField()
+    relay_name = serializers.SerializerMethodField()
 
     def validate(self, attrs):
         relay = attrs.get('relay') or getattr(self.instance, 'relay', None)
@@ -138,8 +176,44 @@ class LoadSheddingTransformerBaySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LoadSheddingTransformerBay
-        fields = ['id', 'stage', 'relay', 'relay_substation_id', 'relay_substation_name', 'relay_name', 'transformers', 'mw_cache']
+        fields = ['id', 'stage', 'relay', 'relay_substation_id', 'relay_substation_name', 'relay_name', 'transformers', 'mw_cache', 'frozen_assets']
         read_only_fields = ['mw_cache']
+
+    def get_relay_substation_id(self, obj):
+        return obj.relay.substation.substation_id if obj.relay else obj.frozen_substation_id
+        
+    def get_relay_substation_name(self, obj):
+        return obj.relay.substation.name if obj.relay else obj.frozen_substation_name
+        
+    def get_relay_name(self, obj):
+        return obj.relay.relay_name if obj.relay else obj.frozen_relay_name
+
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        self._freeze_metadata(instance)
+        instance.save(update_fields=['frozen_relay_name', 'frozen_substation_id', 'frozen_substation_name', 'frozen_assets'])
+        return instance
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        self._freeze_metadata(instance)
+        instance.save(update_fields=['frozen_relay_name', 'frozen_substation_id', 'frozen_substation_name', 'frozen_assets'])
+        return instance
+
+    def _freeze_metadata(self, instance):
+        if getattr(instance, 'relay', None):
+            instance.frozen_relay_name = getattr(instance.relay, 'relay_name', '')
+            sub = getattr(instance.relay, 'substation', None)
+            if sub:
+                instance.frozen_substation_id = getattr(sub, 'substation_id', '')
+                instance.frozen_substation_name = getattr(sub, 'name', '')
+                
+        assets = []
+        target_bay_ids = instance.transformers.values_list('bay_id', flat=True)
+        for bid in target_bay_ids:
+            parts = str(bid).split('_', 1)
+            assets.append(parts[1] if len(parts) > 1 else bid)
+        instance.frozen_assets = assets
 
 
 class LoadSheddingStageDetailSerializer(LoadSheddingStageSerializer):

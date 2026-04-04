@@ -276,7 +276,9 @@ const LoadSheddingViewer = () => {
 
                 const assignedFeeder = selectedTransformers.length > 0
                     ? selectedTransformers.map(t => `T${t.transformer_no}`).join(' & ')
-                    : (bay.transformers || []).map(t => typeof t === 'object' ? `T${t.id}` : `T${t}`).join(' & ');
+                    : (bay.transformers && bay.transformers.length > 0)
+                        ? bay.transformers.map(t => typeof t === 'object' ? `T${t.id}` : `T${t}`).join(' & ')
+                        : (bay.frozen_assets || []).map(a => `T${a}`).join(' & ');
 
                 const breakerNumber = selectedTransformers
                     .map(t => t.lv_breaker_number)
