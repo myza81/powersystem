@@ -24,7 +24,11 @@ class LoadSheddingStageSettingSerializer(serializers.ModelSerializer):
 
 
 class LoadSheddingStageSerializer(serializers.ModelSerializer):
-    settings = LoadSheddingSettingSerializer(many=True, read_only=True)
+    settings = serializers.SerializerMethodField()
+    def get_settings(self, obj):
+        ordered_stagesettings = obj.loadsheddingstagesetting_set.order_by('order').select_related('setting')
+        settings = [ss.setting for ss in ordered_stagesettings]
+        return LoadSheddingSettingSerializer(settings, many=True).data
     setting_ids = serializers.PrimaryKeyRelatedField(
         source='settings',
         many=True,
@@ -58,11 +62,12 @@ class LoadSheddingStageSerializer(serializers.ModelSerializer):
         setting_objects = validated_data.pop('settings', [])
         stage = LoadSheddingStage.objects.create(**validated_data)
         
-        for setting in setting_objects:
+        for idx, setting in enumerate(setting_objects):
             LoadSheddingStageSetting.objects.create(
                 stage=stage,
                 setting=setting,
-                version=stage.version
+                version=stage.version,
+                order=idx
             )
         return stage
 
@@ -75,11 +80,12 @@ class LoadSheddingStageSerializer(serializers.ModelSerializer):
         
         if setting_objects is not None:
             LoadSheddingStageSetting.objects.filter(stage=instance).delete()
-            for setting in setting_objects:
+            for idx, setting in enumerate(setting_objects):
                 LoadSheddingStageSetting.objects.create(
                     stage=instance,
                     setting=setting,
-                    version=instance.version
+                    version=instance.version,
+                    order=idx
                 )
         return instance
 

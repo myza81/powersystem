@@ -586,8 +586,10 @@ class LoadSheddingStageSetting(models.Model):
     stage = models.ForeignKey(LoadSheddingStage, on_delete=models.CASCADE)
     setting = models.ForeignKey(LoadSheddingSetting, on_delete=models.CASCADE)
     version = models.ForeignKey(LoadSheddingVersion, on_delete=models.CASCADE)
+    order = models.PositiveIntegerField(default=0)
 
     class Meta:
+        ordering = ['order']
         unique_together = (
             ('version', 'setting'),  # A setting can only appear once per version
             ('stage', 'setting'),    # And only once per stage

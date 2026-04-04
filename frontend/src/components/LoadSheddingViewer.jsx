@@ -267,7 +267,7 @@ const LoadSheddingViewer = () => {
                 delay2: stage.settings?.[1]?.time_delay ?? 'n/a',
             };
 
-            // Transformer Bays
+            const txRows = [];
             (stage.transformer_bays || []).forEach(bay => {
                 const sub = substations.find(s => s.substation_id === bay.relay_substation_id);
                 const relay = relays.find(r => r.id === bay.relay);
@@ -286,8 +286,7 @@ const LoadSheddingViewer = () => {
                 const voltageRaw = selectedTransformers.map(t => t.lv_voltage).filter(Boolean);
                 const voltage = voltageRaw.length > 0 ? [...new Set(voltageRaw)].join(' & ') : '';
 
-                rows.push({
-                    stageLabel: stage.label,
+                txRows.push({
                     grid: sub?.grid || '',
                     substationName: sub?.name || bay.relay_substation_name || '',
                     substationId: sub?.substation_id || bay.relay_substation_id || '',
@@ -297,12 +296,14 @@ const LoadSheddingViewer = () => {
                     ...settingCells,
                 });
             });
-            // Pocket Bays
+            txRows.sort((a, b) => a.substationId.localeCompare(b.substationId));
+
+            const pocketRows = [];
             (stage.pocket_bays || []).forEach(pocket => {
+                const singlePocketRows = [];
                 (pocket.boundaries || []).forEach(boundary => {
                     const sub = substations.find(s => s.substation_id === boundary.relay_substation_id);
-                    rows.push({
-                        stageLabel: stage.label,
+                    singlePocketRows.push({
                         grid: sub?.grid || '',
                         substationName: sub?.name || boundary.relay_substation_name || '',
                         substationId: sub?.substation_id || boundary.relay_substation_id || '',
@@ -312,6 +313,14 @@ const LoadSheddingViewer = () => {
                         ...settingCells,
                     });
                 });
+                singlePocketRows.sort((a, b) => a.substationId.localeCompare(b.substationId));
+                pocketRows.push(...singlePocketRows);
+            });
+
+            const combined = [...txRows, ...pocketRows];
+            combined.forEach((row, idx) => {
+                row.stageLabel = idx === 0 ? stage.label : '';
+                rows.push(row);
             });
         });
         return rows;
@@ -338,11 +347,11 @@ const LoadSheddingViewer = () => {
         if (rows.length === 0) return;
         const schemeType = selectedScheme?.scheme_type || 'LoadShedding';
         const fileName = `${schemeType}_${selectedScheme?.review_year}_v${selectedScheme?.version}`;
-        const headers = ['Stage', 'Grid', 'Substation', 'Substation ID', 'Voltage', 'Assigned feeder', 'Breaker number', 'Threshold Setting 1', 'Time Delay 1', 'Threshold Setting 2', 'Time Delay 2'];
+        const headers = ['Stage', 'Grid', 'Substation', 'Substation ID', 'Assigned feeder', 'Voltage', 'Breaker number', 'Threshold Setting 1', 'Time Delay 1', 'Threshold Setting 2', 'Time Delay 2'];
         const csvContent = [
             headers.join(','),
             ...rows.map(r => [
-                r.stageLabel, r.grid, `"${r.substationName}"`, r.substationId, r.voltage, `"${r.assignedFeeder}"`, r.breakerNumber, r.threshold1, r.delay1, r.threshold2, r.delay2
+                r.stageLabel, r.grid, `"${r.substationName}"`, r.substationId, `"${r.assignedFeeder}"`, r.voltage, r.breakerNumber, r.threshold1, r.delay1, r.threshold2, r.delay2
             ].join(','))
         ].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -365,9 +374,9 @@ const LoadSheddingViewer = () => {
         
         const disclaimer = `⚠ UNCONTROLLED COPY - For internal use only. Verify against the published system before acting.`;
         const versionInfo = `${schemeType} Scheme: ${selectedScheme?.review_year} v${selectedScheme?.version} | Exported: ${new Date().toLocaleString()}`;
-        const headers = ['Stage', 'Grid', 'Substation', 'Substation ID', 'Voltage', 'Assigned feeder', 'Breaker number', 'Threshold Setting 1', 'Time Delay 1', 'Threshold Setting 2', 'Time Delay 2'];
+        const headers = ['Stage', 'Grid', 'Substation', 'Substation ID', 'Assigned feeder', 'Voltage', 'Breaker number', 'Threshold Setting 1', 'Time Delay 1', 'Threshold Setting 2', 'Time Delay 2'];
         const data = rows.map(r => [
-            r.stageLabel, r.grid, r.substationName, r.substationId, r.voltage, r.assignedFeeder, r.breakerNumber, r.threshold1, r.delay1, r.threshold2, r.delay2
+            r.stageLabel, r.grid, r.substationName, r.substationId, r.assignedFeeder, r.voltage, r.breakerNumber, r.threshold1, r.delay1, r.threshold2, r.delay2
         ]);
         
         const ws = XLSX.utils.aoa_to_sheet([[disclaimer], [versionInfo], headers, ...data]);
@@ -963,8 +972,8 @@ const LoadSheddingViewer = () => {
                                             <th style={{ padding: '0.75rem' }}>Grid</th>
                                             <th style={{ padding: '0.75rem' }}>Substation</th>
                                             <th style={{ padding: '0.75rem' }}>Substation ID</th>
-                                            <th style={{ padding: '0.75rem' }}>Voltage</th>
                                             <th style={{ padding: '0.75rem' }}>Assigned feeder</th>
+                                            <th style={{ padding: '0.75rem' }}>Voltage</th>
                                             <th style={{ padding: '0.75rem' }}>Breaker number</th>
                                             <th style={{ padding: '0.75rem' }}>Threshold Setting 1</th>
                                             <th style={{ padding: '0.75rem' }}>Time Delay 1</th>
@@ -983,8 +992,8 @@ const LoadSheddingViewer = () => {
                                                 <td style={{ padding: '0.75rem' }}>{row.grid}</td>
                                                 <td style={{ padding: '0.75rem' }}>{row.substationName}</td>
                                                 <td style={{ padding: '0.75rem', fontFamily: 'monospace' }}>{row.substationId}</td>
-                                                <td style={{ padding: '0.75rem' }}>{row.voltage}</td>
                                                 <td style={{ padding: '0.75rem' }}>{row.assignedFeeder}</td>
+                                                <td style={{ padding: '0.75rem' }}>{row.voltage}</td>
                                                 <td style={{ padding: '0.75rem' }}>{row.breakerNumber}</td>
                                                 <td style={{ padding: '0.75rem', fontFamily: 'monospace' }}>{row.threshold1}</td>
                                                 <td style={{ padding: '0.75rem', fontFamily: 'monospace' }}>{row.delay1}</td>

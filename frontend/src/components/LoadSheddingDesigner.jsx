@@ -445,12 +445,12 @@ const LoadSheddingDesigner = () => {
         }
 
         // 2. Check for Duplicate Settings Combination
-        // Sort IDs to compare correctly as a set
-        const sortedNewSettings = [...newStageSettings].sort().join(',');
+        // Compare exactly with order preserved
+        const newSettingsStr = [...newStageSettings].filter(Boolean).join(',');
         const duplicateSettings = stages.find((s, i) => {
             if (i === editingStageIdx) return false;
-            const sortedExisting = [...(s.setting_ids || [])].sort().join(',');
-            return sortedExisting === sortedNewSettings;
+            const existing = [...(s.setting_ids || [])].filter(Boolean).join(',');
+            return existing === newSettingsStr;
         });
 
         if (duplicateSettings) {
@@ -464,7 +464,7 @@ const LoadSheddingDesigner = () => {
                 ...updatedStages[editingStageIdx],
                 stage_number: newStageNumber,
                 label: newStageLabel,
-                setting_ids: newStageSettings,
+                setting_ids: newStageSettings.filter(Boolean),
                 target_mw: newStageTargetMW || 0.0
             };
             setStages(updatedStages);
@@ -477,7 +477,7 @@ const LoadSheddingDesigner = () => {
                 transformer_bays: [],
                 pocket_bays: [],
                 pocket_branches: [],
-                setting_ids: newStageSettings,
+                setting_ids: newStageSettings.filter(Boolean),
                 target_mw: newStageTargetMW || 0.0
             };
             setStages([...stages, newStageObj]);
@@ -1286,11 +1286,8 @@ const LoadSheddingDesigner = () => {
     const compactSubstationMnemonic = (subId) => String(subId || '').replace(/\d+$/, '');
 
     const getStageSettingCells = (stage) => {
-        const stageSettings = getSortedSettings(
-            (stage?.setting_ids || [])
-                .map(sId => globalSettings.find(s => s.id === sId))
-                .filter(Boolean)
-        );
+        const stageSettings = (stage?.setting_ids || [])
+            .map(sId => globalSettings.find(s => s.id === sId) || null);
 
         return {
             threshold1: stageSettings[0]?.threshold ?? 'n/a',
@@ -1305,8 +1302,8 @@ const LoadSheddingDesigner = () => {
 
         stages.forEach((stage, stageIdx) => {
             const settingCells = getStageSettingCells(stage);
-            let stageRowStarted = false;
-
+            
+            const txRows = [];
             (stage.transformer_bays || []).forEach(bay => {
                 const relay = relays.find(r => String(r.id) === String(bay.relay));
                 const sub = substations.find(s => s.substation_id === bay.relay_substation_id);
@@ -1324,21 +1321,25 @@ const LoadSheddingDesigner = () => {
                     .filter(Boolean)
                     .join(' & ') || 'n/a';
 
-                rows.push({
-                    stageLabel: !stageRowStarted ? stage.label : '',
+                const voltageRaw = selectedTransformers.map(t => t.lv_voltage).filter(Boolean);
+                const txVoltage = voltageRaw.length > 0 ? [...new Set(voltageRaw)].join(' & ') : '';
+
+                txRows.push({
                     grid: sub.grid || '',
                     substationName: sub.name || '',
                     substationId: sub.substation_id || '',
-                    voltage: sub.voltage || '',
+                    voltage: txVoltage || sub.voltage || '',
                     assignedFeeder: assignedFeeder || 'n/a',
                     breakerNumber,
                     ...settingCells,
                 });
-                stageRowStarted = true;
             });
+            txRows.sort((a, b) => a.substationId.localeCompare(b.substationId));
 
+            const pocketRows = [];
             const pockets = getEffectiveStagePockets(stage, stageIdx);
             pockets.forEach(card => {
+                const singlePocketRows = [];
                 (card.branchGroups || []).forEach(group => {
                     const localSub = substations.find(s => s.substation_id === group.subId);
                     if (!localSub) return;
@@ -1361,8 +1362,7 @@ const LoadSheddingDesigner = () => {
                         .filter(Boolean)
                         .join(' & ') || 'n/a';
 
-                    rows.push({
-                        stageLabel: !stageRowStarted ? stage.label : '',
+                    singlePocketRows.push({
                         grid: localSub.grid || '',
                         substationName: localSub.name || '',
                         substationId: localSub.substation_id || '',
@@ -1371,8 +1371,15 @@ const LoadSheddingDesigner = () => {
                         breakerNumber,
                         ...settingCells,
                     });
-                    stageRowStarted = true;
                 });
+                singlePocketRows.sort((a, b) => a.substationId.localeCompare(b.substationId));
+                pocketRows.push(...singlePocketRows);
+            });
+
+            const combined = [...txRows, ...pocketRows];
+            combined.forEach((row, idx) => {
+                row.stageLabel = idx === 0 ? stage.label : '';
+                rows.push(row);
             });
         });
 
@@ -1873,7 +1880,7 @@ const LoadSheddingDesigner = () => {
                                 </div>
                                 <input
                                     type="text"
-                                    className="dark-input"
+                                    className="platinum-input"
                                     style={{ fontSize: '1.25rem', fontWeight: 'bold', background: 'transparent', border: 'none', padding: 0, width: '150px', minWidth: '100px', color: '#fff' }}
                                     value={stages[activeStageIdx]?.label}
                                     onChange={(e) => {
@@ -3026,11 +3033,11 @@ const LoadSheddingDesigner = () => {
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                             <div>
                                                 <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold ({thresholdUnit})</label>
-                                                <input type="number" step="0.01" className="dark-input" style={{ width: '100%' }} value={newSettingThreshold} onChange={e => setNewSettingThreshold(e.target.value)} placeholder={selectedSchemeType === 'UVLS' ? 'e.g. 0.85' : 'e.g. 49.2'} />
+                                                <input type="number" step="0.01" className="platinum-input" style={{ width: '100%' }} value={newSettingThreshold} onChange={e => setNewSettingThreshold(e.target.value)} placeholder={selectedSchemeType === 'UVLS' ? 'e.g. 0.85' : 'e.g. 49.2'} />
                                             </div>
                                             <div>
                                                 <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Time Delay (Seconds)</label>
-                                                <input type="number" step="0.1" className="dark-input" style={{ width: '100%' }} value={newSettingTimeDelay} onChange={e => setNewSettingTimeDelay(e.target.value)} placeholder="e.g. 0.2" />
+                                                <input type="number" step="0.1" className="platinum-input" style={{ width: '100%' }} value={newSettingTimeDelay} onChange={e => setNewSettingTimeDelay(e.target.value)} placeholder="e.g. 0.2" />
                                             </div>
                                             <button className="btn-primary" onClick={handleAddNewSetting} style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
                                                 <Plus size={16} /> Create Setting
@@ -3144,10 +3151,10 @@ const LoadSheddingDesigner = () => {
                                                 <th style={{ padding: '0.85rem' }}>Stage Label</th>
                                                 <th style={{ padding: '0.85rem' }}>Grid</th>
                                                 <th style={{ padding: '0.85rem' }}>Substation Name</th>
-                                                <th style={{ padding: '0.85rem' }}>Substation id</th>
+                                                <th style={{ padding: '0.85rem' }}>Substation ID</th>
+                                                <th style={{ padding: '0.85rem' }}>Assigned Feeder</th>
                                                 <th style={{ padding: '0.85rem' }}>Voltage</th>
-                                                <th style={{ padding: '0.85rem' }}>Assigned feeder</th>
-                                                <th style={{ padding: '0.85rem' }}>Breaker number</th>
+                                                <th style={{ padding: '0.85rem' }}>Breaker Number</th>
                                                 <th style={{ padding: '0.85rem' }}>Threshold Setting 1</th>
                                                 <th style={{ padding: '0.85rem' }}>Time Delay 1</th>
                                                 <th style={{ padding: '0.85rem' }}>Threshold Setting 2</th>
@@ -3161,8 +3168,8 @@ const LoadSheddingDesigner = () => {
                                                     <td style={{ padding: '0.85rem' }}>{row.grid}</td>
                                                     <td style={{ padding: '0.85rem' }}>{row.substationName}</td>
                                                     <td style={{ padding: '0.85rem', fontFamily: 'monospace' }}>{row.substationId}</td>
-                                                    <td style={{ padding: '0.85rem' }}>{row.voltage}</td>
                                                     <td style={{ padding: '0.85rem' }}>{row.assignedFeeder}</td>
+                                                    <td style={{ padding: '0.85rem' }}>{row.voltage}</td>
                                                     <td style={{ padding: '0.85rem' }}>{row.breakerNumber}</td>
                                                     <td style={{ padding: '0.85rem', fontFamily: 'monospace' }}>{row.threshold1}</td>
                                                     <td style={{ padding: '0.85rem', fontFamily: 'monospace' }}>{row.delay1}</td>
@@ -3217,7 +3224,7 @@ const LoadSheddingDesigner = () => {
                                         <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Stage Number</label>
                                         <input
                                             type="number"
-                                            className="dark-input"
+                                            className="platinum-input"
                                             style={{ width: '100%' }}
                                             value={newStageNumber}
                                             onChange={e => setNewStageNumber(Number(e.target.value))}
@@ -3227,7 +3234,7 @@ const LoadSheddingDesigner = () => {
                                         <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Stage Label</label>
                                         <input
                                             type="text"
-                                            className="dark-input"
+                                            className="platinum-input"
                                             style={{ width: '100%' }}
                                             placeholder="e.g. Stage 5"
                                             value={newStageLabel}
@@ -3239,7 +3246,7 @@ const LoadSheddingDesigner = () => {
                                         <div style={{ position: 'relative' }}>
                                             <input
                                                 type="text"
-                                                className="dark-input"
+                                                className="platinum-input"
                                                 style={{ width: '100%', paddingRight: '2rem' }}
                                                 value={formatInputNumber(newStageTargetMW)}
                                                 onChange={e => {
@@ -3254,35 +3261,44 @@ const LoadSheddingDesigner = () => {
 
                                 <div>
                                     <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Assign Settings</label>
-                                    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '0.5rem', maxHeight: '200px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                        {getSortedSettings(globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS'))).map(s => (
-                                            <div
-                                                key={s.id}
-                                                onClick={() => {
-                                                    if (newStageSettings.includes(s.id)) {
-                                                        setNewStageSettings(newStageSettings.filter(id => id !== s.id));
-                                                    } else {
-                                                        setNewStageSettings([...newStageSettings, s.id]);
-                                                    }
-                                                }}
-                                                style={{
-                                                    padding: '0.5rem 0.75rem',
-                                                    borderRadius: '4px',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'space-between',
-                                                    background: newStageSettings.includes(s.id) ? 'rgba(0, 255, 163, 0.1)' : 'transparent',
-                                                    marginBottom: '2px'
+                                    <div style={{ display: 'flex', gap: '1rem' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold Setting 1</label>
+                                            <select
+                                                className="platinum-input"
+                                                style={{ width: '100%', fontSize: '0.8rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)' }}
+                                                value={newStageSettings[0] || ''}
+                                                onChange={e => {
+                                                    const updated = [...newStageSettings];
+                                                    updated[0] = e.target.value || null;
+                                                    setNewStageSettings(updated);
                                                 }}
                                             >
-                                                <span style={{ fontSize: '0.8rem', color: newStageSettings.includes(s.id) ? 'var(--accent-cyan)' : 'inherit' }}>{s.label}</span>
-                                                {newStageSettings.includes(s.id) && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
-                                            </div>
-                                        ))}
-                                        {globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS')).length === 0 && (
-                                            <div style={{ padding: '1rem', textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>No global settings found for {schemeType}.</div>
-                                        )}
+                                                <option value="">-- None --</option>
+                                                {globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS')).map(s => (
+                                                    <option key={s.id} value={s.id}>{s.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold Setting 2</label>
+                                            <select
+                                                className="platinum-input"
+                                                style={{ width: '100%', fontSize: '0.8rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)' }}
+                                                value={newStageSettings[1] || ''}
+                                                onChange={e => {
+                                                    const updated = [...newStageSettings];
+                                                    if (updated.length === 0) updated.push(null);
+                                                    updated[1] = e.target.value || null;
+                                                    setNewStageSettings(updated);
+                                                }}
+                                            >
+                                                <option value="">-- None --</option>
+                                                {globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS')).map(s => (
+                                                    <option key={s.id} value={s.id}>{s.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
 
