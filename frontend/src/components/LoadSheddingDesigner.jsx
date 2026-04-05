@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Plus,
     Trash2,
@@ -29,6 +29,7 @@ import CompactRegionalMetrics from './CompactRegionalMetrics';
 import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes, FaCodeBranch, FaLock, FaBullseye, FaGaugeHigh, FaTableList, FaGear } from 'react-icons/fa6';
 import { FiAlertCircle, FiEdit2 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
+import { computeSchemeMetrics } from '../utils/loadSheddingUtils';
 import api from '../api';
 
 // Format Date string helper
@@ -76,6 +77,7 @@ const LoadSheddingDesigner = () => {
     const [reviewYear, setReviewYear] = useState(() => getInitialState('reviewYear', new Date().getFullYear()));
     const [targetPercentage, setTargetPercentage] = useState(() => getInitialState('targetPercentage', 60));
     const [isMetricsDrawerOpen, setIsMetricsDrawerOpen] = useState(() => getInitialState('isMetricsDrawerOpen', true));
+    const [isNewlyCloned, setIsNewlyCloned] = useState(() => getInitialState('isNewlyCloned', false));
 
     // Auto-update default target percentage when scheme type changes for new drafts
     useEffect(() => {
@@ -165,11 +167,11 @@ const LoadSheddingDesigner = () => {
     useEffect(() => {
         if (view === 'designer') {
             const draftState = {
-                activeVersionId, schemeType, versionLabel, reviewYear, targetPercentage, isMetricsDrawerOpen, stages, activeStageIdx, detailedSubstations
+                activeVersionId, schemeType, versionLabel, reviewYear, targetPercentage, isMetricsDrawerOpen, isNewlyCloned, stages, activeStageIdx, detailedSubstations
             };
             sessionStorage.setItem('ls_draft_state', JSON.stringify(draftState));
         }
-    }, [activeVersionId, schemeType, versionLabel, reviewYear, targetPercentage, isMetricsDrawerOpen, stages, activeStageIdx, detailedSubstations, view]);
+    }, [activeVersionId, schemeType, versionLabel, reviewYear, targetPercentage, isMetricsDrawerOpen, isNewlyCloned, stages, activeStageIdx, detailedSubstations, view]);
 
     // --- Pocket Preview ---
     useEffect(() => {
@@ -230,12 +232,14 @@ const LoadSheddingDesigner = () => {
         setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], computed_pockets: [], pocket_branches: [], setting_ids: [], target_mw: 1000 }]);
         setActiveStageIdx(0);
         setActiveVersionId(null);
+        setIsNewlyCloned(false);
         setView('designer');
         setActiveTab('stages');
     };
 
     const handleResumeDraft = async (vId) => {
         setLoading(true);
+        setIsNewlyCloned(false);
         try {
             const res = await api.get(`/load-shedding-versions/${vId}/`);
             const vData = res.data;
@@ -244,6 +248,29 @@ const LoadSheddingDesigner = () => {
             setVersionLabel(vData.notes);
             setTargetPercentage(vData.target_percentage || (vData.scheme_type === 'UVLS' ? 15 : 60));
             setActiveVersionId(vData.id);
+
+            // Fetch detailed substation data for existing stages to ensure MW displays correctly
+            if (vData.stages && vData.stages.length > 0) {
+                const subIds = [...new Set(vData.stages.flatMap(s => [
+                    ...(s.transformer_bays?.map(b => b.relay_substation_id) || []),
+                    ...(s.pocket_bays?.flatMap(p => p.topology_cache?.isolated_substations || []) || [])
+                ]))];
+                for (const subId of subIds) {
+                    if (subId && !detailedSubstations[subId]) {
+                        try {
+                            const [sRes, tRes] = await Promise.all([
+                                api.get(`/substations/${subId}/`),
+                                api.get(`/load-transformers/?substation=${subId}`)
+                            ]);
+                            const data = sRes.data;
+                            data.db_transformers = tRes.data;
+                            setDetailedSubstations(prev => ({ ...prev, [subId]: data }));
+                        } catch (e) {
+                             console.error("Failed to pre-fetch sub", subId, e);
+                        }
+                    }
+                }
+            }
 
             if (vData.stages && vData.stages.length > 0) {
                 // Fetch full details for each stage (including transformer bays)
@@ -344,6 +371,7 @@ const LoadSheddingDesigner = () => {
             if (res.data && res.data.id) {
                 // Call resume on the newly cloned draft ID
                 await handleResumeDraft(res.data.id);
+                setIsNewlyCloned(true);
             }
         } catch (err) {
             console.error("Failed to clone version", err);
@@ -705,7 +733,9 @@ const LoadSheddingDesigner = () => {
                 // Update target_percentage and notes for existing draft
                 await api.patch(`/load-shedding-versions/${vId}/`, {
                     target_percentage: targetPercentage,
-                    notes: versionLabel
+                    notes: versionLabel,
+                    scheme_type: schemeType,
+                    review_year: reviewYear
                 });
             }
 
@@ -782,8 +812,16 @@ const LoadSheddingDesigner = () => {
                         });
                     }
                 }
-
             }
+            
+            // 4. Trigger backend recompute to sync mw_cache for Viewer
+            try {
+                await api.post('/load-shedding-transformer-bays/recompute/', { version_id: vId });
+            } catch (recompErr) {
+                console.error("Post-save recompute failed", recompErr);
+                // Non-blocking for the save itself
+            }
+
             sessionStorage.removeItem('ls_draft_state');
             alert("Draft saved successfully!");
             return vId;
@@ -923,6 +961,43 @@ const LoadSheddingDesigner = () => {
         return parts.join(".");
     };
 
+    // --- Metrics & Calculations ---
+
+    /**
+     * Compute scheme-wide metrics using unified utility for 100% parity with Viewer.
+     */
+    const schemeMetrics = useMemo(() => {
+        return computeSchemeMetrics(
+            stages,
+            substations,
+            (stage) => getEffectiveStagePockets(stage, stages.indexOf(stage)),
+            (bay) => {
+                let bayMW = 0;
+                const subId = bay.relay_substation_id;
+                const detail = detailedSubstations[subId];
+                if (detail && detail.transformers && detail.db_transformers) {
+                    bay.transformers?.forEach(transformerObj => {
+                        const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
+                        const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
+                        if (dbTx) {
+                            const expectedName = `TX T${dbTx.transformer_no}`;
+                            const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                            if (tx && tx.load_mw != null) bayMW += parseFloat(tx.load_mw);
+                        }
+                    });
+                }
+                return bayMW;
+            },
+            (bay) => {
+                const subId = bay.relay_substation_id;
+                return criticalAssets.some(ca => String(ca.substation_id) === String(subId));
+            },
+            criticalAssets
+        );
+    }, [stages, substations, detailedSubstations, criticalAssets]);
+
+    const calculateOverallAssignedMW = () => schemeMetrics.totalMW;
+
     const calculateTargetMW = () => {
         if (!gridData || !gridData.total_pload_mw) return 0;
         return (targetPercentage / 100) * gridData.total_pload_mw;
@@ -931,75 +1006,40 @@ const LoadSheddingDesigner = () => {
     const calculateRemainingTargetMW = () => {
         const totalTarget = calculateTargetMW();
         const totalAssigned = calculateOverallAssignedMW();
-        // Returns (Assigned - Target). 
-        // Negative means short of target, Positive means over target.
         return totalAssigned - totalTarget;
-    };
-
-    const calculateOverallAssignedMW = () => {
-        let total = 0;
-        // Add all stages' transformer MW
-        stages.forEach(stage => {
-            stage.transformer_bays?.forEach(bay => {
-                const subId = bay.relay_substation_id;
-                const detail = detailedSubstations[subId];
-                if (!detail || !detail.transformers || !detail.db_transformers) return;
-
-                bay.transformers?.forEach(transformerObj => {
-                    const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
-                    const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                    if (dbTx) {
-                        const expectedName = `TX T${dbTx.transformer_no}`;
-                        const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
-                        if (tx && tx.load_mw != null) {
-                            total += parseFloat(tx.load_mw);
-                        }
-                    }
-                });
-            });
-        });
-
-        // Add network pockets MW from all stages
-        stages.forEach((stage, stageIdx) => {
-            const pockets = getEffectiveStagePockets(stage, stageIdx);
-            pockets.forEach(card => {
-                total += (card.total_p_mw || 0);
-            });
-        });
-
-        return total;
     };
 
     const calculateTotalMW = (stage, stageIdx = activeStageIdx) => {
         if (!stage) return 0;
-        let total = 0;
-
-        stage.transformer_bays?.forEach(bay => {
-            const subId = bay.relay_substation_id;
-            const detail = detailedSubstations[subId];
-
-            if (!detail || !detail.transformers || !detail.db_transformers) return;
-
-            bay.transformers?.forEach(transformerObj => {
-                const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
-                const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                if (dbTx) {
-                    const expectedName = `TX T${dbTx.transformer_no}`;
-                    const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
-                    if (tx && tx.load_mw != null) {
-                        total += parseFloat(tx.load_mw);
-                    }
+        // Use unified utility for single stage to ensure logic parity
+        const metrics = computeSchemeMetrics(
+            [stage],
+            substations,
+            (s) => getEffectiveStagePockets(s, stageIdx),
+            (bay) => {
+                let bayMW = 0;
+                const subId = bay.relay_substation_id;
+                const detail = detailedSubstations[subId];
+                if (detail && detail.transformers && detail.db_transformers) {
+                    bay.transformers?.forEach(transformerObj => {
+                        const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
+                        const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
+                        if (dbTx) {
+                            const expectedName = `TX T${dbTx.transformer_no}`;
+                            const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                            if (tx && tx.load_mw != null) bayMW += parseFloat(tx.load_mw);
+                        }
+                    });
                 }
-            });
-        });
-
-        // Add network pockets MW
-        const pockets = getEffectiveStagePockets(stage, stageIdx);
-        pockets.forEach(card => {
-            total += (card.total_p_mw || 0);
-        });
-
-        return total;
+                return bayMW;
+            },
+            (bay) => {
+                const subId = bay.relay_substation_id;
+                return criticalAssets.some(ca => String(ca.substation_id) === String(subId));
+            },
+            criticalAssets
+        );
+        return metrics.totalMW;
     };
 
     const calculateTransformerMW = (stage) => {
@@ -1029,88 +1069,40 @@ const LoadSheddingDesigner = () => {
     };
     const calculateRegionalMW = (stage, region) => {
         if (!stage) return 0;
-        
-        // Use a local map for this stage to handle overrides correctly
-        const subDataMap = new Map(); // subId -> mw
-
-        // 1. Process standard transformer bays for this stage
-        stage.transformer_bays?.forEach(bay => {
-            const subId = bay.relay_substation_id;
-            const sub = substations.find(s => s.substation_id === subId);
-            if (!sub || (region && sub.region !== region)) return;
-
-            const detail = detailedSubstations[subId];
-            if (!detail || !detail.transformers || !detail.db_transformers) {
-                // Fallback: use substation's total_pload_mw if detailed data not available
-                if (sub.total_pload_mw > 0) {
-                    const bayCount = bay.transformers?.length || 1;
-                    const fallbackMW = parseFloat(sub.total_pload_mw) / bayCount;
-                    subDataMap.set(subId, (subDataMap.get(subId) || 0) + fallbackMW);
-                }
-                return;
-            }
-
-            if (!subDataMap.has(subId)) subDataMap.set(subId, 0);
-            let subMW = subDataMap.get(subId);
-
-            bay.transformers?.forEach(transformerObj => {
-                const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
-                const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                if (dbTx) {
-                    const expectedName = `TX T${dbTx.transformer_no}`;
-                    const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
-                    if (tx && tx.load_mw != null) {
-                        subMW += parseFloat(tx.load_mw);
-                    }
-                }
-            });
-            subDataMap.set(subId, subMW);
-        });
-
-        // 2. Process Network Pockets for this stage
-        const pockets = getEffectiveStagePockets(stage, stages.indexOf(stage));
-        pockets.forEach(card => {
-            (card.pocket_substations || []).forEach(subId => {
-                const sub = substations.find(s => s.substation_id === subId);
-                if (sub && (!region || sub.region === region)) {
-                    // Pocket assignment drops the entire substation, so it overrides any transformer bays
-                    // Use per-substation MW if available, otherwise distribute total proportionally to each substation's total load
-                    const subMW = card.substation_mw?.[subId]?.total_p_mw;
-                    if (subMW != null && subMW > 0) {
-                        subDataMap.set(subId, parseFloat(subMW));
-                    } else if (card.total_p_mw && card.pocket_substations?.length > 0) {
-                        // FALLBACK: Proportional distribution based on the substation's actual load share within the pocket
-                        const totalLoadInPocket = card.pocket_substations.reduce((sum, sId) => {
-                            const s = substations.find(sub => sub.substation_id === sId);
-                            return sum + (parseFloat(s?.total_pload_mw) || 0);
-                        }, 0);
-                        
-                        if (totalLoadInPocket > 0) {
-                            const subLoad = parseFloat(sub?.total_pload_mw) || 0;
-                            subDataMap.set(subId, (subLoad / totalLoadInPocket) * parseFloat(card.total_p_mw));
-                        } else {
-                            // Last resort: even distribution
-                            subDataMap.set(subId, parseFloat(card.total_p_mw) / card.pocket_substations.length);
+        const metrics = computeSchemeMetrics(
+            [stage],
+            substations,
+            (s) => getEffectiveStagePockets(s, stages.indexOf(stage)),
+            (bay) => {
+                let bayMW = 0;
+                const subId = bay.relay_substation_id;
+                const detail = detailedSubstations[subId];
+                if (detail && detail.transformers && detail.db_transformers) {
+                    bay.transformers?.forEach(transformerId => {
+                        const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
+                        if (dbTx) {
+                            const expectedName = `TX T${dbTx.transformer_no}`;
+                            const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                            if (tx && tx.load_mw != null) bayMW += parseFloat(tx.load_mw);
                         }
-                    }
+                    });
                 }
-            });
-        });
-
-        // 3. Sum up the results for this region
-        let total = 0;
-        subDataMap.forEach(mw => {
-            total += mw;
-        });
-
-        return total;
+                return bayMW;
+            },
+            (bay) => {
+                const subId = bay.relay_substation_id;
+                return criticalAssets.some(ca => String(ca.substation_id) === String(subId));
+            },
+            criticalAssets
+        );
+        return metrics.regionalAssigned[region] || 0;
     };
 
     const getOverallRegionalSpiralData = () => {
         if (!gridData || !gridData.regional_breakdown) return [];
         return gridData.regional_breakdown.map(reg => {
             const target_mw = (targetPercentage / 100) * reg.total_pload_mw;
-            const assigned_mw = stages.reduce((sum, s) => sum + (calculateRegionalMW(s, reg.region) || 0), 0);
+            const assigned_mw = schemeMetrics.regionalAssigned[reg.region] || 0;
             return {
                 region: reg.region,
                 target_mw,
@@ -1125,7 +1117,6 @@ const LoadSheddingDesigner = () => {
             const potential_mw = substations
                 .filter(sub => {
                     if (sub.region !== reg.region || !sub.has_active_relay) return false;
-                    // Check if this substation has any active relay that sheds transformers OR has incoming branches
                     const subRelays = relays.filter(r => 
                         (r.substation_id === sub.substation_id || r.substation === sub.substation_id) && 
                         r.is_active && 
@@ -1135,7 +1126,7 @@ const LoadSheddingDesigner = () => {
                 })
                 .reduce((sum, sub) => sum + (parseFloat(sub.total_pload_mw) || 0), 0);
             
-            const assigned_mw = stages.reduce((sum, s) => sum + (calculateRegionalMW(s, reg.region) || 0), 0);
+            const assigned_mw = schemeMetrics.regionalAssigned[reg.region] || 0;
             
             return {
                 region: reg.region,
@@ -1146,33 +1137,13 @@ const LoadSheddingDesigner = () => {
     };
 
     const getAssignedSubstationMetrics = (stageArray, includePockets = false) => {
-        const assignedSubMap = new Map();
-
-        // 1. Process standard transformer bays
-        stageArray.forEach(stage => {
-            stage.transformer_bays?.forEach(bay => {
+        return computeSchemeMetrics(
+            stageArray,
+            substations,
+            (stage) => includePockets ? getEffectiveStagePockets(stage, stages.indexOf(stage)) : [],
+            (bay) => {
                 const subId = bay.relay_substation_id;
-                const subIdTrim = subId?.toString().trim().toUpperCase();
-                if (!subId) return;
-
-                if (!assignedSubMap.has(subId)) assignedSubMap.set(subId, { isCritical: false, mw: 0 });
-                const subData = assignedSubMap.get(subId);
-
-                const bayHasCritical = bay.transformers?.some(tObj => {
-                    const tIdVal = typeof tObj === 'object' ? tObj.id : tObj;
-                    const numId = Number(tIdVal);
-                    return criticalAssets.some(ca => (ca.load_transformers || []).includes(numId));
-                });
-                if (bayHasCritical) subData.isCritical = true;
-
-                // Fallback check: if substation itself is critical in the list
-                if (!subData.isCritical && criticalAssets.some(ca => {
-                    const caSub = (ca.substation_id || ca.substation)?.toString().trim().toUpperCase();
-                    return caSub === subIdTrim;
-                })) {
-                    subData.isCritical = true;
-                }
-
+                let subMW = 0;
                 const detail = detailedSubstations[subId];
                 if (detail && detail.transformers && detail.db_transformers) {
                     bay.transformers?.forEach(tObj => {
@@ -1182,61 +1153,21 @@ const LoadSheddingDesigner = () => {
                             const expectedName = `TX T${dbTx.transformer_no}`;
                             const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
                             if (tx && tx.load_mw != null) {
-                                subData.mw += parseFloat(tx.load_mw);
+                                subMW += parseFloat(tx.load_mw);
                             }
                         }
                     });
                 }
-            });
-        });
-
-        // 2. Process overriding Network Pockets
-        if (includePockets) {
-            stageArray.forEach(stage => {
-                const pockets = getEffectiveStagePockets(stage, stages.indexOf(stage));
-                pockets.forEach(card => {
-                    if (card.pocket_substations && card.pocket_substations.length > 0) {
-                        card.pocket_substations.forEach(subId => {
-                            const subIdTrim = subId?.toString().trim().toUpperCase();
-                            if (!assignedSubMap.has(subId)) assignedSubMap.set(subId, { isCritical: false, mw: 0 });
-                            const subData = assignedSubMap.get(subId);
-                            
-                            if (criticalAssets.some(ca => {
-                                const caSub = (ca.substation_id || ca.substation)?.toString().trim().toUpperCase();
-                                return caSub === subIdTrim;
-                            })) {
-                                subData.isCritical = true;
-                            }
-                            
-                            // Use per-substation MW if available (newly computed), otherwise distribute total evenly
-                            const subMW = card.substation_mw?.[subId]?.total_p_mw;
-                            if (subMW != null && subMW > 0) {
-                                subData.mw = parseFloat(subMW);
-                            } else if (card.total_p_mw && card.pocket_substations?.length > 0) {
-                                // Fallback: distribute total MW evenly among pocket substations
-                                subData.mw = parseFloat(card.total_p_mw) / card.pocket_substations.length;
-                            }
-                        });
-                    }
+                return subMW;
+            },
+            (bay) => {
+                return (bay.transformers || []).some(tObj => {
+                    const tIdVal = typeof tObj === 'object' ? tObj.id : tObj;
+                    return (criticalAssets || []).some(ca => (ca.load_transformers || []).includes(Number(tIdVal)));
                 });
-            });
-        }
-
-        let totalSubs = 0;
-        let totalMW = 0;
-        let criticalSubs = 0;
-        let criticalMW = 0;
-
-        assignedSubMap.forEach(data => {
-            totalSubs++;
-            totalMW += data.mw;
-            if (data.isCritical) {
-                criticalSubs++;
-                criticalMW += data.mw;
-            }
-        });
-
-        return { totalSubs, totalMW, criticalSubs, criticalMW };
+            },
+            criticalAssets
+        );
     };
 
     const getStageRegionalSpiralData = (stage) => {
@@ -1664,7 +1595,7 @@ const LoadSheddingDesigner = () => {
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                                         <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Scheme Type</label>
-                                        {activeVersionId && <Lock size={12} style={{ color: 'var(--accent-cyan)', opacity: 0.8 }} />}
+                                        {(activeVersionId && !isNewlyCloned) && <Lock size={12} style={{ color: 'var(--accent-cyan)', opacity: 0.8 }} />}
                                     </div>
                                     <select
                                         style={{
@@ -1676,13 +1607,13 @@ const LoadSheddingDesigner = () => {
                                             color: 'var(--text-primary)',
                                             fontSize: '0.75rem',
                                             outline: 'none',
-                                            opacity: activeVersionId ? 0.6 : 1,
-                                            cursor: activeVersionId ? 'not-allowed' : 'default',
+                                            opacity: (activeVersionId && !isNewlyCloned) ? 0.6 : 1,
+                                            cursor: (activeVersionId && !isNewlyCloned) ? 'not-allowed' : 'default',
                                             transition: 'all 0.2s ease',
                                         }}
                                         value={schemeType}
                                         onChange={(e) => setSchemeType(e.target.value)}
-                                        disabled={!!activeVersionId}
+                                        disabled={!!activeVersionId && !isNewlyCloned}
                                     >
                                         <option value="UFLS">UFLS (Under Frequency)</option>
                                         <option value="UVLS">UVLS (Under Voltage)</option>
@@ -1693,7 +1624,7 @@ const LoadSheddingDesigner = () => {
                                     <div style={{ flex: 1 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                                             <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Review Year</label>
-                                            {activeVersionId && <Lock size={12} style={{ color: 'var(--accent-cyan)', opacity: 0.8 }} />}
+                                            {(activeVersionId && !isNewlyCloned) && <Lock size={12} style={{ color: 'var(--accent-cyan)', opacity: 0.8 }} />}
                                         </div>
                                         <input
                                             type="number"
@@ -1706,13 +1637,13 @@ const LoadSheddingDesigner = () => {
                                                 color: 'var(--text-primary)',
                                                 fontSize: '0.75rem',
                                                 outline: 'none',
-                                                opacity: activeVersionId ? 0.6 : 1,
-                                                cursor: activeVersionId ? 'not-allowed' : 'default',
+                                                opacity: (activeVersionId && !isNewlyCloned) ? 0.6 : 1,
+                                                cursor: (activeVersionId && !isNewlyCloned) ? 'not-allowed' : 'default',
                                                 transition: 'all 0.2s ease',
                                             }}
                                             value={reviewYear}
                                             onChange={(e) => setReviewYear(Number(e.target.value))}
-                                            disabled={!!activeVersionId}
+                                            disabled={!!activeVersionId && !isNewlyCloned}
                                         />
                                     </div>
                                     <div style={{ flex: 1 }}>
@@ -1746,14 +1677,14 @@ const LoadSheddingDesigner = () => {
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                                         <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Document Name (Notes)</label>
-                                        {activeVersionId && <Lock size={12} style={{ color: 'var(--accent-cyan)', opacity: 0.8 }} />}
+                                        {(activeVersionId && !isNewlyCloned) && <Lock size={12} style={{ color: 'var(--accent-cyan)', opacity: 0.8 }} />}
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="e.g. 2026 National UFLS"
                                         value={versionLabel}
                                         onChange={(e) => setVersionLabel(e.target.value)}
-                                        disabled={!!activeVersionId}
+                                        disabled={!!activeVersionId && !isNewlyCloned}
                                         style={{
                                             width: '100%',
                                             padding: '0.525rem 1rem',
@@ -1763,8 +1694,8 @@ const LoadSheddingDesigner = () => {
                                             color: 'var(--text-primary)',
                                             fontSize: '0.75rem',
                                             outline: 'none',
-                                            opacity: activeVersionId ? 0.6 : 1,
-                                            cursor: activeVersionId ? 'not-allowed' : 'default',
+                                            opacity: (activeVersionId && !isNewlyCloned) ? 0.6 : 1,
+                                            cursor: (activeVersionId && !isNewlyCloned) ? 'not-allowed' : 'default',
                                             transition: 'all 0.2s ease',
                                         }}
                                     />
@@ -2045,6 +1976,44 @@ const LoadSheddingDesigner = () => {
                                                 }}>
                                                     {formatMW(card.total_p_mw ?? 0)} MW
                                                 </div>
+                                                <button
+                                                    onClick={() => {
+                                                        const newStages = [...stages];
+                                                        const active = { ...newStages[activeStageIdx] };
+                                                        const exitingBranches = card.branches || [];
+                                                        active.computed_pockets = (active.computed_pockets || []).filter(c => c.id !== card.id);
+                                                        // Move back to tray for editing
+                                                        active.pocket_branches = [...new Set([...(active.pocket_branches || []), ...exitingBranches])];
+                                                        newStages[activeStageIdx] = active;
+                                                        setStages(newStages);
+                                                    }}
+                                                    style={{
+                                                        width: '22px',
+                                                        height: '22px',
+                                                        borderRadius: '999px',
+                                                        border: '1px solid rgba(0, 229, 255, 0.18)',
+                                                        background: 'rgba(0, 229, 255, 0.08)',
+                                                        color: 'var(--accent-cyan)',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        padding: 0,
+                                                        transition: 'all 0.2s ease'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.background = 'rgba(0, 229, 255, 0.16)';
+                                                        e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.28)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.background = 'rgba(0, 229, 255, 0.08)';
+                                                        e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.18)';
+                                                    }}
+                                                    aria-label={`Edit pocket ${idx + 1}`}
+                                                    type="button"
+                                                >
+                                                    <FiEdit2 size={12} />
+                                                </button>
                                                 <button
                                                     onClick={() => {
                                                         const newStages = [...stages];

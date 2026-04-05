@@ -647,6 +647,7 @@ class LoadSheddingTransformerBay(models.Model):
         loads = load_map.get(substation_id, {}).get("loads", [])
 
         target_local_ids = set()
+        target_bay_ids = set()  # Always define to avoid scoping error
         if self.frozen_assets:
             target_local_ids.update(self.frozen_assets)
         elif self.transformers.exists():

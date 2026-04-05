@@ -240,12 +240,14 @@ class LoadSheddingVersionSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         if self.instance:
-            # Check for immutable fields after creation
-            for field in ['scheme_type', 'review_year', 'notes']:
-                if field in attrs and attrs[field] != getattr(self.instance, field):
-                    raise serializers.ValidationError({
-                        field: f"The {field.replace('_', ' ')} cannot be changed once a version is created to maintain data integrity."
-                    })
+            # Only protect core identity fields on published/deactivated versions.
+            # Drafts (including newly cloned ones) are allowed to rename/reconfigure freely.
+            if self.instance.status != 'draft':
+                for field in ['scheme_type', 'review_year', 'notes']:
+                    if field in attrs and attrs[field] != getattr(self.instance, field):
+                        raise serializers.ValidationError({
+                            field: f"The {field.replace('_', ' ')} cannot be changed on a published or deactivated version."
+                        })
         return attrs
 
     def create(self, validated_data):

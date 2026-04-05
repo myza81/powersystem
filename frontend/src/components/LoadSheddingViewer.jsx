@@ -18,6 +18,7 @@ import {
 import * as XLSX from 'xlsx';
 import { FaBolt, FaCodeBranch, FaShieldHalved, FaLayerGroup, FaCircleNodes, FaTableList } from 'react-icons/fa6';
 import { motion, AnimatePresence } from 'framer-motion';
+import { normalisePocketBay, computeSchemeMetrics } from '../utils/loadSheddingUtils';
 import api from '../api';
 import CompactRegionalMetrics from './CompactRegionalMetrics';
 
@@ -109,6 +110,7 @@ const LoadSheddingViewer = () => {
     const [selectedScheme, setSelectedScheme] = useState(null);
     const [stageDetails, setStageDetails] = useState([]);
     const [substations, setSubstations] = useState([]);
+    const [criticalAssets, setCriticalAssets] = useState([]);
     const [relays, setRelays] = useState([]);
     const [gridData, setGridData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -131,20 +133,22 @@ const LoadSheddingViewer = () => {
     // ==========================================
     const fetchVersions = async () => {
         try {
-            const [vRes, sRes, rRes, aRes] = await Promise.all([
+            const [vRes, sRes, rRes, aRes, cRes] = await Promise.all([
                 api.get('/load-shedding-versions/'),
                 api.get('/substations/'),
                 api.get('/load-shedding-relays/'),
-                api.get('/load-analytics/aggregate/?level=grid')
+                api.get('/load-analytics/aggregate/?level=grid'),
+                api.get('/critical-assets/')
             ]);
             
             setAllVersions(vRes.data);
             setSubstations(sRes.data);
             setRelays(rRes.data);
             setGridData(aRes.data);
+            setCriticalAssets(cRes.data);
 
             const published = vRes.data.filter(v => v.status === 'active' || v.status === 'deactivated');
-            const active = published.find(v => v.is_active);
+            const active = published.find(v => v.is_active || v.status === 'active');
             if (active) handleSelectScheme(active);
             else if (published.length > 0) handleSelectScheme(published[0]);
         } catch (err) {
@@ -186,64 +190,22 @@ const LoadSheddingViewer = () => {
     // COMPUTED METRICS
     // ==========================================
     const schemeMetrics = useMemo(() => {
-        let totalMW = 0;
-        let totalPockets = 0;
-        const substationSet = new Set();
-        const regionalAssigned = {}; // region -> mw
-
-        stageDetails.forEach(stage => {
-            (stage.transformer_bays || []).forEach(bay => {
-                const mw = bay.mw_cache?.mw || 0;
-                totalMW += mw;
-                if (bay.relay_substation_id) substationSet.add(bay.relay_substation_id);
-                
-                // Track regional for charts
-                const sub = substations.find(s => s.substation_id === bay.relay_substation_id);
-                if (sub) {
-                    regionalAssigned[sub.region] = (regionalAssigned[sub.region] || 0) + mw;
-                }
-            });
-            (stage.pocket_bays || []).forEach(pocket => {
-                const mw = pocket.topology_cache?.mw || 0;
-                const subMWMap = pocket.topology_cache?.substation_mw || {};
-                totalMW += mw;
-                totalPockets++;
-                
-                (pocket.topology_cache?.isolated_substations || []).forEach(subId => {
-                    substationSet.add(subId);
-                    const sub = substations.find(s => s.substation_id === subId);
-                    if (sub) {
-                        // Use per-substation MW if available in cache, otherwise distribute proportionally to total substation load
-                        let assignedToSub = 0;
-                        if (subMWMap[subId]?.total_p_mw != null) {
-                            assignedToSub = subMWMap[subId].total_p_mw;
-                        } else {
-                            // FALLBACK: Proportional distribution based on total_pload_mw of substations in the pocket
-                            const totalLoadInPocket = (pocket.topology_cache?.isolated_substations || []).reduce((sum, sId) => {
-                                const s = substations.find(srv => srv.substation_id === sId);
-                                return sum + (parseFloat(s?.total_pload_mw) || 0);
-                            }, 0);
-                            
-                            if (totalLoadInPocket > 0) {
-                                assignedToSub = ((parseFloat(sub.total_pload_mw) || 0) / totalLoadInPocket) * mw;
-                            } else {
-                                assignedToSub = mw / (pocket.topology_cache?.isolated_substations?.length || 1);
-                            }
-                        }
-                        regionalAssigned[sub.region] = (regionalAssigned[sub.region] || 0) + assignedToSub;
-                    }
+        return computeSchemeMetrics(
+            stageDetails,
+            substations,
+            (stage) => (stage.pocket_bays || []).map(normalisePocketBay),
+            (bay) => bay.mw_cache?.mw || 0,
+            (bay) => {
+                // Determine if bay is critical based on its transformers (same logic as Designer)
+                const txs = bay.transformers || [];
+                return txs.some(tObj => {
+                    const tIdVal = typeof tObj === 'object' ? tObj.id : tObj;
+                    return (criticalAssets || []).some(ca => (ca.load_transformers || []).includes(Number(tIdVal)));
                 });
-            });
-        });
-
-        return {
-            totalMW,
-            stageCount: stageDetails.length,
-            substationCount: substationSet.size,
-            pocketCount: totalPockets,
-            regionalAssigned,
-        };
-    }, [stageDetails, substations]);
+            },
+            criticalAssets
+        );
+    }, [stageDetails, substations, criticalAssets]);
 
     const regionalSpiralData = useMemo(() => {
         if (!gridData?.regional_breakdown) return [];
@@ -409,9 +371,15 @@ const LoadSheddingViewer = () => {
     };
 
     const getStageMW = (stage) => {
-        const txMW = (stage.transformer_bays || []).reduce((acc, b) => acc + (b.mw_cache?.mw || 0), 0);
-        const pocketMW = (stage.pocket_bays || []).reduce((acc, b) => acc + (b.topology_cache?.mw || 0), 0);
-        return txMW + pocketMW;
+        const metrics = computeSchemeMetrics(
+            [stage],
+            substations,
+            (s) => (s.pocket_bays || []).map(normalisePocketBay),
+            (b) => b.mw_cache?.mw || 0,
+            (b) => false, // stage level simple MW doesn't need critical tracking here
+            criticalAssets
+        );
+        return metrics.totalMW;
     };
 
     // ==========================================
