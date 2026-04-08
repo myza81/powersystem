@@ -981,7 +981,9 @@ const LoadSheddingDesigner = () => {
                         const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
                         if (dbTx) {
                             const expectedName = `TX T${dbTx.transformer_no}`;
-                            const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                            // Use exact match first, then fallback to includes but with word boundary or specific suffix
+                            const tx = detail.transformers.find(t => t.name === expectedName) || 
+                                       detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
                             if (tx && tx.load_mw != null) bayMW += parseFloat(tx.load_mw);
                         }
                     });
@@ -1026,7 +1028,9 @@ const LoadSheddingDesigner = () => {
                         const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
                         if (dbTx) {
                             const expectedName = `TX T${dbTx.transformer_no}`;
-                            const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                            // Use exact match first, then fallback to includes but with word boundary or specific suffix
+                            const tx = detail.transformers.find(t => t.name === expectedName) || 
+                                       detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
                             if (tx && tx.load_mw != null) bayMW += parseFloat(tx.load_mw);
                         }
                     });
@@ -1057,7 +1061,8 @@ const LoadSheddingDesigner = () => {
                 const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
                 if (dbTx) {
                     const expectedName = `TX T${dbTx.transformer_no}`;
-                    const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                    const tx = detail.transformers.find(t => t.name === expectedName) || 
+                               detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
                     if (tx && tx.load_mw != null) {
                         total += parseFloat(tx.load_mw);
                     }
@@ -1082,7 +1087,9 @@ const LoadSheddingDesigner = () => {
                         const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
                         if (dbTx) {
                             const expectedName = `TX T${dbTx.transformer_no}`;
-                            const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                            // Use exact match first, then fallback to includes but with word boundary or specific suffix
+                            const tx = detail.transformers.find(t => t.name === expectedName) || 
+                                       detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
                             if (tx && tx.load_mw != null) bayMW += parseFloat(tx.load_mw);
                         }
                     });
@@ -1151,7 +1158,8 @@ const LoadSheddingDesigner = () => {
                         const dbTx = detail.db_transformers.find(t => String(t.id) === String(tId));
                         if (dbTx) {
                             const expectedName = `TX T${dbTx.transformer_no}`;
-                            const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                            const tx = detail.transformers.find(t => t.name === expectedName) || 
+                                       detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
                             if (tx && tx.load_mw != null) {
                                 subMW += parseFloat(tx.load_mw);
                             }
@@ -2447,23 +2455,39 @@ const LoadSheddingDesigner = () => {
                                             }
                                         };
 
-                                        const renderNodeHeader = (id, label, level, icon) => {
+                                        const renderNodeHeader = (id, label, level, icon, refreshAction = null) => {
                                             const isExpanded = expandedNodes.has(id);
                                             return (
                                                 <div
-                                                    onClick={() => toggleNode(id)}
                                                     style={{
                                                         display: 'flex', alignItems: 'center', gap: '0.5rem',
                                                         padding: '0.5rem', paddingLeft: `${0.5 + level * 1}rem`,
-                                                        cursor: 'pointer', borderRadius: '4px',
+                                                        borderRadius: '4px',
                                                         background: 'transparent',
-                                                        transition: 'background 0.2s'
+                                                        transition: 'background 0.2s',
+                                                        justifyContent: 'space-between'
                                                     }}
                                                     className="hover-glow"
                                                 >
-                                                    {isExpanded ? <ChevronDown size={14} color="var(--text-secondary)" /> : <ChevronRight size={14} color="var(--text-secondary)" />}
-                                                    {icon && <span style={{ color: 'var(--text-secondary)', display: 'flex' }}>{icon}</span>}
-                                                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: isExpanded ? '#fff' : 'var(--text-secondary)' }}>{label}</span>
+                                                    <div 
+                                                        onClick={() => toggleNode(id)}
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, cursor: 'pointer' }}
+                                                    >
+                                                        {isExpanded ? <ChevronDown size={14} color="var(--text-secondary)" /> : <ChevronRight size={14} color="var(--text-secondary)" />}
+                                                        {icon && <span style={{ color: 'var(--text-secondary)', display: 'flex' }}>{icon}</span>}
+                                                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: isExpanded ? '#fff' : 'var(--text-secondary)' }}>{label}</span>
+                                                    </div>
+                                                    {refreshAction && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); refreshAction(); }}
+                                                            style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', transition: 'all 0.2s' }}
+                                                            onMouseEnter={e => e.currentTarget.style.color = 'var(--accent-cyan)'}
+                                                            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
+                                                            title="Refresh data"
+                                                        >
+                                                            <RefreshCw size={12} />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             );
                                         };
@@ -2490,7 +2514,8 @@ const LoadSheddingDesigner = () => {
                                                     const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
                                                     if (dbTx) {
                                                         const expectedName = `TX T${dbTx.transformer_no}`;
-                                                        const tx = detail.transformers.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                                                        const tx = detail.transformers.find(t => t.name === expectedName) || 
+                                                                   detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
                                                         if (tx && tx.load_mw != null) {
                                                             totalMw += parseFloat(tx.load_mw);
                                                         }
@@ -2637,7 +2662,8 @@ const LoadSheddingDesigner = () => {
                                                                     if (dbTx) {
                                                                         txLabel = `T${dbTx.transformer_no}`;
                                                                         const expectedName = `TX T${dbTx.transformer_no}`;
-                                                                        const tx = detail.transformers?.find(t => t.name.includes(expectedName) || t.name === expectedName);
+                                                                        const tx = detail.transformers?.find(t => t.name === expectedName) || 
+                                                                                   detail.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
                                                                         if (tx && tx.load_mw != null) txMw = parseFloat(tx.load_mw);
                                                                     }
                                                                 }
@@ -2863,7 +2889,20 @@ const LoadSheddingDesigner = () => {
                                                                     const substation = nodeData.substation;
                                                                     return (
                                                                         <div key={subId} style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', marginLeft: '12px' }}>
-                                                                            {renderNodeHeader(sId, `${substation.name} (${subId})`, 2)}
+                                                                            {renderNodeHeader(sId, `${substation.name} (${subId})`, 2, null, async () => {
+                                                                                // Force refresh specific substation
+                                                                                try {
+                                                                                    const [res, txRes] = await Promise.all([
+                                                                                        api.get(`/substations/${subId}/`),
+                                                                                        api.get(`/load-transformers/?substation=${subId}`)
+                                                                                    ]);
+                                                                                    const data = res.data;
+                                                                                    data.db_transformers = txRes.data;
+                                                                                    setDetailedSubstations(prev => ({ ...prev, [subId]: data }));
+                                                                                } catch (e) {
+                                                                                    console.error("Refresh failed", e);
+                                                                                }
+                                                                            })}
                                                                             {expandedNodes.has(sId) && (
                                                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
                                                                                     {nodeData.relays.map(relay => renderRelayNode(relay, substation, 3))}

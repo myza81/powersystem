@@ -110,18 +110,42 @@ class SubstationDetailSerializer(SubstationSerializer):
             Q(from_bus_id__in=bus_ids) | Q(to_bus_id__in=bus_ids)
         ).distinct().select_related('from_bus', 'to_bus', 'tertiary_bus')
         
+        from core.models import NetworkLoad
+        # Pre-fetch allloads for this substation to handle topological swaps/mismatches
+        all_sub_loads = list(NetworkLoad.objects.filter(snapshot=snapshot, bus_id__in=bus_ids))
+        sub_load_map = {l.load_id: l for l in all_sub_loads}
+        
         from django.db.models import Sum
         for tx in tx_queryset:
             load_bus = tx.to_bus if tx.to_bus_id in bus_ids else tx.from_bus
-            load_data = load_bus.loads.aggregate(p=Sum('p_mw'), q=Sum('q_mvar'))
+            
+            # 1. Primary: Match by ID on the local bus
+            target_load = load_bus.loads.filter(load_id=tx.ckt_id).first()
+            if not target_load:
+                target_load = load_bus.loads.filter(load_id=f"T{tx.ckt_id}").first()
+            
+            # 2. Fallback: Search substation-wide if local match fails (handles topological swaps like PRGS132)
+            if not target_load:
+                target_load = sub_load_map.get(str(tx.ckt_id))
+                if not target_load:
+                    target_load = sub_load_map.get(f"T{tx.ckt_id}")
+            
+            if target_load:
+                load_p = target_load.p_mw
+                load_q = target_load.q_mvar
+            else:
+                # 3. Final Fallback: Aggregate the entire local bus
+                load_data = load_bus.loads.aggregate(p=Sum('p_mw'), q=Sum('q_mvar'))
+                load_p = load_data['p'] or 0.0
+                load_q = load_data['q'] or 0.0
             
             transformers.append({
                 'id': f"TX-{tx.ckt_id}-{tx.from_bus.bus_number}-{tx.to_bus.bus_number}",
                 'name': f"TX {tx.ckt_id}",
                 'type': 'Transformer',
                 'voltage_ratio': f"{tx.from_bus.base_kv:.0f}/{tx.to_bus.base_kv:.0f}kV" + (f"/{tx.tertiary_bus.base_kv:.0f}kV" if tx.tertiary_bus else ""),
-                'load_mw': round(load_data['p'] or 0.0, 2),
-                'load_mvar': round(load_data['q'] or 0.0, 2),
+                'load_mw': round(load_p, 2),
+                'load_mvar': round(load_q, 2),
                 'nomv1': tx.nomv1,
                 'nomv2': tx.nomv2,
                 'nomv3': tx.nomv3,
