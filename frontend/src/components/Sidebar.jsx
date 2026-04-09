@@ -1,24 +1,22 @@
 import React, { useState } from 'react';
 import {
-    LayoutDashboard,
-    Zap,
-    Database,
+    LayoutGrid,
+    Boxes,
     ChevronLeft,
     ChevronRight,
-    LineChart,
-    Settings,
+    Radar,
+    Sliders,
     LogOut,
     LogIn,
     User,
     Ghost,
     ChevronDown,
-    Menu,
-    List,
-    PlusCircle,
-    Upload,
-    Shield,
+    Building2,
+    Workflow,
+    Unplug,
     Activity,
-    Cpu,
+    Terminal,
+    BadgeAlert,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -33,30 +31,37 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
     const toggleCollapse = () => setCollapsed(!collapsed);
 
     const monitoringItems = [
-        { id: 'dashboard', label: 'Live Dashboard', icon: LayoutDashboard },
-        { id: 'snapshots', label: 'Network Analysis', icon: Activity },
+        { id: 'dashboard', label: 'Load Analytics', icon: LayoutGrid },
+        { id: 'snapshots', label: 'Snapshot View', icon: Activity },
     ];
 
     const assetItems = [
-        { id: 'list', label: 'Substation Assets', icon: List },
+        { id: 'list', label: 'Substation Assets', icon: Building2 },
     ];
 
     const operationItems = [
         {
             id: 'load-shedding',
             label: 'Load Shedding',
-            icon: Shield,
+            icon: Unplug,
             children: [
                 { id: 'load-shedding-viewer', label: 'Scheme Viewer' },
                 { id: 'load-shedding-designer', label: 'Scheme Designer' },
             ]
         },
-        { id: 'critical-substations', label: 'Critical Substations', icon: Shield },
+        { id: 'critical-substations', label: 'Critical Substations', icon: BadgeAlert },
     ];
 
     const systemItems = [
-        { id: 'dev-tools', label: 'Developer Tools', icon: Cpu },
+        { id: 'dev-tools', label: 'Developer Tools', icon: Terminal },
     ];
+
+    const navItemClasses = (isActive, extra = '') => [
+        'nav-item',
+        extra,
+        collapsed ? 'collapsed' : '',
+        isActive ? 'active' : ''
+    ].filter(Boolean).join(' ');
 
     const handleNavigate = (view) => {
         onViewChange(view);
@@ -72,16 +77,14 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
             {/* Header / Logo */}
             <div className={`sidebar-header ${collapsed ? 'justify-center' : ''}`}>
                 <div className="brand-container">
-                    <div className="logo-icon">
-                        <Zap size={24} color="var(--accent-cyan)" fill="var(--accent-cyan)" />
-                    </div>
+                    {/* Icon removed per request */}
                     {!collapsed && (
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             className="logo-text"
                         >
-                            GridDefense <span style={{ color: 'var(--accent-blue)' }}>Ops</span>
+                            <span className="logo-text-bold">Grid</span> Defence
                         </motion.div>
                     )}
                 </div>
@@ -95,16 +98,21 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
             <nav className="sidebar-nav">
 
                 {/* Monitoring & Analysis */}
-                <div className="nav-group" style={{ position: 'relative' }}>
+                <div className="nav-group">
                     <div
                         className={`nav-group-header ${collapsed ? 'collapsed' : ''}`}
                         onClick={() => setMonitoringExpanded(!monitoringExpanded)}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <LineChart size={20} className="nav-icon" style={{ color: 'var(--text-secondary)' }} />
-                            {!collapsed && <span className="nav-label" style={{ fontSize: '0.9rem', fontWeight: 500 }}>Monitoring</span>}
+                        <div className="nav-group-title">
+                            <Radar size={20} className="nav-icon" />
+                            {!collapsed && <span>Grid Snapshot</span>}
                         </div>
-                        {!collapsed && <ChevronDown size={14} style={{ transform: monitoringExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-secondary)' }} />}
+                        {!collapsed && (
+                            <ChevronDown
+                                size={14}
+                                className={`chevron ${monitoringExpanded ? 'open' : ''}`}
+                            />
+                        )}
                     </div>
 
                     <AnimatePresence>
@@ -119,19 +127,15 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                                     <a
                                         key={item.id}
                                         href={`?view=${item.id}`}
-                                        className={`nav-item sub-item ${currentView === item.id ? 'active' : ''}`}
+                                        className={navItemClasses(currentView === item.id, 'sub-item')}
                                         onClick={(e) => {
                                             e.preventDefault();
                                             handleNavigate(item.id);
                                         }}
                                         title={collapsed ? item.label : ''}
-                                        style={collapsed ? { padding: '0.75rem 0', justifyContent: 'center' } : {}}
                                     >
-                                        {!collapsed && <item.icon size={16} style={{ marginRight: '10px' }} />}
-                                        {!collapsed && item.label}
-                                        {collapsed && (
-                                            <item.icon size={18} />
-                                        )}
+                                        <item.icon size={16} />
+                                        {!collapsed && <span className="nav-label">{item.label}</span>}
                                     </a>
                                 ))}
                             </motion.div>
@@ -140,7 +144,7 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                 </div>
 
                 {/* Asset Group */}
-                <div className="nav-group" style={{ position: 'relative' }}>
+                <div className="nav-group">
                     <div
                         className={`nav-group-header ${collapsed ? 'collapsed' : ''}`}
                         onClick={() => {
@@ -148,11 +152,16 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                             setAssetsExpanded(!assetsExpanded);
                         }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <Zap size={20} className="nav-icon" style={{ color: 'var(--text-secondary)' }} />
-                            {!collapsed && <span className="nav-label" style={{ fontSize: '0.9rem', fontWeight: 500 }}>Assets</span>}
+                        <div className="nav-group-title">
+                            <Boxes size={20} className="nav-icon" />
+                            {!collapsed && <span>Assets</span>}
                         </div>
-                        {!collapsed && <ChevronDown size={14} style={{ transform: assetsExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-secondary)' }} />}
+                        {!collapsed && (
+                            <ChevronDown
+                                size={14}
+                                className={`chevron ${assetsExpanded ? 'open' : ''}`}
+                            />
+                        )}
                     </div>
 
                     <AnimatePresence>
@@ -167,19 +176,15 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                                     <a
                                         key={item.id}
                                         href={`?view=${item.id}`}
-                                        className={`nav-item sub-item ${currentView === item.id ? 'active' : ''}`}
+                                        className={navItemClasses(currentView === item.id, 'sub-item')}
                                         onClick={(e) => {
                                             e.preventDefault();
                                             handleNavigate(item.id);
                                         }}
                                         title={collapsed ? item.label : ''}
-                                        style={collapsed ? { padding: '0.75rem 0', justifyContent: 'center' } : {}}
                                     >
-                                        {!collapsed && <item.icon size={16} style={{ marginRight: '10px' }} />}
-                                        {!collapsed && item.label}
-                                        {collapsed && (
-                                            <item.icon size={18} />
-                                        )}
+                                        <item.icon size={16} />
+                                        {!collapsed && <span className="nav-label">{item.label}</span>}
                                     </a>
                                 ))}
                             </motion.div>
@@ -188,16 +193,21 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                 </div>
 
                 {/* Operations Group */}
-                <div className="nav-group" style={{ position: 'relative' }}>
+                <div className="nav-group">
                     <div
                         className={`nav-group-header ${collapsed ? 'collapsed' : ''}`}
                         onClick={() => setOperationsExpanded(!operationsExpanded)}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <Shield size={20} className="nav-icon" style={{ color: 'var(--text-secondary)' }} />
-                            {!collapsed && <span className="nav-label" style={{ fontSize: '0.9rem', fontWeight: 500 }}>Operations</span>}
+                        <div className="nav-group-title">
+                            <Workflow size={20} className="nav-icon" />
+                            {!collapsed && <span>Operations</span>}
                         </div>
-                        {!collapsed && <ChevronDown size={14} style={{ transform: operationsExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-secondary)' }} />}
+                        {!collapsed && (
+                            <ChevronDown
+                                size={14}
+                                className={`chevron ${operationsExpanded ? 'open' : ''}`}
+                            />
+                        )}
                     </div>
 
                     <AnimatePresence>
@@ -209,10 +219,13 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                                 style={{ overflow: 'hidden' }}
                             >
                                 {operationItems.map(item => (
-                                    <div key={item.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <div key={item.id} className="nested-group">
                                         <a
                                             href={`?view=${item.id}`}
-                                            className={`nav-item sub-item ${(currentView === item.id || (item.children && item.children.some(c => c.id === currentView))) ? 'active' : ''}`}
+                                            className={navItemClasses(
+                                                currentView === item.id || (item.children && item.children.some(c => c.id === currentView)),
+                                                'sub-item'
+                                            )}
                                             onClick={(e) => {
                                                 e.preventDefault();
                                                 if (item.children) {
@@ -222,21 +235,18 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                                                 }
                                             }}
                                             title={collapsed ? item.label : ''}
-                                            style={collapsed ? { padding: '0.75rem 0', justifyContent: 'center' } : {}}
                                         >
-                                            {!collapsed && <item.icon size={16} style={{ marginRight: '10px' }} />}
-                                            {!collapsed && item.label}
-                                            {collapsed && <item.icon size={18} />}
-                                            {!collapsed && item.children && (
-                                                <ChevronDown
-                                                    size={14}
-                                                    style={{
-                                                        marginLeft: 'auto',
-                                                        transform: loadSheddingExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                                                        transition: 'transform 0.2s',
-                                                        color: 'var(--text-secondary)'
-                                                    }}
-                                                />
+                                            <item.icon size={16} />
+                                            {!collapsed && (
+                                                <>
+                                                    <span className="nav-label">{item.label}</span>
+                                                    {item.children && (
+                                                        <ChevronDown
+                                                            size={14}
+                                                            className={`chevron ${loadSheddingExpanded ? 'open' : ''}`}
+                                                        />
+                                                    )}
+                                                </>
                                             )}
                                         </a>
 
@@ -247,20 +257,19 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                                                         initial={{ height: 0, opacity: 0 }}
                                                         animate={{ height: 'auto', opacity: 1 }}
                                                         exit={{ height: 0, opacity: 0 }}
-                                                        style={{ overflow: 'hidden', paddingLeft: '1.5rem' }}
+                                                        className="nested-children"
                                                     >
                                                         {item.children.map(child => (
                                                             <a
                                                                 key={child.id}
                                                                 href={`?view=${child.id}`}
-                                                                className={`nav-item sub-item ${currentView === child.id ? 'active' : ''}`}
+                                                                className={navItemClasses(currentView === child.id, 'sub-item child')}
                                                                 onClick={(e) => {
                                                                     e.preventDefault();
                                                                     handleNavigate(child.id);
                                                                 }}
-                                                                style={{ fontSize: '0.8rem', opacity: 0.8 }}
                                                             >
-                                                                {child.label}
+                                                                <span className="nav-label">{child.label}</span>
                                                             </a>
                                                         ))}
                                                     </motion.div>
@@ -275,16 +284,21 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                 </div>
 
                 {/* System Group */}
-                <div className="nav-group" style={{ position: 'relative', marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
+                <div className="nav-group system-section">
                     <div
                         className={`nav-group-header ${collapsed ? 'collapsed' : ''}`}
                         onClick={() => setSystemExpanded(!systemExpanded)}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <Settings size={20} className="nav-icon" style={{ color: 'var(--text-secondary)' }} />
-                            {!collapsed && <span className="nav-label" style={{ fontSize: '0.9rem', fontWeight: 500 }}>System</span>}
+                        <div className="nav-group-title">
+                            <Sliders size={20} className="nav-icon" />
+                            {!collapsed && <span>System</span>}
                         </div>
-                        {!collapsed && <ChevronDown size={14} style={{ transform: systemExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-secondary)' }} />}
+                        {!collapsed && (
+                            <ChevronDown
+                                size={14}
+                                className={`chevron ${systemExpanded ? 'open' : ''}`}
+                            />
+                        )}
                     </div>
 
                     <AnimatePresence>
@@ -299,17 +313,15 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                                     <a
                                         key={item.id}
                                         href={`?view=${item.id}`}
-                                        className={`nav-item sub-item ${currentView === item.id ? 'active' : ''}`}
+                                        className={navItemClasses(currentView === item.id, 'sub-item')}
                                         onClick={(e) => {
                                             e.preventDefault();
                                             handleNavigate(item.id);
                                         }}
                                         title={collapsed ? item.label : ''}
-                                        style={collapsed ? { padding: '0.75rem 0', justifyContent: 'center' } : {}}
                                     >
-                                        {!collapsed && <item.icon size={16} style={{ marginRight: '10px' }} />}
-                                        {!collapsed && item.label}
-                                        {collapsed && <item.icon size={18} />}
+                                        <item.icon size={16} />
+                                        {!collapsed && <span className="nav-label">{item.label}</span>}
                                     </a>
                                 ))}
                             </motion.div>
@@ -321,7 +333,7 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
             {/* Footer / User Profile */}
             <div className="sidebar-footer">
                 <div className="user-profile">
-                    <div className="avatar" style={currentUser?.is_anonymous ? { borderColor: 'rgba(255,255,255,0.15)' } : {}}>
+                    <div className={`avatar ${currentUser?.is_anonymous ? 'guest' : ''}`}>
                         {currentUser?.is_anonymous
                             ? <Ghost size={18} color="var(--text-secondary)" />
                             : <User size={20} />}
@@ -331,7 +343,7 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                             <div className="user-name">
                                 {currentUser?.is_anonymous ? 'Anonymous' : (currentUser?.username || 'Guest')}
                             </div>
-                            <div className="user-role" style={currentUser?.is_anonymous ? { color: 'rgba(255,255,255,0.3)' } : {}}>
+                            <div className="user-role" style={currentUser?.is_anonymous ? { color: 'rgba(75, 85, 99, 0.7)' } : {}}>
                                 {currentUser?.is_anonymous ? 'Guest Access' : (currentUser?.is_staff ? 'Administrator' : 'User')}
                             </div>
                         </div>
@@ -359,21 +371,4 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
         </motion.div>
     );
 };
-
-const NavItem = ({ item, isActive, collapsed, onClick }) => (
-    <a
-        href={`?view=${item.id}`}
-        className={`nav-item ${isActive ? 'active' : ''} ${collapsed ? 'collapsed' : ''}`}
-        onClick={(e) => {
-            e.preventDefault();
-            onClick();
-        }}
-        title={collapsed ? item.label : ''}
-    >
-        <item.icon size={20} className="nav-icon" />
-        {!collapsed && <span className="nav-label">{item.label}</span>}
-        {isActive && !collapsed && <motion.div layoutId="active-indicator" className="active-indicator" />}
-    </a>
-);
-
 export default Sidebar;

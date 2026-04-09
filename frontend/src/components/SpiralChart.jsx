@@ -17,8 +17,22 @@ const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', t
     const sortedData = [...data].sort((a, b) => parseVal(b[valueKey]) - parseVal(a[valueKey]));
 
     return (
-        <div style={{ position: 'relative', width: '100%', maxWidth: '500px', margin: '0 auto', aspectRatio: '500/340', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg viewBox="0 0 500 340" style={{ overflow: 'visible' }}>
+        <div style={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: '300px',
+            margin: '0 auto',
+            aspectRatio: '1 / 1',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'linear-gradient(145deg,#10192d,#0c1423)',
+            borderRadius: '26px',
+            padding: '1.2rem',
+            border: '1px solid rgba(255,255,255,0.05)',
+            boxShadow: '0 20px 45px rgba(3,10,20,0.4)'
+        }}>
+            <svg viewBox="0 0 320 320" style={{ overflow: 'visible' }}>
                 {sortedData.map((item, idx) => {
                     const value = parseVal(item[valueKey]);
                     let target = 0;
@@ -36,10 +50,10 @@ const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', t
                     const label = item[labelKey];
 
                     // Track config
-                    const center = { x: 300, y: 190 };
-                    const maxRadius = 160;
-                    const trackWidth = 16;
-                    const gap = 12;
+                    const center = { x: 160, y: 160 };
+                    const maxRadius = 110;
+                    const trackWidth = 10;
+                    const gap = 10;
                     const radius = maxRadius - (idx * (trackWidth + gap));
 
                     const getCoords = (angleInDegrees) => {
@@ -50,8 +64,8 @@ const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', t
                         };
                     };
 
-                    const startDeg = -90;
-                    const fullSweep = 270;
+                    const startDeg = -100;
+                    const fullSweep = 260;
                     const endDeg = startDeg + fullSweep;
 
                     const bgStart = getCoords(startDeg);
@@ -79,26 +93,26 @@ const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', t
                             style={{ cursor: 'pointer' }}
                         >
                             <text
-                                x={bgStart.x - 12}
-                                y={bgStart.y + 5}
+                                x={bgStart.x - 4}
+                                y={bgStart.y + 2}
                                 textAnchor="end"
                                 style={{
-                                    fill: isHovered ? '#fff' : 'rgba(255,255,255,0.7)',
-                                    fontSize: '0.85rem',
-                                    fontWeight: isHovered ? 600 : 400,
-                                    fontFamily: 'monospace',
-                                    transition: 'all 0.3s ease'
+                                    fill: isHovered ? '#f8fafc' : 'rgba(248,250,252,0.7)',
+                                    fontSize: '0.65rem',
+                                    fontWeight: isHovered ? 600 : 500,
+                                    fontFamily: 'Poppins, sans-serif',
+                                    transition: 'all 0.2s ease'
                                 }}
                             >
-                                <tspan style={{ fontWeight: 700, fill: color }}>{label}</tspan>
-                                <tspan dx="8">{value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MW</tspan>
-                                <tspan dx="8" style={{ fill: 'rgba(255,255,255,0.5)' }}>{(percent * 100).toFixed(1)}%</tspan>
+                                <tspan style={{ fontWeight: 600, fill: color }}>{label || '—'}</tspan>
+                                <tspan dx="6" style={{ fontWeight: 500 }}>{value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MW</tspan>
+                                <tspan dx="4" style={{ fill: 'rgba(248,250,252,0.6)' }}>{(percent * 100).toFixed(1)}%</tspan>
                             </text>
 
                             <path
                                 d={bgPath}
                                 fill="none"
-                                stroke="rgba(255,255,255,0.05)"
+                                 stroke="rgba(248,250,252,0.15)"
                                 strokeWidth={trackWidth}
                                 strokeLinecap="round"
                             />
@@ -112,9 +126,9 @@ const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', t
                                 initial={{ pathLength: 0 }}
                                 animate={{ pathLength: 1 }}
                                 transition={{ duration: 1, delay: idx * 0.1, ease: 'easeOut' }}
-                                style={{
-                                    filter: isHovered ? `drop-shadow(0 0 8px ${color})` : 'none'
-                                }}
+                                 style={{
+                                    filter: isHovered ? `drop-shadow(0 6px 15px ${color}77)` : 'none'
+                                 }}
                             />
                         </g>
                     );
@@ -122,9 +136,9 @@ const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', t
             </svg>
 
             {!targetKey && (
-                <div style={{ position: 'absolute', textAlign: 'center', pointerEvents: 'none', top: '50%', transform: 'translateY(-20%)' }}>
-                    <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)' }}>Total System Load</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+                <div style={{ position: 'absolute', textAlign: 'center', pointerEvents: 'none', top: '50%', transform: 'translateY(-35%)' }}>
+                    <div style={{ fontSize: '0.65rem', color: 'rgba(248,250,252,0.6)', letterSpacing: '0.2em', textTransform: 'uppercase' }}>Total Load</div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc', fontFamily: 'monospace' }}>
                         {totalLoad.toLocaleString(undefined, { maximumFractionDigits: 0 })} MW
                     </div>
                 </div>
@@ -141,17 +155,16 @@ const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', t
                             bottom: '100%',
                             left: '50%',
                             x: '-50%',
-                            marginBottom: '10px',
-                            background: 'rgba(10, 12, 16, 0.95)',
+                            marginBottom: '12px',
+                            background: '#01070f',
                             border: `1px solid ${colorFunction ? colorFunction(sortedData[hoveredIndex], hoveredIndex) : `hsl(${190 + (hoveredIndex * 30)}, 90%, 50%)`}`,
-                            padding: '0.5rem 0.75rem',
-                            borderRadius: '8px',
+                            padding: '0.4rem 0.75rem',
+                            borderRadius: '10px',
                             zIndex: 40,
-                            backdropFilter: 'blur(12px)',
                             pointerEvents: 'none',
                             whiteSpace: 'nowrap',
                             textAlign: 'center',
-                            boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+                            boxShadow: '0 18px 35px rgba(1,7,15,0.55)'
                         }}
                     >
                         <div style={{ color: '#fff', fontWeight: 600, fontSize: '0.85rem', marginBottom: '4px' }}>

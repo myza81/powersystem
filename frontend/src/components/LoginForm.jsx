@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Eye, EyeOff, User, Ghost, AlertCircle, ChevronRight, Shield, Activity, Database } from 'lucide-react';
+import { Zap, Eye, EyeOff, User, Ghost, AlertCircle, ChevronRight, Unplug, Activity, Building2, Shield } from 'lucide-react';
 
 const LoginForm = ({ onLogin, onAnonymous, error, loading }) => {
     const [username, setUsername] = useState('');
@@ -14,8 +14,8 @@ const LoginForm = ({ onLogin, onAnonymous, error, loading }) => {
 
     const features = [
         { icon: Activity, label: 'Live Network Monitoring', desc: 'Real-time substation data and analytics' },
-        { icon: Shield, label: 'Load Shedding Operations', desc: 'Design and manage shedding schemes' },
-        { icon: Database, label: 'Asset Intelligence', desc: 'Comprehensive substation asset registry' },
+        { icon: Unplug, label: 'Load Shedding Operations', desc: 'Design and manage shedding schemes' },
+        { icon: Building2, label: 'Asset Intelligence', desc: 'Comprehensive substation asset registry' },
     ];
 
     return (
@@ -45,19 +45,19 @@ const LoginForm = ({ onLogin, onAnonymous, error, loading }) => {
                 {/* Animated background glows */}
                 <div style={{
                     position: 'absolute', inset: 0,
-                    background: 'radial-gradient(ellipse 80% 60% at 30% 50%, rgba(0, 229, 255, 0.07) 0%, transparent 70%)',
+                    background: 'radial-gradient(ellipse 80% 60% at 30% 50%, rgba(22, 192, 152, 0.05) 0%, transparent 70%)',
                     pointerEvents: 'none',
                 }} />
                 <div style={{
                     position: 'absolute', inset: 0,
-                    background: 'radial-gradient(ellipse 50% 40% at 70% 80%, rgba(0, 255, 163, 0.05) 0%, transparent 60%)',
+                    background: 'radial-gradient(ellipse 50% 40% at 70% 80%, rgba(2, 64, 49, 0.03) 0%, transparent 60%)',
                     pointerEvents: 'none',
                 }} />
 
                 {/* Grid overlay */}
                 <div style={{
                     position: 'absolute', inset: 0,
-                    backgroundImage: 'linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)',
+                    backgroundImage: 'linear-gradient(rgba(2, 64, 49, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(2, 64, 49, 0.03) 1px, transparent 1px)',
                     backgroundSize: '40px 40px',
                     pointerEvents: 'none',
                 }} />
@@ -69,19 +69,10 @@ const LoginForm = ({ onLogin, onAnonymous, error, loading }) => {
                     transition={{ delay: 0.2, duration: 0.6 }}
                     style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '3rem' }}
                 >
-                    <div style={{
-                        width: 52, height: 52,
-                        background: 'linear-gradient(135deg, rgba(0,229,255,0.15), rgba(0,255,163,0.15))',
-                        borderRadius: 14,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        border: '1px solid rgba(0, 229, 255, 0.3)',
-                        boxShadow: '0 0 30px rgba(0, 229, 255, 0.15)',
-                    }}>
-                        <Zap size={28} color="var(--accent-cyan)" fill="var(--accent-cyan)" />
-                    </div>
+                    {/* Icon removed per request */}
                     <div>
-                        <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>
-                            GridDefense <span style={{ color: 'var(--accent-blue)' }}>Ops</span>
+                        <div className="logo-text">
+                            <span className="logo-text-bold">Grid</span> Defence
                         </div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: 2 }}>
                             Power System Intelligence
@@ -100,12 +91,12 @@ const LoginForm = ({ onLogin, onAnonymous, error, loading }) => {
                         fontSize: 'clamp(2rem, 3.5vw, 3rem)',
                         fontWeight: 700,
                         lineHeight: 1.15,
-                        color: '#fff',
+                        color: 'var(--text-primary)',
                         marginBottom: '1rem',
                         letterSpacing: '-0.02em',
                     }}>
                         Operate your grid<br />
-                        <span style={{ color: 'var(--accent-cyan)' }}>with precision.</span>
+                        <span className="text-gradient">with precision.</span>
                     </h1>
                     <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: 420 }}>
                         A unified platform for substation asset management, load shedding operations, and real-time network intelligence.
@@ -126,14 +117,14 @@ const LoginForm = ({ onLogin, onAnonymous, error, loading }) => {
                         >
                             <div style={{
                                 width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                                background: 'rgba(0, 229, 255, 0.08)',
-                                border: '1px solid rgba(0, 229, 255, 0.15)',
+                                background: 'rgba(16, 185, 129, 0.08)',
+                                border: '1px solid rgba(16, 185, 129, 0.15)',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
                                 <f.icon size={16} color="var(--accent-blue)" />
                             </div>
                             <div>
-                                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#fff', marginBottom: 2 }}>{f.label}</div>
+                                <div style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: 2 }}>{f.label}</div>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{f.desc}</div>
                             </div>
                         </motion.div>
@@ -158,7 +149,7 @@ const LoginForm = ({ onLogin, onAnonymous, error, loading }) => {
             {/* ── Divider ── */}
             <div style={{
                 width: 1,
-                background: 'linear-gradient(to bottom, transparent, rgba(0,229,255,0.2) 30%, rgba(0,229,255,0.2) 70%, transparent)',
+                background: 'linear-gradient(to bottom, transparent, rgba(2, 64, 49, 0.1) 30%, rgba(2, 64, 49, 0.1) 70%, transparent)',
                 flexShrink: 0,
             }} />
 
@@ -174,7 +165,8 @@ const LoginForm = ({ onLogin, onAnonymous, error, loading }) => {
                     justifyContent: 'center',
                     padding: '3rem 2.5rem',
                     position: 'relative',
-                    background: 'rgba(0,0,0,0.2)',
+                    background: 'var(--bg-card)',
+                    borderLeft: '1px solid var(--border-color)',
                 }}
             >
                 <div style={{ width: '100%', maxWidth: 360 }}>
@@ -184,7 +176,7 @@ const LoginForm = ({ onLogin, onAnonymous, error, loading }) => {
                         transition={{ delay: 0.3, duration: 0.6 }}
                     >
                         <h2 style={{
-                            fontSize: '1.6rem', fontWeight: 700, color: '#fff',
+                            fontSize: '1.6rem', fontWeight: 700, color: 'var(--text-primary)',
                             marginBottom: '0.5rem', letterSpacing: '-0.02em',
                         }}>
                             Welcome back

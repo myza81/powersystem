@@ -1,31 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Zap, TrendingUp, MapPin, Building2, Database, Loader2, BarChart3, AlertCircle, AlertTriangle, CheckCircle2, FileText, ZoomIn, ZoomOut, X, Edit3 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Zap, TrendingUp, MapPin, Building2, Database, Loader2, BarChart3, AlertCircle, AlertTriangle, CheckCircle2, FileText, ZoomIn, ZoomOut, X, Edit3, Radar } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SldViewer from './SldViewer';
 import SubstationMap from './SubstationMap';
 
 import api from '../api';
-import SpiralChart from './SpiralChart';
+import AuroraRingChart from './AuroraRingChart';
 
 const LoadDashboard = ({ substations = [] }) => {
     const [loading, setLoading] = useState(true);
     const [gridData, setGridData] = useState(null);
     const [viewingSld, setViewingSld] = useState(null); // SLD Viewer State
-    const [mapData, setMapData] = useState([]);
 
-
-    // Update map data whenever substations prop or live loads change
-    useEffect(() => {
-        if (substations) {
-            const mappedData = substations.map(s => ({
-                ...s,
-                load_mw: s.total_pload_mw || s.current_load_mw || (s.load_mw || 0),
-                bays: null
-            }));
-            setMapData(mappedData);
-        }
-    }, [substations]);
 
     // Fetch grid overview on mount or when substations change
     useEffect(() => {
@@ -44,8 +31,32 @@ const LoadDashboard = ({ substations = [] }) => {
     }, [substations]);
 
     // Live telemetry removed
+    const metrics = gridData ? [
+        {
+            label: 'Total Internal Demand',
+            value: `${gridData.total_pload_mw.toFixed(1)} MW`,
+            detail: 'Active load captured in the export',
+            accent: 'linear-gradient(135deg,#f4f1ff,#e1d3ff)'
+        },
+        {
+            label: 'Catalogued Substations',
+            value: `${substations.length}`,
+            detail: 'Assets included in this summary',
+            accent: 'linear-gradient(135deg,#e8f6ff,#c7e9ff)'
+        }
+    ] : [];
 
+    const regionalHighlights = gridData?.regional_breakdown
+        ? [...gridData.regional_breakdown].sort((a, b) => (b.total_pload_mw || 0) - (a.total_pload_mw || 0)).slice(0, 4)
+        : [];
 
+    const mapPoints = useMemo(() => (
+        (substations || []).map((s) => ({
+            ...s,
+            load_mw: s.total_pload_mw || s.current_load_mw || s.load_mw || 0,
+            bays: null
+        }))
+    ), [substations]);
 
     if (loading) {
         return (
@@ -54,364 +65,159 @@ const LoadDashboard = ({ substations = [] }) => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'linear-gradient(135deg, #0a0e1a 0%, #1a1f35 100%)'
+                background: '#020617'
             }}>
-                <Loader2 size={48} className="animate-spin" style={{ color: '#00e5ff' }} />
+                <Loader2 size={48} className="animate-spin" style={{ color: '#22d3ee' }} />
             </div>
         );
     }
 
     return (
-        <div style={{
-            minHeight: '100vh',
-            padding: '2rem',
-            background: 'linear-gradient(135deg, #0a0e1a 0%, #1a1f35 100%)'
-        }}>
-            <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-                {/* SLD Viewer Overlay */}
+        <div className="fui-dashboard-container">
+            <div className="fui-scanline" />
+            
+            {/* Layer 0: Geospatial Backdrop */}
+            <div className="fui-backdrop-map">
+                <SubstationMap data={mapPoints} fuiMode={true} />
+            </div>
+
+            {/* Layer 1: Data Overlays */}
+            <div style={{ position: 'relative', zIndex: 10, height: '100vh', padding: '1.5rem', pointerEvents: 'none' }}>
                 <AnimatePresence>
                     {viewingSld && (
-                        <SldViewer
-                            substation={viewingSld}
-                            onClose={() => setViewingSld(null)}
-                        />
+                        <div style={{ pointerEvents: 'auto' }}>
+                            <SldViewer
+                                substation={viewingSld}
+                                onClose={() => setViewingSld(null)}
+                            />
+                        </div>
                     )}
                 </AnimatePresence>
 
-                {/* Header */}
-                <motion.div
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    style={{ marginBottom: '2rem' }}
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-                        <div style={{
-                            width: '56px',
-                            height: '56px',
-                            background: 'linear-gradient(135deg, #00e5ff 0%, #00a8ff 100%)',
-                            borderRadius: '14px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 8px 24px rgba(0, 229, 255, 0.3)'
-                        }}>
-                            <BarChart3 size={28} color="#000" strokeWidth={2.5} />
-                        </div>
-                        <div>
-                            <h1 style={{
-                                fontSize: '2.25rem',
-                                fontWeight: 700,
-                                background: 'linear-gradient(135deg, #fff 0%, #00e5ff 100%)',
-                                WebkitBackgroundClip: 'text',
-                                WebkitTextFillColor: 'transparent',
-                                margin: 0
-                            }}>
-                                Load Analytics Dashboard
-                            </h1>
-                            <p style={{ color: 'rgba(255,255,255,0.6)', margin: '4px 0 0 0', fontSize: '0.95rem' }}>
-                                Grid Demand Analytics
-                            </p>
-                        </div>
-
-                    </div>
-                </motion.div>
-
                 {gridData && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-
-                        {/* Section 1: Global KPIs */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                            <MetricCard
-                                icon={<Zap size={24} />}
-                                label="Total Internal Demand"
-                                value={`${gridData.total_pload_mw.toFixed(1)} MW`}
-                                subValue="Internal Active Load"
-                                color="#00e5ff"
-                            //progress={75} // Simulated usage
-                            //trend="+2.3% vs yesterday"
-                            />
-                            <MetricCard
-                                icon={<TrendingUp size={24} />}
-                                label="Total Internal Reactive"
-                                value={`${gridData.total_qload_mvar.toFixed(1)} MVAr`}
-                                subValue="Internal Reactive Load"
-                                color="#ff9500"
-                            />
-                            <MetricCard
-                                icon={<Zap size={24} />}
-                                label="System Power Factor"
-                                value={
-                                    (gridData.total_pload_mw / Math.sqrt(Math.pow(gridData.total_pload_mw, 2) + Math.pow(gridData.total_qload_mvar, 2))).toFixed(3)
-                                }
-                                subValue="Grid Efficiency"
-                                color="#34c759"
-                            />
-                        </div>
-
-                        {/* 3-Column Layout: Ownership, Regional, State */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', alignItems: 'stretch' }}>
-
-                            {/* Ownership Breakdown */}
-                            {gridData.ownership_breakdown && gridData.ownership_breakdown.length > 0 && (
-                                <div style={{
-                                    background: 'rgba(0,0,0,0.3)',
-                                    backdropFilter: 'blur(20px)',
-                                    borderRadius: '16px',
-                                    border: '1px solid rgba(0,229,255,0.2)',
-                                    padding: '1.5rem',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    minHeight: '380px' // Compact height
-                                }}>
-                                    <h3 style={{ fontSize: '1.1rem', color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <Building2 size={18} color="#00e5ff" /> Ownership
-                                    </h3>
-
-                                    <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                        <SpiralChart
-                                            data={gridData.ownership_breakdown || []}
-                                            labelKey="ownership"
-                                            valueKey="total_pload_mw"
-                                            colorFunction={(item) => item.ownership === 'TNB' ? '#ef4444' : item.ownership === 'LPC' ? '#f59e0b' : '#3b82f6'}
-                                        />
+                    <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr 380px', height: '100%', gap: '1.5rem' }}>
+                        
+                        {/* LEFT COLUMN: Metrics & Regional Intensity */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', pointerEvents: 'auto' }}>
+                            {/* Demand Metrics */}
+                            <div className="fui-glass-card">
+                                <div className="fui-corner-br fui-corner-tl" />
+                                <div className="fui-corner-br fui-corner-tr" />
+                                <header style={{ marginBottom: '1.5rem' }}>
+                                    <div className="fui-stat-label">Grid Stability Sentinel</div>
+                                    <h3 style={{ margin: 0, fontSize: '1rem', color: '#fff' }}>TOTAL DEMAND ANALYSIS</h3>
+                                </header>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div>
+                                        <div className="fui-stat-label">Active Power</div>
+                                        <div className="fui-stat-value">{gridData.total_pload_mw.toFixed(1)} <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>MW</span></div>
+                                    </div>
+                                    <div>
+                                        <div className="fui-stat-label">Reactive Power</div>
+                                        <div className="fui-stat-value" style={{ color: '#fb923c' }}>{gridData.total_qload_mvar.toFixed(1)} <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>MVAr</span></div>
                                     </div>
                                 </div>
-                            )}
+                            </div>
 
-                            {/* Regional Analysis */}
-                            <div style={{
-                                background: 'rgba(0,0,0,0.3)',
-                                backdropFilter: 'blur(20px)',
-                                borderRadius: '16px',
-                                border: '1px solid rgba(0,229,255,0.2)',
-                                padding: '1.5rem',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                minHeight: '380px'
-                            }}>
-                                <h3 style={{ fontSize: '1.1rem', color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <MapPin size={18} color="#00e5ff" /> Regional Load
-                                </h3>
-
-                                <div style={{
-                                    flex: 1,
-                                    display: 'flex',
-                                    flexWrap: 'wrap',
-                                    gap: '1rem',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-around'
-                                }}>
-                                    <SpiralChart
+                            {/* Regional Intensity */}
+                            <div className="fui-glass-card" style={{ flex: 1 }}>
+                                <div className="fui-corner-br fui-corner-tl" />
+                                <div className="fui-corner-br fui-corner-bl" />
+                                <header style={{ marginBottom: '1rem' }}>
+                                    <div className="fui-stat-label">Spatial Distribution</div>
+                                    <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#fff' }}>REGIONAL LOAD INTENSITY</h3>
+                                </header>
+                                <div style={{ height: 'calc(100% - 40px)', overflowY: 'auto' }}>
+                                    <ProgressBarChart
                                         data={gridData.regional_breakdown || []}
                                         labelKey="region"
                                         valueKey="total_pload_mw"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* State Analysis (Vertical List) */}
-                            <div style={{
-                                background: 'rgba(0,0,0,0.3)',
-                                backdropFilter: 'blur(20px)',
-                                borderRadius: '16px',
-                                border: '1px solid rgba(255, 149, 0, 0.2)', // Orange tint border
-                                padding: '1.5rem',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                minHeight: '380px',
-                                maxHeight: '380px' // constrain height
-                            }}>
-                                <h3 style={{ fontSize: '1.1rem', color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <MapPin size={18} color="#ff9500" /> State Load
-                                </h3>
-
-                                <div style={{ flex: 1, overflow: 'hidden' }}>
-                                    <ProgressBarChart
-                                        data={gridData.state_breakdown || []}
-                                        labelKey="state"
-                                        valueKey="total_pload_mw"
                                         unit="MW"
+                                        fuiMode={true}
                                     />
                                 </div>
                             </div>
-
                         </div>
 
-                        {/* Map Section */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3 }}
-                            style={{
-                                marginTop: '2rem',
-                                background: 'rgba(0,0,0,0.3)',
-                                backdropFilter: 'blur(20px)',
-                                borderRadius: '16px',
-                                border: '1px solid rgba(0,229,255,0.2)',
-                                padding: '1.5rem'
-                            }}
-                        >
-                            <h3 style={{ fontSize: '1.25rem', color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <MapPin size={20} color="#00e5ff" />
-                                Geospatial Load Distribution
-                            </h3>
-                            <SubstationMap data={mapData} />
-                        </motion.div>
+                        {/* CENTER COLUMN: Branding / Empty for Map visibility */}
+                        <div style={{ position: 'relative' }}>
+                            <div style={{ 
+                                position: 'absolute', 
+                                top: '50%', 
+                                left: '50%', 
+                                transform: 'translate(-50%, -50%)', 
+                                textAlign: 'center',
+                                opacity: 0.3,
+                                pointerEvents: 'none'
+                             }}>
+                                <Radar size={120} color="var(--fui-cyan)" style={{ opacity: 0.1, marginBottom: '1rem' }} />
+                                <div className="fui-stat-label" style={{ fontSize: '1.5rem', letterSpacing: '0.4em' }}>GRID DEFENCE</div>
+                                <div className="fui-stat-label" style={{ fontSize: '0.6rem', marginTop: '0.5rem' }}>MALAYSIA POWER SYSTEM INTELLIGENCE</div>
+                            </div>
+                        </div>
 
+                        {/* RIGHT COLUMN: Hotspots & Ownership */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', pointerEvents: 'auto' }}>
+                            {/* Hotspot Substations */}
+                            <div className="fui-glass-card" style={{ flex: 1 }}>
+                                <div className="fui-corner-br fui-corner-tr" />
+                                <div className="fui-corner-br-item fui-corner-br" />
+                                <header style={{ marginBottom: '1rem' }}>
+                                    <div className="fui-stat-label" style={{ color: 'var(--fui-red)' }}>Critical Load Alerts</div>
+                                    <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#fff' }}>TOP HOTSPOT NODES</h3>
+                                </header>
+                                <table className="fui-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Node ID</th>
+                                            <th>Location</th>
+                                            <th style={{ textAlign: 'right' }}>Load</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {[...mapPoints]
+                                            .sort((a, b) => b.load_mw - a.load_mw)
+                                            .slice(0, 8)
+                                            .map((p, idx) => (
+                                                <tr key={idx}>
+                                                    <td style={{ color: 'var(--fui-cyan)', fontWeight: 600 }}>{p.substation_id}</td>
+                                                    <td style={{ opacity: 0.7 }}>{p.name}</td>
+                                                    <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>
+                                                        {p.load_mw.toFixed(1)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Ownership Blend */}
+                            <div className="fui-glass-card">
+                                <div className="fui-corner-br-item fui-corner-br" />
+                                <div className="fui-corner-br fui-corner-bl" />
+                                <header style={{ marginBottom: '1rem' }}>
+                                    <div className="fui-stat-label">Asset Intelligence</div>
+                                    <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#fff' }}>CONTROL BLOCKS</h3>
+                                </header>
+                                <div style={{ transform: 'scale(0.85)', transformOrigin: 'top left' }}>
+                                    <AuroraRingChart
+                                        data={gridData.ownership_breakdown || []}
+                                        labelKey="ownership"
+                                        valueKey="total_pload_mw"
+                                        fuiMode={true}
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
-
-
-
-
             </div>
-
         </div>
     );
 };
 
-// Metric Card Component
-const MetricCard = ({ icon, label, value, subValue, color, trend, progress }) => (
-    <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        style={{
-            padding: '1.5rem',
-            background: 'rgba(0,0,0,0.4)',
-            backdropFilter: 'blur(20px)',
-            borderRadius: '16px',
-            border: `1px solid ${color}33`,
-            position: 'relative',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            minHeight: '180px'
-        }}
-    >
-        <div style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            width: '120px',
-            height: '120px',
-            background: `radial-gradient(circle, ${color}15 0%, transparent 70%)`
-        }} />
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div style={{ color: color, padding: '10px', background: `${color}15`, borderRadius: '10px' }}>
-                {icon}
-            </div>
-            {trend && (
-                <div style={{
-                    fontSize: '0.75rem',
-                    color: trend.includes('+') ? '#34c759' : '#ff3b30',
-                    fontWeight: 600,
-                    background: 'rgba(255,255,255,0.1)',
-                    padding: '4px 8px',
-                    borderRadius: '20px'
-                }}>
-                    {trend}
-                </div>
-            )}
-        </div>
-
-        <div>
-            <div style={{
-                fontSize: '0.85rem',
-                color: 'rgba(255,255,255,0.6)',
-                marginBottom: '0.25rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-            }}>
-                {label}
-            </div>
-            <div style={{
-                fontSize: '2rem',
-                fontWeight: 700,
-                color: '#fff',
-                marginBottom: '0.25rem',
-                fontFamily: 'monospace'
-            }}>
-                {value}
-            </div>
-            <div style={{
-                fontSize: '0.85rem',
-                color: 'rgba(255,255,255,0.5)'
-            }}>
-                {subValue}
-            </div>
-        </div>
-
-        {/* Micro-Visualization: Progress Bar */}
-        {progress !== undefined && (
-            <div style={{ marginTop: '1rem', width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-                <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ duration: 1.5, ease: "easeOut" }}
-                    style={{ height: '100%', background: color }}
-                />
-            </div>
-        )}
-    </motion.div>
-);
-
-// Regions View Component
-const RegionsView = ({ breakdown }) => (
-    <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-        gap: '1.5rem'
-    }}>
-        {breakdown.map((region, idx) => (
-            <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-                style={{
-                    padding: '1.5rem',
-                    background: 'rgba(0,0,0,0.3)',
-                    backdropFilter: 'blur(20px)',
-                    borderRadius: '16px',
-                    border: '1px solid rgba(0,229,255,0.2)'
-                }}
-            >
-                <h4 style={{
-                    fontSize: '1.1rem',
-                    color: '#00e5ff',
-                    marginBottom: '1rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem'
-                }}>
-                    <MapPin size={18} />
-                    {region.region || 'Unknown Region'}
-                </h4>
-                <div style={{ marginBottom: '1rem' }}>
-                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                        Active Power
-                    </div>
-                    <div style={{ fontSize: '2rem', fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
-                        {region.total_pload_mw.toFixed(1)} <span style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.5)' }}>MW</span>
-                    </div>
-                </div>
-                <div>
-                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', marginBottom: '0.25rem' }}>
-                        Reactive Power
-                    </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
-                        {region.total_qload_mvar.toFixed(1)} <span style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.5)' }}>MVAr</span>
-                    </div>
-                </div>
-            </motion.div>
-        ))}
-    </div>
-);
-
 // Progress Bar Chart Component (Generic)
-const ProgressBarChart = ({ data, labelKey = 'label', valueKey = 'value', unit = '', colorFunction }) => {
+const ProgressBarChart = ({ data, labelKey = 'label', valueKey = 'value', unit = '', colorFunction, fuiMode = false }) => {
     const maxVal = Math.max(...data.map(r => r[valueKey] || 0));
     const [hoveredIndex, setHoveredIndex] = useState(null);
 
@@ -425,7 +231,7 @@ const ProgressBarChart = ({ data, labelKey = 'label', valueKey = 'value', unit =
             height: '100%',
             overflowY: 'auto',
             paddingRight: '0.5rem',
-            gap: '0.75rem'
+            gap: '0.85rem'
         }}>
             {sortedData.map((item, idx) => {
                 const val = item[valueKey] || 0;
@@ -440,9 +246,10 @@ const ProgressBarChart = ({ data, labelKey = 'label', valueKey = 'value', unit =
                             display: 'flex',
                             alignItems: 'center',
                             gap: '1rem',
-                            padding: '0.5rem',
-                            borderRadius: '8px',
-                            background: isHovered ? 'rgba(255, 149, 0, 0.1)' : 'transparent',
+                            padding: fuiMode ? '0.4rem 0.5rem' : '0.65rem 0.75rem',
+                            borderRadius: fuiMode ? '0' : '12px',
+                            background: isHovered ? (fuiMode ? 'rgba(34, 211, 238, 0.1)' : 'rgba(4, 125, 96, 0.08)') : (fuiMode ? 'transparent' : 'rgba(15,23,42,0.02)'),
+                            borderBottom: fuiMode ? '1px solid rgba(34, 211, 238, 0.1)' : 'none',
                             transition: 'background 0.2s',
                             cursor: 'default'
                         }}
@@ -451,26 +258,28 @@ const ProgressBarChart = ({ data, labelKey = 'label', valueKey = 'value', unit =
                     >
                         {/* Label */}
                         <div style={{
-                            width: '40px',
-                            fontSize: '0.75rem',
-                            color: isHovered ? '#fff' : 'rgba(255,255,255,0.7)',
+                            width: '80px',
+                            fontSize: '0.7rem',
+                            color: isHovered ? (fuiMode ? '#fff' : '#0f172a') : (fuiMode ? 'rgba(255,255,255,0.6)' : '#64748b'),
                             fontWeight: isHovered ? 600 : 400,
                             textAlign: 'right',
-                            flexShrink: 0
+                            flexShrink: 0,
+                            fontFamily: fuiMode ? 'JetBrains Mono, monospace' : 'inherit'
                         }}>
                             {label}
                         </div>
 
                         {/* Bar Container */}
-                        <div style={{ flex: 1, height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ flex: 1, height: fuiMode ? '4px' : '10px', background: fuiMode ? 'rgba(34, 211, 238, 0.05)' : 'rgba(15,23,42,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
                             <motion.div
                                 initial={{ width: 0 }}
                                 animate={{ width: `${widthPercentage}%` }}
                                 transition={{ duration: 1, delay: idx * 0.05 }}
                                 style={{
                                     height: '100%',
-                                    background: colorFunction ? colorFunction(item, idx) : 'linear-gradient(90deg, #ff9500 0%, #ff5e3a 100%)',
-                                    borderRadius: '4px'
+                                    background: colorFunction ? colorFunction(item, idx) : (fuiMode ? 'var(--fui-cyan)' : 'linear-gradient(90deg,#0f766e,#22d3ee)'),
+                                    boxShadow: fuiMode ? '0 0 8px var(--fui-cyan-glow)' : 'none',
+                                    borderRadius: '999px'
                                 }}
                             />
                         </div>
@@ -481,10 +290,10 @@ const ProgressBarChart = ({ data, labelKey = 'label', valueKey = 'value', unit =
                             textAlign: 'right',
                             fontSize: '0.8rem',
                             fontFamily: 'monospace',
-                            color: '#fff',
-                            fontWeight: 500
+                            color: fuiMode ? '#fff' : '#0f172a',
+                            fontWeight: 600
                         }}>
-                            {val.toFixed(1)} <span style={{ fontSize: '0.7rem', color: '#aaa', fontWeight: 400 }}>{unit}</span>
+                            {val.toFixed(1)} <span style={{ fontSize: '0.65rem', color: fuiMode ? 'rgba(34, 211, 238, 0.6)' : '#94a3b8', fontWeight: 400 }}>{unit}</span>
                         </div>
                     </div>
                 );
@@ -508,8 +317,8 @@ const SubstationSearchCard = ({ substation, onClick, url, onViewSld, isSelected 
             onClick={onClick}
             style={{
                 padding: '1rem',
-                background: isSelected ? 'rgba(0,229,255,0.1)' : 'rgba(0,0,0,0.2)',
-                border: isSelected ? '1px solid #00e5ff' : (hasConfigIssue ? '1px solid #ef4444' : '1px solid rgba(255,255,255,0.1)'),
+                background: isSelected ? 'rgba(4, 125, 96, 0.08)' : '#fff',
+                border: isSelected ? '1px solid #047d60' : (hasConfigIssue ? '1px solid #ef4444' : '1px solid rgba(15,23,42,0.08)'),
                 borderRadius: '12px',
                 cursor: 'pointer',
                 transition: 'all 0.3s',
@@ -518,11 +327,11 @@ const SubstationSearchCard = ({ substation, onClick, url, onViewSld, isSelected 
         >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ flex: 1 }}>
-                    <div style={{ color: '#fff', fontWeight: 600, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 600, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {substation.name}
                         {hasConfigIssue && (
                             <div title="Non-standard LV Voltage detected" style={{
-                                background: 'rgba(239, 68, 68, 0.2)',
+                                background: 'rgba(239, 68, 68, 0.15)',
                                 padding: '2px 6px',
                                 borderRadius: '4px',
                                 display: 'flex',
@@ -532,7 +341,7 @@ const SubstationSearchCard = ({ substation, onClick, url, onViewSld, isSelected 
                             </div>
                         )}
                     </div>
-                    <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                         {substation.substation_id} • {substation.state || 'N/A'}
                     </div>
                 </div>
@@ -545,11 +354,11 @@ const SubstationSearchCard = ({ substation, onClick, url, onViewSld, isSelected 
                         }}
                         title="View Single Line Diagram"
                         style={{
-                            background: 'rgba(255,255,255,0.1)',
+                            background: 'rgba(4,125,96,0.08)',
                             border: 'none',
                             borderRadius: '6px',
                             padding: '6px',
-                            color: '#00e5ff',
+                            color: '#047d60',
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
@@ -558,7 +367,7 @@ const SubstationSearchCard = ({ substation, onClick, url, onViewSld, isSelected 
                     >
                         <FileText size={16} />
                     </button>
-                    <Building2 size={20} color={isSelected ? '#00e5ff' : 'rgba(255,255,255,0.3)'} />
+                    <Building2 size={20} color={isSelected ? '#047d60' : 'rgba(15,23,42,0.3)'} />
                 </div>
             </div>
         </motion.div>
@@ -574,15 +383,16 @@ const SubstationDetailsPanel = ({ substation, details, onClose, onViewSld, onEdi
         style={{
             marginTop: '1.5rem',
             padding: '2rem',
-            background: 'rgba(0,229,255,0.05)',
-            border: '2px solid rgba(0,229,255,0.3)',
-            borderRadius: '16px'
+            background: '#fff',
+            border: '1px solid rgba(15,23,42,0.08)',
+            borderRadius: '16px',
+            boxShadow: '0 15px 35px rgba(15,23,42,0.08)'
         }}
     >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1.5rem' }}>
             <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-                    <h4 style={{ fontSize: '1.5rem', color: '#fff', margin: 0 }}>
+                    <h4 style={{ fontSize: '1.5rem', color: 'var(--text-primary)', margin: 0 }}>
                         {substation.name}
                     </h4>
                     <button
@@ -592,10 +402,10 @@ const SubstationDetailsPanel = ({ substation, details, onClose, onViewSld, onEdi
                             alignItems: 'center',
                             gap: '0.5rem',
                             padding: '0.25rem 0.75rem',
-                            background: 'rgba(0, 229, 255, 0.1)',
-                            border: '1px solid rgba(0, 229, 255, 0.3)',
+                            background: 'rgba(4,125,96,0.08)',
+                            border: '1px solid rgba(4,125,96,0.3)',
                             borderRadius: '6px',
-                            color: '#00e5ff',
+                            color: '#047d60',
                             fontSize: '0.8rem',
                             cursor: 'pointer'
                         }}
@@ -609,10 +419,10 @@ const SubstationDetailsPanel = ({ substation, details, onClose, onViewSld, onEdi
                             alignItems: 'center',
                             gap: '0.5rem',
                             padding: '0.25rem 0.75rem',
-                            background: 'rgba(237, 137, 54, 0.1)', // Orange tint
+                            background: 'rgba(237, 137, 54, 0.1)',
                             border: '1px solid rgba(237, 137, 54, 0.3)',
                             borderRadius: '6px',
-                            color: '#ed8936',
+                            color: '#b45309',
                             fontSize: '0.8rem',
                             cursor: 'pointer'
                         }}
@@ -621,16 +431,16 @@ const SubstationDetailsPanel = ({ substation, details, onClose, onViewSld, onEdi
                     </button>
 
                 </div>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
                     {substation.substation_id} • {substation.state}
                 </p>
             </div>
             <button
                 onClick={onClose}
                 style={{
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    color: '#fff',
+                    background: 'transparent',
+                    border: '1px solid rgba(15,23,42,0.1)',
+                    color: 'var(--text-secondary)',
                     padding: '0.5rem 1rem',
                     borderRadius: '8px',
                     cursor: 'pointer',

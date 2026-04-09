@@ -126,7 +126,7 @@ const BayBreakdown = ({ bays, transformers, incoming_bays, color = '#333' }) => 
     );
 };
 
-const SubstationMap = ({ data, focusLocation }) => {
+const SubstationMap = ({ data, focusLocation, fuiMode = false }) => {
     const defaultCenter = [4.2105, 101.9758];
     const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
     const [showSettings, setShowSettings] = useState(false);
@@ -234,13 +234,14 @@ const SubstationMap = ({ data, focusLocation }) => {
 
     return (
         <div style={{
-            height: '600px',
+            height: '100%',
             width: '100%',
-            borderRadius: '16px',
+            borderRadius: fuiMode ? '0' : '16px',
             overflow: 'hidden',
-            border: '1px solid rgba(0,229,255,0.2)',
+            border: fuiMode ? 'none' : '1px solid rgba(0,229,255,0.2)',
             zIndex: 1,
-            position: 'relative'
+            position: 'relative',
+            background: fuiMode ? '#020617' : 'inherit'
         }}>
             {/* Search Input (Top) */}
             <div style={{
@@ -470,17 +471,18 @@ const SubstationMap = ({ data, focusLocation }) => {
             <MapContainer
                 center={defaultCenter}
                 zoom={7}
-                style={{ height: '100%', width: '100%' }}
+                style={{ height: '100%', width: '100%', background: fuiMode ? '#020617' : '#fff' }}
                 scrollWheelZoom={true}
+                zoomControl={!fuiMode}
             >
                 <LayersControl position="topright">
-                    <LayersControl.BaseLayer checked name="OpenStreetMap (Light)">
+                    <LayersControl.BaseLayer checked={!fuiMode} name="OpenStreetMap (Light)">
                         <TileLayer
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         />
                     </LayersControl.BaseLayer>
-                    <LayersControl.BaseLayer name="Dark Matter (High Contrast)">
+                    <LayersControl.BaseLayer checked={fuiMode} name="Dark Matter (High Contrast)">
                         <TileLayer
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
                             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -495,7 +497,10 @@ const SubstationMap = ({ data, focusLocation }) => {
 
                     {/* Overlays for Heatmap and Markers */}
                     <LayersControl.Overlay checked name="Load Heatmap">
-                        <HeatmapLayer points={heatPoints} />
+                        <HeatmapLayer 
+                            points={heatPoints} 
+                            gradient={fuiMode ? { 0.4: '#f97316', 0.7: '#ef4444', 1: '#7f1d1d' } : null}
+                        />
                     </LayersControl.Overlay>
 
                     <LayersControl.Overlay checked name="Substation Markers">

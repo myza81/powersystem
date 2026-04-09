@@ -417,16 +417,16 @@ const App = () => {
                     </motion.div>
                 )}
 
-                {view !== 'critical-substations' && view !== 'load-shedding-designer' && (
+                {view !== 'critical-substations' && view !== 'load-shedding-designer' && view !== 'dashboard' && (
                     <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                             <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
-                                {view === 'dashboard' && 'Live Dashboard'}
+                                {view === 'dashboard' && 'Load Analytics'}
                                 {view === 'list' && 'Substation Assets'}
                                 {view === 'create' && 'Register New Entry'}
                                 {view === 'edit' && 'Edit Substation'}
                                 {view === 'config' && 'Configuration Editor'}
-                                {view === 'snapshots' && 'Network Analysis'}
+                                {view === 'snapshots' && 'Snapshot View'}
                                 {view === 'dev-tools' && 'Developer Tools'}
                                 {view === 'load-shedding-viewer' && 'Load Shedding Viewer'}
                             </h2>
@@ -500,7 +500,7 @@ const App = () => {
                                 left: 0,
                                 width: '100%',
                                 height: '100%',
-                                background: 'rgba(0,0,0,0.85)',
+                                background: 'rgba(255,255,255,0.85)',
                                 backdropFilter: 'blur(10px)',
                                 zIndex: 2000,
                                 display: 'flex',
@@ -518,13 +518,13 @@ const App = () => {
                                 style={{
                                     width: '100%',
                                     maxWidth: '1000px',
-                                    background: '#0f172a',
+                                    background: '#ffffff',
                                     borderRadius: '16px',
-                                    border: '1px solid rgba(0, 229, 255, 0.3)',
+                                    border: '1px solid rgba(16, 185, 129, 0.3)',
                                     overflow: 'hidden',
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    boxShadow: '0 20px 50px rgba(0,0,0,0.5)'
+                                    boxShadow: '0 20px 50px rgba(0,0,0,0.1)'
                                 }}
                             >
                                 <div style={{
@@ -533,17 +533,17 @@ const App = () => {
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'center',
-                                    background: 'rgba(0,0,0,0.2)'
+                                    background: 'rgba(16, 185, 129, 0.05)'
                                 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <div style={{ padding: '8px', background: 'rgba(0, 229, 255, 0.1)', borderRadius: '8px' }}>
-                                            <MapPin size={20} color="#00e5ff" />
+                                        <div style={{ padding: '8px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px' }}>
+                                            <MapPin size={20} color="#10b981" />
                                         </div>
                                         <div>
-                                            <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>
+                                            <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#111827' }}>
                                                 {locatingSubstation.name}
                                             </h3>
-                                            <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                                            <div style={{ fontSize: '0.85rem', color: 'rgba(75, 85, 99, 0.8)', marginTop: '2px' }}>
                                                 {locatingSubstation.substation_id} • {locatingSubstation.state || 'Unknown State'}
                                             </div>
                                         </div>
@@ -551,16 +551,16 @@ const App = () => {
                                     <button
                                         onClick={() => setLocatingSubstation(null)}
                                         style={{
-                                            background: 'rgba(255,255,255,0.1)',
+                                            background: 'rgba(16, 185, 129, 0.1)',
                                             border: 'none',
                                             borderRadius: '8px',
                                             padding: '8px',
-                                            color: '#fff',
+                                            color: '#10b981',
                                             cursor: 'pointer',
                                             transition: 'background 0.2s'
                                         }}
-                                        onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.2)'}
-                                        onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
+                                        onMouseEnter={(e) => e.target.style.background = 'rgba(16, 185, 129, 0.2)'}
+                                        onMouseLeave={(e) => e.target.style.background = 'rgba(16, 185, 129, 0.1)'}
                                     >
                                         <X size={20} />
                                     </button>
