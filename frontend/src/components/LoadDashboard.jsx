@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Zap, TrendingUp, MapPin, Building2, Database, Loader2, BarChart3, AlertCircle, AlertTriangle, CheckCircle2, FileText, ZoomIn, ZoomOut, X, Edit3, Radar } from 'lucide-react';
+import { Search, Zap, TrendingUp, MapPin, Building2, Database, Loader2, BarChart3, AlertCircle, AlertTriangle, CheckCircle2, FileText, ZoomIn, ZoomOut, X, Edit3, Radar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SldViewer from './SldViewer';
 import SubstationMap from './SubstationMap';
 
 import api from '../api';
-import AuroraRingChart from './AuroraRingChart';
+import SpiralChart from './SpiralChart';
 
 const LoadDashboard = ({ substations = [] }) => {
     const [loading, setLoading] = useState(true);
     const [gridData, setGridData] = useState(null);
     const [viewingSld, setViewingSld] = useState(null); // SLD Viewer State
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [topCount, setTopCount] = useState(5);
 
 
     // Fetch grid overview on mount or when substations change
@@ -74,18 +76,18 @@ const LoadDashboard = ({ substations = [] }) => {
 
     return (
         <div className="fui-dashboard-container">
-            <div className="fui-scanline" />
             
             {/* Layer 0: Geospatial Backdrop */}
             <div className="fui-backdrop-map">
                 <SubstationMap data={mapPoints} fuiMode={true} />
             </div>
 
-            {/* Layer 1: Data Overlays */}
-            <div style={{ position: 'relative', zIndex: 10, height: '100vh', padding: '1.5rem', pointerEvents: 'none' }}>
+
+            {/* Layer 2: Interactive Modals & Sidebar */}
+            <div style={{ position: 'relative', zIndex: 10, height: '100vh', pointerEvents: 'none', overflow: 'hidden' }}>
                 <AnimatePresence>
                     {viewingSld && (
-                        <div style={{ pointerEvents: 'auto' }}>
+                        <div style={{ pointerEvents: 'auto', padding: '1.5rem', position: 'absolute', left: 0, top: 0, bottom: 0, width: '100%' }}>
                             <SldViewer
                                 substation={viewingSld}
                                 onClose={() => setViewingSld(null)}
@@ -95,121 +97,165 @@ const LoadDashboard = ({ substations = [] }) => {
                 </AnimatePresence>
 
                 {gridData && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr 380px', height: '100%', gap: '1.5rem' }}>
-                        
-                        {/* LEFT COLUMN: Metrics & Regional Intensity */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', pointerEvents: 'auto' }}>
-                            {/* Demand Metrics */}
-                            <div className="fui-glass-card">
-                                <div className="fui-corner-br fui-corner-tl" />
-                                <div className="fui-corner-br fui-corner-tr" />
-                                <header style={{ marginBottom: '1.5rem' }}>
-                                    <div className="fui-stat-label">Grid Stability Sentinel</div>
-                                    <h3 style={{ margin: 0, fontSize: '1rem', color: '#fff' }}>TOTAL DEMAND ANALYSIS</h3>
-                                </header>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                    <div>
-                                        <div className="fui-stat-label">Active Power</div>
-                                        <div className="fui-stat-value">{gridData.total_pload_mw.toFixed(1)} <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>MW</span></div>
-                                    </div>
-                                    <div>
-                                        <div className="fui-stat-label">Reactive Power</div>
-                                        <div className="fui-stat-value" style={{ color: '#fb923c' }}>{gridData.total_qload_mvar.toFixed(1)} <span style={{ fontSize: '0.8rem', opacity: 0.5 }}>MVAr</span></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Regional Intensity */}
-                            <div className="fui-glass-card" style={{ flex: 1 }}>
-                                <div className="fui-corner-br fui-corner-tl" />
-                                <div className="fui-corner-br fui-corner-bl" />
-                                <header style={{ marginBottom: '1rem' }}>
-                                    <div className="fui-stat-label">Spatial Distribution</div>
-                                    <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#fff' }}>REGIONAL LOAD INTENSITY</h3>
-                                </header>
-                                <div style={{ height: 'calc(100% - 40px)', overflowY: 'auto' }}>
-                                    <ProgressBarChart
-                                        data={gridData.regional_breakdown || []}
-                                        labelKey="region"
-                                        valueKey="total_pload_mw"
-                                        unit="MW"
-                                        fuiMode={true}
-                                    />
-                                </div>
-                            </div>
+                    <motion.div
+                        initial={false}
+                        animate={{ x: sidebarCollapsed ? 'calc(100% - 1.5rem)' : '0%' }}
+                        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            right: 0,
+                            bottom: 0,
+                            width: '420px',
+                            padding: '1.5rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            pointerEvents: 'none'
+                        }}
+                    >
+                        {/* Sidebar Toggle Tab */}
+                        <div style={{ position: 'absolute', left: '-10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'auto', zIndex: 20 }}>
+                            <button
+                                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                                style={{
+                                    background: 'var(--fui-glass-bg)',
+                                    backdropFilter: 'blur(12px)',
+                                    border: '1px solid rgba(34, 211, 238, 0.2)',
+                                    borderRight: 'none',
+                                    color: 'var(--fui-cyan)',
+                                    borderRadius: '8px 0 0 8px',
+                                    padding: '1rem 0.25rem',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    boxShadow: '-4px 0 15px rgba(34, 211, 238, 0.05)',
+                                    transition: 'background 0.2s, color 0.2s',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(34,211,238,0.2)'; e.currentTarget.style.color = '#fff'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--fui-glass-bg)'; e.currentTarget.style.color = 'var(--fui-cyan)'; }}
+                            >
+                                {sidebarCollapsed ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+                            </button>
                         </div>
 
-                        {/* CENTER COLUMN: Branding / Empty for Map visibility */}
-                        <div style={{ position: 'relative' }}>
-                            <div style={{ 
-                                position: 'absolute', 
-                                top: '50%', 
-                                left: '50%', 
-                                transform: 'translate(-50%, -50%)', 
-                                textAlign: 'center',
-                                opacity: 0.3,
-                                pointerEvents: 'none'
-                             }}>
-                                <Radar size={120} color="var(--fui-cyan)" style={{ opacity: 0.1, marginBottom: '1rem' }} />
-                                <div className="fui-stat-label" style={{ fontSize: '1.5rem', letterSpacing: '0.4em' }}>GRID DEFENCE</div>
-                                <div className="fui-stat-label" style={{ fontSize: '0.6rem', marginTop: '0.5rem' }}>MALAYSIA POWER SYSTEM INTELLIGENCE</div>
-                            </div>
-                        </div>
+                        {/* Sidebar Content Panel */}
+                        <div className="fui-glass-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', pointerEvents: 'auto', overflow: 'hidden' }}>
+                            <div className="fui-corner-br fui-corner-tl" />
+                            <div className="fui-corner-br fui-corner-tr" />
+                            <div className="fui-corner-br fui-corner-bl" />
+                            <div className="fui-corner-br-item fui-corner-br" />
 
-                        {/* RIGHT COLUMN: Hotspots & Ownership */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', pointerEvents: 'auto' }}>
-                            {/* Hotspot Substations */}
-                            <div className="fui-glass-card" style={{ flex: 1 }}>
-                                <div className="fui-corner-br fui-corner-tr" />
-                                <div className="fui-corner-br-item fui-corner-br" />
-                                <header style={{ marginBottom: '1rem' }}>
-                                    <div className="fui-stat-label" style={{ color: 'var(--fui-red)' }}>Critical Load Alerts</div>
-                                    <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#fff' }}>TOP HOTSPOT NODES</h3>
-                                </header>
-                                <table className="fui-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Node ID</th>
-                                            <th>Location</th>
-                                            <th style={{ textAlign: 'right' }}>Load</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {[...mapPoints]
-                                            .sort((a, b) => b.load_mw - a.load_mw)
-                                            .slice(0, 8)
-                                            .map((p, idx) => (
-                                                <tr key={idx}>
-                                                    <td style={{ color: 'var(--fui-cyan)', fontWeight: 600 }}>{p.substation_id}</td>
-                                                    <td style={{ opacity: 0.7 }}>{p.name}</td>
-                                                    <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }}>
-                                                        {p.load_mw.toFixed(1)}
-                                                    </td>
-                                                </tr>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid rgba(34,211,238,0.1)', paddingBottom: '0.75rem' }}>
+                                <div>
+                                    <div className="fui-stat-label">System Snapshot</div>
+                                    <h3 style={{ margin: 0, fontSize: '1rem', color: '#fff', letterSpacing: '0.05em' }}>DATA ANALYTICS</h3>
+                                </div>
+                                <BarChart3 size={20} color="var(--fui-cyan)" style={{ opacity: 0.6 }} />
+                            </div>
+
+                            {/* Scrollable interior */}
+                            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                
+                                {/* Metrics */}
+                                <div>
+                                    <div className="fui-stat-label" style={{ marginBottom: '0.75rem' }}>Overview</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                        <div>
+                                            <div className="fui-stat-label" style={{ fontSize: '0.55rem' }}>Active Power</div>
+                                            <div className="fui-stat-value" style={{ fontSize: '1.4rem' }}>{gridData.total_pload_mw.toFixed(1)} <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>MW</span></div>
+                                        </div>
+                                        <div>
+                                            <div className="fui-stat-label" style={{ fontSize: '0.55rem' }}>Total Substations</div>
+                                            <div className="fui-stat-value" style={{ fontSize: '1.4rem', color: 'var(--fui-cyan)' }}>{mapPoints.length} <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>Nodes</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Regional Distribution */}
+                                <div>
+                                    <div className="fui-stat-label" style={{ marginBottom: '0.75rem' }}>Regional Load Distribution</div>
+                                    <div style={{ transform: 'scale(1)', transformOrigin: 'top center' }}>
+                                        <SpiralChart
+                                            data={gridData.regional_breakdown || []}
+                                            labelKey="region"
+                                            valueKey="total_pload_mw"
+                                            totalValue={gridData.total_pload_mw}
+                                            fuiMode={true}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Asset Intelligence */}
+                                <div>
+                                    <div className="fui-stat-label" style={{ marginBottom: '0.25rem' }}>Asset Distribution</div>
+                                    <div style={{ transform: 'scale(1)', transformOrigin: 'top center' }}>
+                                        <SpiralChart
+                                            data={gridData.ownership_breakdown || []}
+                                            labelKey="ownership"
+                                            valueKey="total_pload_mw"
+                                            totalValue={gridData.total_pload_mw}
+                                            fuiMode={true}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Top Highest Load Substations */}
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                        <div className="fui-stat-label" style={{ color: 'var(--fui-cyan)', margin: 0 }}>Top Highest Load Substations</div>
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                            {[5, 10, 15, 20].map(n => (
+                                                <button
+                                                    key={n}
+                                                    onClick={() => setTopCount(n)}
+                                                    style={{
+                                                        background: topCount === n ? 'var(--fui-cyan)' : 'rgba(34, 211, 238, 0.1)',
+                                                        border: `1px solid ${topCount === n ? 'var(--fui-cyan)' : 'rgba(34, 211, 238, 0.2)'}`,
+                                                        color: topCount === n ? '#000' : 'var(--fui-cyan)',
+                                                        fontSize: '0.6rem',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        cursor: 'pointer',
+                                                        fontWeight: 700,
+                                                        transition: 'all 0.2s ease'
+                                                    }}
+                                                >
+                                                    {n}
+                                                </button>
                                             ))}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {/* Ownership Blend */}
-                            <div className="fui-glass-card">
-                                <div className="fui-corner-br-item fui-corner-br" />
-                                <div className="fui-corner-br fui-corner-bl" />
-                                <header style={{ marginBottom: '1rem' }}>
-                                    <div className="fui-stat-label">Asset Intelligence</div>
-                                    <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#fff' }}>CONTROL BLOCKS</h3>
-                                </header>
-                                <div style={{ transform: 'scale(0.85)', transformOrigin: 'top left' }}>
-                                    <AuroraRingChart
-                                        data={gridData.ownership_breakdown || []}
-                                        labelKey="ownership"
-                                        valueKey="total_pload_mw"
-                                        fuiMode={true}
-                                    />
+                                        </div>
+                                    </div>
+                                    <div style={{ border: '1px solid rgba(34, 211, 238, 0.2)', borderRadius: '8px', overflow: 'hidden', maxHeight: '250px', overflowY: 'auto' }}>
+                                        <table className="fui-table" style={{ margin: 0, fontSize: '0.7rem' }}>
+                                            <thead style={{ background: 'rgba(34, 211, 238, 0.1)', position: 'sticky', top: 0, zIndex: 5 }}>
+                                                <tr>
+                                                    <th style={{ color: '#fff', borderBottom: 'none', padding: '0.5rem 0.75rem' }}>Substation ID</th>
+                                                    <th style={{ color: '#fff', borderBottom: 'none', padding: '0.5rem 0.75rem' }}>Substation Name</th>
+                                                    <th style={{ textAlign: 'right', color: '#fff', borderBottom: 'none', padding: '0.5rem 0.75rem' }}>Load (MW)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {[...mapPoints]
+                                                    .sort((a, b) => b.load_mw - a.load_mw)
+                                                    .slice(0, topCount)
+                                                    .map((p, idx) => (
+                                                        <tr key={idx} style={{ background: idx % 2 === 0 ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
+                                                            <td style={{ color: 'var(--fui-red)', fontWeight: 600, padding: '0.5rem 0.75rem' }}>{p.substation_id}</td>
+                                                            <td style={{ opacity: 0.7, padding: '0.5rem 0.75rem' }}>{p.name}</td>
+                                                            <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, padding: '0.5rem 0.75rem' }}>
+                                                                {p.load_mw.toFixed(1)}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
+                                
                             </div>
                         </div>
-                    </div>
+                    </motion.div>
                 )}
             </div>
         </div>

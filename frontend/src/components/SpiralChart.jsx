@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', targetKey = null, colorFunction }) => {
+const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', totalValue = null, targetKey = null, colorFunction, fuiMode = false }) => {
     // Robust Parsing: Handle potential strings or nulls
     const parseVal = (v) => {
         const p = parseFloat(v);
@@ -9,8 +9,9 @@ const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', t
     };
 
     // If targetKey is provided, we compare valueKey to targetKey per row.
-    // If targetKey is NOT provided, we compare valueKey to the totalLoad sum.
-    const totalLoad = targetKey ? 0 : data.reduce((acc, curr) => acc + parseVal(curr[valueKey]), 0);
+    // If targetKey is NOT provided, we use the provided totalValue OR calculate sum.
+    const internalSum = data.reduce((acc, curr) => acc + parseVal(curr[valueKey]), 0);
+    const totalLoad = targetKey ? 0 : (totalValue !== null ? totalValue : internalSum);
     const [hoveredIndex, setHoveredIndex] = useState(null);
 
     // Sort data (descending by value)
@@ -26,11 +27,11 @@ const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', t
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'linear-gradient(145deg,#10192d,#0c1423)',
+            background: fuiMode ? 'transparent' : 'linear-gradient(145deg,#10192d,#0c1423)',
             borderRadius: '26px',
-            padding: '1.2rem',
-            border: '1px solid rgba(255,255,255,0.05)',
-            boxShadow: '0 20px 45px rgba(3,10,20,0.4)'
+            padding: fuiMode ? '0' : '1.2rem',
+            border: fuiMode ? 'none' : '1px solid rgba(255,255,255,0.05)',
+            boxShadow: fuiMode ? 'none' : '0 20px 45px rgba(3,10,20,0.4)'
         }}>
             <svg viewBox="0 0 320 320" style={{ overflow: 'visible' }}>
                 {sortedData.map((item, idx) => {
@@ -64,8 +65,8 @@ const SpiralChart = ({ data, labelKey = 'region', valueKey = 'total_pload_mw', t
                         };
                     };
 
-                    const startDeg = -100;
-                    const fullSweep = 260;
+                    const startDeg = -90; // Top (12 o'clock)
+                    const fullSweep = 270;
                     const endDeg = startDeg + fullSweep;
 
                     const bgStart = getCoords(startDeg);

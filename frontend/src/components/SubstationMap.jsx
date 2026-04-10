@@ -130,6 +130,10 @@ const SubstationMap = ({ data, focusLocation, fuiMode = false }) => {
     const defaultCenter = [4.2105, 101.9758];
     const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
     const [showSettings, setShowSettings] = useState(false);
+    const [activeTab, setActiveTab] = useState('layers');
+    const [activeLayer, setActiveLayer] = useState(fuiMode ? 'dark' : 'light');
+    const [showHeatmap, setShowHeatmap] = useState(true);
+    const [showMarkers, setShowMarkers] = useState(true);
 
 
     // Search functionality state
@@ -399,6 +403,7 @@ const SubstationMap = ({ data, focusLocation, fuiMode = false }) => {
                     left: '10px',
                     zIndex: 1001,
                     width: '320px',
+                    minHeight: '380px',
                     background: 'rgba(15, 23, 42, 0.95)',
                     backdropFilter: 'blur(20px)',
                     border: '1px solid rgba(0,229,255,0.3)',
@@ -406,12 +411,44 @@ const SubstationMap = ({ data, focusLocation, fuiMode = false }) => {
                     padding: '16px',
                     boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
                 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h4 style={{ margin: 0, color: '#00e5ff', fontSize: '0.9rem' }}>Legend & Thresholds</h4>
-                        <X size={16} style={{ cursor: 'pointer', color: '#fff' }} onClick={() => setShowSettings(false)} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', gap: '15px' }}>
+                            <button onClick={() => setActiveTab('layers')} style={{ background: 'none', border: 'none', padding: 0, color: activeTab === 'layers' ? '#00e5ff' : '#aaa', cursor: 'pointer', fontWeight: activeTab === 'layers' ? 600 : 400, borderBottom: activeTab === 'layers' ? '2px solid #00e5ff' : 'none', paddingBottom: '4px' }}>Map Settings</button>
+                            <button onClick={() => setActiveTab('thresholds')} style={{ background: 'none', border: 'none', padding: 0, color: activeTab === 'thresholds' ? '#00e5ff' : '#aaa', cursor: 'pointer', fontWeight: activeTab === 'thresholds' ? 600 : 400, borderBottom: activeTab === 'thresholds' ? '2px solid #00e5ff' : 'none', paddingBottom: '4px' }}>Thresholds</button>
+                        </div>
+                        <X size={16} style={{ cursor: 'pointer', color: '#fff', marginTop: '2px' }} onClick={() => setShowSettings(false)} />
                     </div>
 
-                    <h5 style={{ margin: '0 0 8px 0', color: '#00e5ff', fontSize: '0.8rem' }}>Marker Thresholds</h5>
+                    {activeTab === 'layers' && (
+                        <div>
+                            <h5 style={{ margin: '0 0 8px 0', color: '#00e5ff', fontSize: '0.8rem' }}>Base Map</h5>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                                <label style={{ color: '#fff', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                    <input type="radio" value="light" checked={activeLayer === 'light'} onChange={() => setActiveLayer('light')} style={{ accentColor: '#00e5ff' }} /> OpenStreetMap (Light)
+                                </label>
+                                <label style={{ color: '#fff', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                    <input type="radio" value="dark" checked={activeLayer === 'dark'} onChange={() => setActiveLayer('dark')} style={{ accentColor: '#00e5ff' }} /> Dark Matter (High Contrast)
+                                </label>
+                                <label style={{ color: '#fff', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                    <input type="radio" value="satellite" checked={activeLayer === 'satellite'} onChange={() => setActiveLayer('satellite')} style={{ accentColor: '#00e5ff' }} /> Satellite Imagery
+                                </label>
+                            </div>
+
+                            <h5 style={{ margin: '0 0 8px 0', color: '#00e5ff', fontSize: '0.8rem' }}>Overlays</h5>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                <label style={{ color: '#fff', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={showHeatmap} onChange={() => setShowHeatmap(!showHeatmap)} style={{ accentColor: '#00e5ff' }} /> Load Heatmap
+                                </label>
+                                <label style={{ color: '#fff', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={showMarkers} onChange={() => setShowMarkers(!showMarkers)} style={{ accentColor: '#00e5ff' }} /> Substation Status Markers
+                                </label>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'thresholds' && (
+                        <div>
+                            <h5 style={{ margin: '0 0 8px 0', color: '#00e5ff', fontSize: '0.8rem' }}>Marker Thresholds</h5>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {thresholds.map((t, idx) => (
                             <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#fff' }}>
@@ -447,24 +484,25 @@ const SubstationMap = ({ data, focusLocation, fuiMode = false }) => {
                             </div>
                         ))}
                     </div>
-
-                    <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'flex-end' }}>
-                        <button
-                            onClick={() => setThresholds(DEFAULT_THRESHOLDS)}
-                            style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#aaa',
-                                fontSize: '0.75rem',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                            }}
-                        >
-                            <RefreshCw size={12} /> Reset to Defaults
-                        </button>
-                    </div>
+                            <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'flex-end' }}>
+                                <button
+                                    onClick={() => setThresholds(DEFAULT_THRESHOLDS)}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: '#aaa',
+                                        fontSize: '0.75rem',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                >
+                                    <RefreshCw size={12} /> Reset to Defaults
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -475,113 +513,111 @@ const SubstationMap = ({ data, focusLocation, fuiMode = false }) => {
                 scrollWheelZoom={true}
                 zoomControl={!fuiMode}
             >
-                <LayersControl position="topright">
-                    <LayersControl.BaseLayer checked={!fuiMode} name="OpenStreetMap (Light)">
-                        <TileLayer
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        />
-                    </LayersControl.BaseLayer>
-                    <LayersControl.BaseLayer checked={fuiMode} name="Dark Matter (High Contrast)">
-                        <TileLayer
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                        />
-                    </LayersControl.BaseLayer>
-                    <LayersControl.BaseLayer name="Satellite">
-                        <TileLayer
-                            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-                            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                        />
-                    </LayersControl.BaseLayer>
+                {activeLayer === 'light' && (
+                    <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                )}
+                {activeLayer === 'dark' && (
+                    <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    />
+                )}
+                {activeLayer === 'satellite' && (
+                    <TileLayer
+                        attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                    />
+                )}
 
-                    {/* Overlays for Heatmap and Markers */}
-                    <LayersControl.Overlay checked name="Load Heatmap">
-                        <HeatmapLayer 
-                            points={heatPoints} 
-                            gradient={fuiMode ? { 0.4: '#f97316', 0.7: '#ef4444', 1: '#7f1d1d' } : null}
-                        />
-                    </LayersControl.Overlay>
+                {/* Overlays for Heatmap and Markers */}
+                {showHeatmap && (
+                    <HeatmapLayer 
+                        points={heatPoints} 
+                        gradient={fuiMode ? { 0.4: '#f97316', 0.7: '#ef4444', 1: '#7f1d1d' } : null}
+                    />
+                )}
 
-                    <LayersControl.Overlay checked name="Substation Markers">
-                        <LayerGroup>
-                            {data.map(d => {
-                                if (!d.latitude || !d.longitude) return null;
-                                const rawLoad = d.total_pload_mw || d.load_mw;
-                                const load = parseFloat(rawLoad) || 0;
-                                const color = getColor(load);
-                                // Ensure load is non-negative for sqrt
-                                const radius = Math.max(4, Math.sqrt(Math.max(0, load)) * 0.8);
-                                const lat = parseFloat(d.latitude);
-                                const lng = parseFloat(d.longitude);
+                {showMarkers && (
+                    <LayerGroup>
+                        {data.map(d => {
+                            if (!d.latitude || !d.longitude) return null;
+                            const rawLoad = d.total_pload_mw || d.load_mw;
+                            const load = parseFloat(rawLoad) || 0;
+                            const color = getColor(load);
+                            // Ensure load is non-negative for sqrt
+                            const radius = Math.max(4, Math.sqrt(Math.max(0, load)) * 0.8);
+                            const lat = parseFloat(d.latitude);
+                            const lng = parseFloat(d.longitude);
 
-                                if (isNaN(lat) || isNaN(lng)) return null;
+                            if (isNaN(lat) || isNaN(lng)) return null;
 
-                                return (
-                                    <React.Fragment key={d.substation_id}>
-                                        <CircleMarker
-                                            center={[lat, lng]}
-                                            radius={radius * 3.5}
-                                            pathOptions={{
-                                                color: color,
-                                                fillColor: color,
-                                                fillOpacity: 0.1,
-                                                stroke: false
-                                            }}
-                                            interactive={false}
-                                        />
-                                        <CircleMarker
-                                            center={[lat, lng]}
-                                            radius={radius * 2}
-                                            pathOptions={{
-                                                color: color,
-                                                fillColor: color,
-                                                fillOpacity: 0.3,
-                                                stroke: false
-                                            }}
-                                            interactive={false}
-                                        />
-                                        <CircleMarker
-                                            center={[lat, lng]}
-                                            radius={radius}
-                                            pathOptions={{
-                                                color: '#fff',
-                                                weight: 1,
-                                                fillColor: color,
-                                                fillOpacity: 0.9
-                                            }}
-                                        >
-                                            <Tooltip direction="top" offset={[0, -10]} opacity={1} interactive={true}>
-                                                <div style={{ textAlign: 'center', minWidth: '150px' }}>
-                                                    <h4 style={{ margin: '0 0 4px 0', color: color }}>
-                                                        {d.name || d.substation_id}
-                                                        <div style={{ fontSize: '0.75rem', color: '#666', fontWeight: 'normal', marginTop: '2px' }}>
-                                                            {d.substation_id}
-                                                        </div>
-                                                    </h4>
-                                                    <div style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                                                        Total: <strong>{(d.total_pload_mw || d.load_mw || 0).toFixed(2)} MW</strong>
+                            return (
+                                <React.Fragment key={d.substation_id}>
+                                    <CircleMarker
+                                        center={[lat, lng]}
+                                        radius={radius * 3.5}
+                                        pathOptions={{
+                                            color: color,
+                                            fillColor: color,
+                                            fillOpacity: 0.1,
+                                            stroke: false
+                                        }}
+                                        interactive={false}
+                                    />
+                                    <CircleMarker
+                                        center={[lat, lng]}
+                                        radius={radius * 2}
+                                        pathOptions={{
+                                            color: color,
+                                            fillColor: color,
+                                            fillOpacity: 0.3,
+                                            stroke: false
+                                        }}
+                                        interactive={false}
+                                    />
+                                    <CircleMarker
+                                        center={[lat, lng]}
+                                        radius={radius}
+                                        pathOptions={{
+                                            color: '#fff',
+                                            weight: 1,
+                                            fillColor: color,
+                                            fillOpacity: 0.9
+                                        }}
+                                    >
+                                        <Tooltip direction="top" offset={[0, -10]} opacity={1} interactive={true}>
+                                            <div style={{ textAlign: 'center', minWidth: '150px' }}>
+                                                <h4 style={{ margin: '0 0 4px 0', color: color }}>
+                                                    {d.name || d.substation_id}
+                                                    <div style={{ fontSize: '0.75rem', color: '#666', fontWeight: 'normal', marginTop: '2px' }}>
+                                                        {d.substation_id}
                                                     </div>
-
-                                                    <BayBreakdown
-                                                        bays={d.bays}
-                                                        transformers={d.transformers}
-                                                        incoming_bays={d.incoming_bays}
-                                                        color={color}
-                                                    />
-
-                                                    <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '4px' }}>
-                                                        {d.state}
-                                                    </div>
+                                                </h4>
+                                                <div style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
+                                                    Total: <strong>{(d.total_pload_mw || d.load_mw || 0).toFixed(2)} MW</strong>
                                                 </div>
-                                            </Tooltip>
-                                        </CircleMarker>
-                                    </React.Fragment>
-                                );
-                            })}
-                        </LayerGroup>
-                    </LayersControl.Overlay>
-                </LayersControl>
+
+                                                <BayBreakdown
+                                                    bays={d.bays}
+                                                    transformers={d.transformers}
+                                                    incoming_bays={d.incoming_bays}
+                                                    color={color}
+                                                />
+
+                                                <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '4px' }}>
+                                                    {d.state}
+                                                </div>
+                                            </div>
+                                        </Tooltip>
+                                    </CircleMarker>
+                                </React.Fragment>
+                            );
+                        })}
+                    </LayerGroup>
+                )}
 
                 {/* Map Controller for programmatic zoom/pan */}
                 <MapController center={mapCenter} zoom={mapZoom} />
