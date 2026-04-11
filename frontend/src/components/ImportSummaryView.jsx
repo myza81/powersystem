@@ -210,9 +210,27 @@ const ImportSummaryView = ({ summary }) => {
 
                 return (
                     <div style={{ animation: 'fadeIn 0.3s' }}>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <h3 style={{ margin: '0 0 0.5rem 0', color: '#047d60', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.1rem', fontWeight: 700, fontFamily: "'Poppins', sans-serif" }}>
+                                <AlertTriangle size={20} /> Missing Data
+                            </h3>
+                            <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '8px', padding: '12px 16px', marginBottom: '1rem' }}>
+                                <div style={{ fontSize: '0.75rem', color: '#92400e', fontWeight: 600, marginBottom: '4px', fontFamily: "'Poppins', sans-serif" }}>
+                                    What is Missing Data?
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: '#b45309', lineHeight: 1.5, fontFamily: "'Poppins', sans-serif" }}>
+                                    These are buses that are <strong>not mapped</strong> to any substation in your network topology. 
+                                    This often happens when a bus in your PSS/E case does not have a corresponding substation ID defined, 
+                                    or the substation mapping was not included in the import.
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: '#b45309', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #fcd34d', fontFamily: "'Poppins', sans-serif" }}>
+                                    <strong>Unknown Buses</strong> = Buses with no assigned substation name
+                                </div>
+                            </div>
+                        </div>
                         <div style={{ display: 'grid', gap: '12px' }}>
                             {Object.entries(groupedBySub)
-                                .sort((a, b) => b[1].total_mw - a[1].total_mw) // Sort by MW descending
+                                .sort((a, b) => b[1].total_mw - a[1].total_mw)
                                 .map(([subName, data]) => {
                                     const isOpen = expandedMissing.has(subName);
                                     const localSearch = missingBusesSearch[subName] || '';
@@ -222,7 +240,7 @@ const ImportSummaryView = ({ summary }) => {
                                         return String(b.bus_number).includes(q) || (b.bus_name || '').toLowerCase().includes(q);
                                     });
                                     return (
-                                        <div key={subName} style={{ borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                                        <div key={subName} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                                             <button
                                                 onClick={() => toggleMissing(subName)}
                                                 style={{
@@ -231,17 +249,17 @@ const ImportSummaryView = ({ summary }) => {
                                                     alignItems: 'center',
                                                     justifyContent: 'space-between',
                                                     padding: '12px 16px',
-                                                    background: 'rgba(15, 23, 42, 0.6)',
+                                                    background: '#fff',
                                                     border: 'none',
-                                                    color: '#e2e8f0',
+                                                    color: '#334155',
                                                     cursor: 'pointer'
                                                 }}
                                             >
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                     {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#f59e0b' }}>{subName}</div>
+                                                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#f59e0b', fontFamily: "'Poppins', sans-serif" }}>{subName}</div>
                                                 </div>
-                                                <div style={{ display: 'flex', gap: '14px', color: '#94a3b8', fontSize: '0.75rem' }}>
+                                                <div style={{ display: 'flex', gap: '14px', color: '#64748b', fontSize: '0.75rem', fontFamily: "'Poppins', sans-serif" }}>
                                                     <span>{data.buses.length} buses</span>
                                                     <span>{data.total_mw.toFixed(3)} MW</span>
                                                     <span>{data.total_mvar.toFixed(3)} MVar</span>
@@ -254,10 +272,10 @@ const ImportSummaryView = ({ summary }) => {
                                                         initial={{ height: 0, opacity: 0 }}
                                                         animate={{ height: 'auto', opacity: 1 }}
                                                         exit={{ height: 0, opacity: 0 }}
-                                                        style={{ padding: '16px', background: 'rgba(15, 23, 42, 0.35)' }}
+                                                        style={{ padding: '16px', background: '#f8fafc' }}
                                                     >
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '12px' }}>
-                                                            <div style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 600 }}>Unmapped Buses</div>
+                                                            <div style={{ color: '#334155', fontSize: '0.8rem', fontWeight: 600, fontFamily: "'Poppins', sans-serif" }}>Unmapped Buses</div>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                                 <div style={{ position: 'relative' }}>
                                                                     <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
@@ -267,31 +285,45 @@ const ImportSummaryView = ({ summary }) => {
                                                                         value={localSearch}
                                                                         onChange={(e) => updateMissingBusesSearch(subName, e.target.value)}
                                                                         style={{
-                                                                            background: 'rgba(15, 23, 42, 0.6)',
-                                                                            border: '1px solid rgba(255,255,255,0.1)',
+                                                                            background: '#fff',
+                                                                            border: '1px solid #e2e8f0',
                                                                             borderRadius: '8px',
                                                                             padding: '6px 10px 6px 30px',
-                                                                            color: '#fff',
+                                                                            color: '#334155',
                                                                             fontSize: '0.75rem',
                                                                             outline: 'none',
-                                                                            width: '200px'
+                                                                            width: '200px',
+                                                                            fontFamily: "'Poppins', sans-serif"
                                                                         }}
                                                                     />
                                                                 </div>
-                                                                <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{filteredData.length} / {data.buses.length} rows</div>
+                                                                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>{filteredData.length} / {data.buses.length} rows</div>
                                                             </div>
                                                         </div>
-                                                        <DataTable
-                                                            columns={[
-                                                                { header: 'Bus No.', field: 'bus_number' },
-                                                                { header: 'Name', field: 'bus_name' },
-                                                                { header: 'Base kV', field: 'base_kv' },
-                                                                { header: 'Load (MW)', field: 'load_p_mw' },
-                                                                { header: 'Load (MVar)', field: 'load_q_mvar' },
-                                                            ]}
-                                                            data={filteredData}
-                                                            keyField="bus_id"
-                                                        />
+                                                        <div style={{ background: '#fff', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr 0.8fr 1fr 1fr', gap: '1rem', padding: '0.75rem 1rem', background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.08), rgba(5, 150, 105, 0.04))', borderBottom: '1px solid #e2e8f0', fontSize: '0.65rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Poppins', sans-serif" }}>
+                                                                <div>Bus No.</div>
+                                                                <div>Name</div>
+                                                                <div>Base kV</div>
+                                                                <div>Load (MW)</div>
+                                                                <div>Load (MVar)</div>
+                                                            </div>
+                                                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                                                {filteredData.length === 0 ? (
+                                                                    <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem' }}>No buses found</div>
+                                                                ) : (
+                                                                    filteredData.map(bus => (
+                                                                        <div key={bus.bus_id} style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr 0.8fr 1fr 1fr', gap: '1rem', padding: '0.7rem 1rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', color: '#334155', fontFamily: "'Poppins', sans-serif" }}>
+                                                                            <div style={{ fontWeight: 600 }}>{bus.bus_number}</div>
+                                                                            <div>{bus.bus_name || '--'}</div>
+                                                                            <div>{bus.base_kv}</div>
+                                                                            <div>{Number(bus.load_p_mw || 0).toFixed(3)}</div>
+                                                                            <div>{Number(bus.load_q_mvar || 0).toFixed(3)}</div>
+                                                                        </div>
+                                                                    ))
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>
@@ -696,6 +728,15 @@ case 'topology':
                             });
                             return (
                                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                    <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '8px', padding: '12px 16px', marginBottom: '1rem' }}>
+                                        <div style={{ fontSize: '0.75rem', color: '#92400e', fontWeight: 600, marginBottom: '4px', fontFamily: "'Poppins', sans-serif" }}>
+                                            What is "Missing"?
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: '#b45309', lineHeight: 1.5, fontFamily: "'Poppins', sans-serif" }}>
+                                            These are <strong>Model Substations</strong> (from master file) that do not exist in your Network Topology. 
+                                            They were likely defined in the master file but were never imported into the network model.
+                                        </div>
+                                    </div>
                                     <div style={{ marginBottom: '1rem', position: 'relative' }}>
                                         <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                                         <input
@@ -762,7 +803,7 @@ case 'topology':
                                             }}
                                         />
                                     </div>
-                                    <div style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}>
+<div style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '1rem', padding: '0.85rem 1.25rem', background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))', borderBottom: '1px solid #e2e8f0', fontSize: '0.68rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                                             <div>Substation ID</div>
                                             <div>Name</div>
@@ -775,8 +816,8 @@ case 'topology':
                                                 filteredData.map(s => (
                                                     <div key={s.substation_id} style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '1rem', padding: '0.85rem 1.25rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.8rem', color: '#334155' }}>
                                                         <div style={{ fontWeight: 600 }}>{s.substation_id}</div>
-                                                        <div>{s.substation_name || '--'}</div>
-                                                        <div>{s.buses?.length || 0}</div>
+                                                        <div style={{ fontFamily: "'Poppins', sans-serif" }}>{s.substation_name || '--'}</div>
+                                                        <div style={{ fontFamily: "'Poppins', sans-serif" }}>{s.buses?.length || 0}</div>
                                                     </div>
                                                 ))
                                             )}
@@ -795,38 +836,52 @@ case 'topology':
                                     (s.substation_name || '').toLowerCase().includes(q);
                             });
                             return (
-                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                    <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '8px', padding: '12px 16px', marginBottom: '1rem' }}>
+                                        <div style={{ fontSize: '0.75rem', color: '#92400e', fontWeight: 600, marginBottom: '4px', fontFamily: "'Poppins', sans-serif" }}>
+                                            What is "Unregistered"?
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: '#b45309', lineHeight: 1.5, fontFamily: "'Poppins', sans-serif" }}>
+                                            These are <strong>Topology Substations</strong> that exist in your network but are not registered in the Model. 
+                                            They may need to be added to the master file for proper tracking.
+                                        </div>
+                                    </div>
                                     <div style={{ marginBottom: '1rem', position: 'relative' }}>
                                         <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                                         <input
                                             type="text"
-                                            placeholder="Search Unregistered Substations..."
+                                            placeholder="Search Unregistered..."
                                             value={searchMissingMaster}
                                             onChange={(e) => setSearchMissingMaster(e.target.value)}
                                             style={{
-                                                width: '100%',
-                                                background: 'rgba(15, 23, 42, 0.4)',
-                                                border: '1px solid rgba(255,255,255,0.1)',
-                                                borderRadius: '8px',
-                                                padding: '10px 10px 10px 36px',
-                                                color: '#fff',
-                                                fontSize: '0.85rem',
-                                                outline: 'none'
+                                                width: '100%', background: '#f8fafc',
+                                                border: '1px solid #e2e8f0', borderRadius: '8px',
+                                                padding: '10px 10px 10px 36px', color: '#334155',
+                                                fontSize: '0.85rem', outline: 'none', fontFamily: "'Poppins', sans-serif"
                                             }}
                                         />
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
-                                        <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{filteredData.length} / {missingFromMasterList.length} rows</div>
+                                    <div style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '1rem', padding: '0.85rem 1.25rem', background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))', borderBottom: '1px solid #e2e8f0', fontSize: '0.68rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                            <div>Substation ID</div>
+                                            <div>Name</div>
+                                            <div>Buses</div>
+                                        </div>
+                                        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                            {filteredData.length === 0 ? (
+                                                <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>No data found</div>
+                                            ) : (
+                                                filteredData.map(s => (
+                                                    <div key={s.substation_id} style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '1rem', padding: '0.85rem 1.25rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.8rem', color: '#334155' }}>
+                                                        <div style={{ fontWeight: 600 }}>{s.substation_id}</div>
+                                                        <div style={{ fontFamily: "'Poppins', sans-serif" }}>{s.substation_name || '--'}</div>
+                                                        <div style={{ fontFamily: "'Poppins', sans-serif" }}>{s.buses?.length || 0}</div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
-                                    <DataTable
-                                        columns={[
-                                            { header: 'Substation ID', field: 'substation_id' },
-                                            { header: 'Substation Name', field: 'substation_name' },
-                                            { header: 'Buses Count', render: row => row.buses?.length || 0 },
-                                        ]}
-                                        data={filteredData}
-                                        keyField="substation_id"
-                                    />
+                                    <div style={{ marginTop: '0.5rem', color: '#64748b', fontSize: '0.75rem' }}>Showing {filteredData.length} of {missingFromMasterList.length} rows</div>
                                 </motion.div>
                             );
                         })()}
