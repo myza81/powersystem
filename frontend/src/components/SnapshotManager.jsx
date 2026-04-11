@@ -337,7 +337,8 @@ const SnapshotManager = () => {
                 background: '#fff', 
                 borderRadius: '12px', 
                 overflow: 'hidden',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.06)'
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                border: '1px solid #e2e8f0'
             }}>
                 <div style={{
                     display: 'grid',
@@ -345,15 +346,16 @@ const SnapshotManager = () => {
                     gap: '1rem',
                     padding: '0.85rem 1.25rem',
                     background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))',
-                    borderBottom: '1px solid rgba(4, 125, 96, 0.15)',
-                    fontSize: '0.68rem',
+                    borderBottom: '1px solid #e2e8f0',
+                    fontSize: '0.8rem',
                     fontWeight: 700,
                     color: '#047d60',
                     textTransform: 'uppercase',
-                    letterSpacing: '0.18em',
+                    letterSpacing: '0.1em',
                     position: 'sticky',
                     top: 0,
-                    zIndex: 10
+                    zIndex: 10,
+                    fontFamily: "'Poppins', sans-serif"
                 }}>
                     <div>Model Reference</div>
                     <div>Timestamp</div>
@@ -363,14 +365,15 @@ const SnapshotManager = () => {
                     
                 <div style={{ maxHeight: 'calc(100vh - 480px)', overflowY: 'auto' }}>
                 {loading ? (
-                    <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
+                    <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                         <Loader2 className="animate-spin" size={32} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-                        <div>Loading registry...</div>
+                        <div style={{ fontSize: '0.85rem' }}>Loading registry...</div>
                     </div>
                 ) : snapshots.length === 0 ? (
-                    <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
+                    <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                         <Database size={48} style={{ marginBottom: '1rem', opacity: 0.2 }} />
-                        <div>No snapshots found. Import your first PSS/E case.</div>
+                        <div style={{ fontSize: '0.85rem' }}>No snapshots found.</div>
+                        <div style={{ fontSize: '0.75rem', marginTop: '0.5rem' }}>Import your first PSS/E case.</div>
                     </div>
                 ) : (
                     snapshots.map((snap, i) => (
@@ -380,34 +383,36 @@ const SnapshotManager = () => {
                                 display: 'grid',
                                 gridTemplateColumns: 'minmax(300px, 2fr) 180px 1fr 120px',
                                 gap: '1rem',
-                                padding: '1rem 1.5rem',
-                                borderBottom: '1px solid rgba(4, 125, 96, 0.08)',
+                                padding: '0.85rem 1.25rem',
+                                borderBottom: '1px solid #f1f5f9',
                                 alignItems: 'center',
                                 background: snap.is_active ? 'rgba(4, 125, 96, 0.04)' : 'transparent',
-                                borderLeft: snap.is_active ? '3px solid #047d60' : '3px solid transparent'
+                                fontSize: '0.8rem',
+                                color: '#334155',
+                                cursor: !snap.is_active ? 'pointer' : 'default'
                             }}
                             onClick={() => !snap.is_active && handleActivate(snap.id)}
                         >
                             <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: snap.is_active ? '#047d60' : '#334155' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2px' }}>
+                                    <div style={{ fontWeight: 600, color: snap.is_active ? '#047d60' : '#334155' }}>
                                         {snap.name}
                                     </div>
                                     <StatusBadge active={snap.is_active} />
                                 </div>
-                                <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                                <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontFamily: 'monospace' }}>
                                     UID: {snap.id}
                                 </div>
                             </div>
 
-                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
+                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
                                 {new Date(snap.timestamp).toLocaleDateString()}
-                                <span style={{ marginLeft: '8px', opacity: 0.5 }}>
+                                <span style={{ marginLeft: '6px', opacity: 0.5 }}>
                                     {new Date(snap.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                             </div>
 
-                            <div style={{ color: '#64748b', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div style={{ color: '#64748b', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {snap.description || '--'}
                             </div>
 
@@ -421,7 +426,7 @@ const SnapshotManager = () => {
                                             color: '#fff',
                                             padding: '4px 12px',
                                             borderRadius: '6px',
-                                            fontSize: '0.65rem',
+fontSize: '0.7rem',
                                             fontWeight: 600,
                                             cursor: 'pointer'
                                         }}

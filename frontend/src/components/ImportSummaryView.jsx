@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    X, AlertTriangle, Zap, Grid, CheckCircle, AlertCircle, ChevronDown, ChevronRight, Search
+    X, AlertTriangle, Zap, Grid, CheckCircle, AlertCircle, ChevronDown, ChevronRight, Search, LayoutDashboard
 } from 'lucide-react';
 
 // --- Reusable Components ---
@@ -951,7 +951,7 @@ case 'topology':
                     <div>
                         <div style={{ marginBottom: '1.5rem' }}>
                             <h3 style={{ margin: '0 0 0.5rem 0', color: '#047d60', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.1rem', fontWeight: 700, fontFamily: "'Poppins', sans-serif" }}>
-                                <Grid size={20} /> Active Snapshot Overview
+                                <LayoutDashboard size={20} /> Active Snapshot Overview
                             </h3>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', animation: 'fadeIn 0.3s' }}>
@@ -1030,7 +1030,7 @@ case 'topology':
                             textAlign: 'left'
                         }}
                     >
-                        <Grid size={18} />
+                        <LayoutDashboard size={18} />
                         Overview
                     </button>
                     <button
