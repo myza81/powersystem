@@ -469,89 +469,65 @@ const ImportSummaryView = ({ summary }) => {
                                                 >
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                                         <div style={{ background: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                                                            <button
-                                                                onClick={() => toggleIslandLoads(island.id)}
-                                                                style={{
-                                                                    width: '100%',
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'space-between',
-                                                                    padding: '10px 14px',
-                                                                    background: '#f8fafc',
-                                                                    border: 'none',
-                                                                    color: '#334155',
-                                                                    cursor: 'pointer'
-                                                                }}
-                                                            >
+                                                            <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                    {isLoadsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                                                     <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#047d60', fontFamily: "'Poppins', sans-serif" }}>Load Contributors</div>
                                                                 </div>
                                                                 <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{loadCount} loads</div>
-                                                            </button>
-
-                                                            <AnimatePresence>
-                                                                {isLoadsOpen && (
-                                                                    <motion.div
-                                                                        initial={{ height: 0, opacity: 0 }}
-                                                                        animate={{ height: 'auto', opacity: 1 }}
-                                                                        exit={{ height: 0, opacity: 0 }}
-                                                                        style={{ padding: '12px 14px', background: '#fff' }}
-                                                                    >
-                                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px', gap: '12px' }}>
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                                                <div style={{ position: 'relative' }}>
-                                                                                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                                                                                    <input
-                                                                                        type="text"
-                                                                                        placeholder="Search loads..."
-                                                                                        value={loadQuery}
-                                                                                        onChange={(e) => updateIslandLoadSearch(island.id, e.target.value)}
-                                                                                        style={{
-                                                                                            background: '#f8fafc',
-                                                                                            border: '1px solid #e2e8f0',
-                                                                                            borderRadius: '8px',
-                                                                                            padding: '6px 10px 6px 30px',
-                                                                                            color: '#334155',
-                                                                                            fontSize: '0.75rem',
-                                                                                            outline: 'none',
-                                                                                            width: '200px',
-                                                                                            fontFamily: "'Poppins', sans-serif"
-                                                                                        }}
-                                                                                    />
+                                                            </div>
+                                                            <div style={{ padding: '12px 14px', background: '#fff' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px', gap: '12px' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                        <div style={{ position: 'relative' }}>
+                                                                            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                                                            <input
+                                                                                type="text"
+                                                                                placeholder="Search loads..."
+                                                                                value={loadQuery}
+                                                                                onChange={(e) => updateIslandLoadSearch(island.id, e.target.value)}
+                                                                                style={{
+                                                                                    background: '#f8fafc',
+                                                                                    border: '1px solid #e2e8f0',
+                                                                                    borderRadius: '8px',
+                                                                                    padding: '6px 10px 6px 30px',
+                                                                                    color: '#334155',
+                                                                                    fontSize: '0.75rem',
+                                                                                    outline: 'none',
+                                                                                    width: '200px',
+                                                                                    fontFamily: "'Poppins', sans-serif"
+                                                                                }}
+                                                                            />
+                                                                        </div>
+                                                                        <div style={{ color: '#64748b', fontSize: '0.75rem' }}>{filteredLoads.length} / {loadCount} rows</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div style={{ background: '#fff', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.8fr 1.2fr 1fr 0.8fr 0.8fr', gap: '1rem', padding: '0.75rem 1rem', background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.08), rgba(5, 150, 105, 0.04))', borderBottom: '1px solid #e2e8f0', fontSize: '0.65rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Poppins', sans-serif" }}>
+                                                                        <div>Load ID</div>
+                                                                        <div>Bus No.</div>
+                                                                        <div>Bus Name</div>
+                                                                        <div>Substation</div>
+                                                                        <div>P (MW)</div>
+                                                                        <div>Q (MVar)</div>
+                                                                    </div>
+                                                                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                                                        {filteredLoads.length === 0 ? (
+                                                                            <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem' }}>No loads found</div>
+                                                                        ) : (
+                                                                            filteredLoads.map(load => (
+                                                                                <div key={load.load_id} style={{ display: 'grid', gridTemplateColumns: '1fr 0.8fr 1.2fr 1fr 0.8fr 0.8fr', gap: '1rem', padding: '0.7rem 1rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', color: '#334155', fontFamily: "'Poppins', sans-serif" }}>
+                                                                                    <div style={{ fontWeight: 600 }}>{load.load_id}</div>
+                                                                                    <div>{load.bus_number}</div>
+                                                                                    <div>{load.bus_name || '--'}</div>
+                                                                                    <div>{load.substation_name || '--'}</div>
+                                                                                    <div>{Number(load.p_mw || 0).toFixed(3)}</div>
+                                                                                    <div>{Number(load.q_mvar || 0).toFixed(3)}</div>
                                                                                 </div>
-                                                                                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>{filteredLoads.length} / {loadCount} rows</div>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div style={{ background: '#fff', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.8fr 1.2fr 1fr 0.8fr 0.8fr', gap: '1rem', padding: '0.75rem 1rem', background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.08), rgba(5, 150, 105, 0.04))', borderBottom: '1px solid #e2e8f0', fontSize: '0.65rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Poppins', sans-serif" }}>
-                                                                                <div>Load ID</div>
-                                                                                <div>Bus No.</div>
-                                                                                <div>Bus Name</div>
-                                                                                <div>Substation</div>
-                                                                                <div>P (MW)</div>
-                                                                                <div>Q (MVar)</div>
-                                                                            </div>
-                                                                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                                                                {filteredLoads.length === 0 ? (
-                                                                                    <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem' }}>No loads found</div>
-                                                                                ) : (
-                                                                                    filteredLoads.map(load => (
-                                                                                        <div key={load.load_id} style={{ display: 'grid', gridTemplateColumns: '1fr 0.8fr 1.2fr 1fr 0.8fr 0.8fr', gap: '1rem', padding: '0.7rem 1rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', color: '#334155', fontFamily: "'Poppins', sans-serif" }}>
-                                                                                            <div style={{ fontWeight: 600 }}>{load.load_id}</div>
-                                                                                            <div>{load.bus_number}</div>
-                                                                                            <div>{load.bus_name || '--'}</div>
-                                                                                            <div>{load.substation_name || '--'}</div>
-                                                                                            <div>{Number(load.p_mw || 0).toFixed(3)}</div>
-                                                                                            <div>{Number(load.q_mvar || 0).toFixed(3)}</div>
-                                                                                        </div>
-                                                                                    ))
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    </motion.div>
-                                                                )}
-                                                            </AnimatePresence>
+                                                                            ))
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
                                                         </div>
 
                                                         {/* Difference Tables comparing Island Subs vs Topology Subs */}
