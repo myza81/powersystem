@@ -108,7 +108,7 @@ const SubstationFilter = ({
                             placeholder="Search name, ID, mnemonic..."
                             value={search}
                             onChange={(e) => updateFilter('search', e.target.value)}
-                            style={{ paddingLeft: '2.2rem', paddingRight: '2rem', width: '100%', height: '36px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', color: '#0f172a', outline: 'none' }}
+                            className="filter-search-input" style={{ paddingLeft: '2.2rem', paddingRight: '2rem', width: '100%', height: '36px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', color: '#0f172a', outline: 'none', fontFamily: "'Poppins', sans-serif", fontSize: '0.85rem' }}
                         />
                         {search !== '' && (
                             <X
@@ -240,7 +240,7 @@ const FilterDropdown = ({ label, value, options, onChange, disabled, suffix = ''
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            style={{ width: '100%', padding: '8px', fontSize: '0.85rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', color: '#0f172a' }}
+            style={{ width: '100%', padding: '8px', fontSize: '0.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', color: '#0f172a', fontFamily: "'Poppins', sans-serif" }}
         >
             {options.map(opt => (
                 <option key={opt} value={opt} style={{ background: '#fff' }}>

@@ -13,8 +13,8 @@ const tabButtonStyle = (isActive) => {
         padding: '0.75rem 1rem',
         borderRadius: '8px',
         border: 'none',
-        background: isActive ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
-        color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+        background: isActive ? '#047d60' : 'transparent',
+        color: isActive ? '#fff' : '#64748b',
         fontWeight: isActive ? 600 : 500,
         cursor: 'pointer',
         display: 'flex',
@@ -22,29 +22,34 @@ const tabButtonStyle = (isActive) => {
         gap: '12px',
         transition: 'all 0.2s ease',
         fontSize: '0.85rem',
-        textAlign: 'left'
+        textAlign: 'left',
+        fontFamily: "'Poppins', sans-serif"
     };
 };
 
 const inputLabelStyle = {
     display: 'block',
     fontSize: '0.7rem',
-    color: 'var(--text-secondary)',
+    color: '#334155',
     marginBottom: '6px',
-    fontWeight: 500,
-    letterSpacing: '0.5px'
+    fontWeight: 600,
+    letterSpacing: '0.5px',
+    fontFamily: "'Poppins', sans-serif"
 };
 
 const pillStyle = (type, value) => {
-    let bg = 'rgba(255,255,255,0.05)';
-    let color = 'var(--text-secondary)';
+    let bg = '#f1f5f9';
+    let color = '#64748b';
 
     if (type === 'voltage') {
-        bg = value >= 500 ? 'rgba(255,255,255,0.1)' : (value >= 275 ? 'rgba(0, 191, 255, 0.08)' : (value >= 230 ? 'rgba(255, 165, 0, 0.1)' : 'rgba(74, 222, 128, 0.1)'));
-        color = value >= 500 ? '#ffffff' : (value >= 275 ? '#15d5f6ff' : (value >= 230 ? '#ffa500' : 'var(--accent-cyan)'));
+        bg = value >= 500 ? '#1e293b' : (value >= 275 ? '#e0f2fe' : (value >= 230 ? '#fef3c7' : '#ecfdf5'));
+        color = value >= 500 ? '#ffffff' : (value >= 275 ? '#0369a1' : (value >= 230 ? '#b45309' : '#047d60'));
     } else if (type === 'ownership') {
         bg = 'rgba(255, 159, 67, 0.1)';
-        color = '#ff9f43';
+        color = '#c2410c';
+    } else if (type === 'default') {
+        bg = '#f1f5f9';
+        color = '#64748b';
     }
 
     return {
@@ -53,6 +58,7 @@ const pillStyle = (type, value) => {
         color: color,
         padding: '2px 8px',
         borderRadius: '4px',
+        fontFamily: "'Poppins', sans-serif",
         fontWeight: 600,
         display: 'inline-block'
     };
@@ -107,7 +113,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                style={{ background: 'var(--bg-card)', padding: '1.5rem', borderRadius: '1rem', width: '100%', maxWidth: '500px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}
+                style={{ background: '#fff', padding: '1.5rem', borderRadius: '1rem', width: '100%', maxWidth: '500px', border: '1px solid #e2e8f0', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', gap: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}
             >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
@@ -125,7 +131,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
-                            style={{ padding: '0.75rem', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', gap: '8px' }}
+                            style={{ padding: '0.75rem', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: '8px' }}
                         >
                             <AlertTriangle size={16} color="#ef4444" />
                             <span style={{ fontSize: '0.8rem', color: '#ef4444', lineHeight: 1.4 }}>{assetStatus.msg}</span>
@@ -170,14 +176,14 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                         onClick={() => setAssetForm(f => ({ ...f, is_active: !f.is_active }))}
                                         style={{
                                             width: '40px', height: '20px',
-                                            background: assetForm.is_active !== false ? 'rgba(76, 175, 80, 0.4)' : 'rgba(255,255,255,0.1)',
+                                            background: assetForm.is_active !== false ? 'rgba(76, 175, 80, 0.4)' : '#e2e8f0',
                                             borderRadius: '20px', padding: '2px', cursor: 'pointer', position: 'relative',
-                                            border: `1px solid ${assetForm.is_active !== false ? 'rgba(76, 175, 80, 0.5)' : 'rgba(255,255,255,0.2)'}`,
+                                            border: `1px solid ${assetForm.is_active !== false ? 'rgba(76, 175, 80, 0.5)' : '#cbd5e1'}`,
                                             transition: 'all 0.3s'
                                         }}
                                     >
                                         <motion.div animate={{ x: assetForm.is_active !== false ? 20 : 0 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                                            style={{ width: '14px', height: '14px', background: '#fff', borderRadius: '50%', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
+                                            style={{ width: '14px', height: '14px', background: '#fff', borderRadius: '50%', boxShadow: '0 2px 4px #f1f5f9' }} />
                                     </div>
                                     <span style={{ fontSize: '0.75rem', color: assetForm.is_active !== false ? '#fff' : 'var(--text-secondary)', fontWeight: 500 }}>
                                         {assetForm.is_active !== false ? 'Active' : 'Off'}
@@ -188,7 +194,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
 
                         <div>
                             <label style={inputLabelStyle}>Load Transformers</label>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f1f5f9', alignItems: 'flex-start' }}>
                                 {filteredLTs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No load transformers available for {targetV}kV.</div>}
                                 {filteredLTs.map((lt) => {
                                     const checked = (assetForm.load_transformers || []).includes(lt.id);
@@ -199,9 +205,9 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                         <label key={lt.id} style={{
                                             display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px',
                                             cursor: isClaimed ? 'not-allowed' : 'pointer',
-                                            background: isClaimed ? 'rgba(255,255,255,0.02)' : checked ? 'rgba(0, 191, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                                            border: `1px solid ${isClaimed ? 'rgba(255,255,255,0.05)' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
-                                            color: isClaimed ? 'rgba(255,255,255,0.2)' : checked ? '#fff' : 'var(--text-secondary)',
+                                            background: isClaimed ? '#f8fafc' : checked ? 'rgba(0, 191, 255, 0.2)' : '#f1f5f9',
+                                            border: `1px solid ${isClaimed ? '#f1f5f9' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                            color: isClaimed ? '#cbd5e1' : checked ? '#fff' : 'var(--text-secondary)',
                                             transition: 'all 0.2s', userSelect: 'none',
                                             opacity: isClaimed ? 0.4 : 1
                                         }}>
@@ -218,7 +224,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
 
                         <div>
                             <label style={inputLabelStyle}>Auto Transformers</label>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f1f5f9', alignItems: 'flex-start' }}>
                                 {filteredATs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No auto transformers available for {targetV}kV.</div>}
                                 {filteredATs.map((at) => {
                                     const checked = (assetForm.auto_transformers || []).includes(at.id);
@@ -229,9 +235,9 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                         <label key={at.id} style={{
                                             display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px',
                                             cursor: isClaimed ? 'not-allowed' : 'pointer',
-                                            background: isClaimed ? 'rgba(255,255,255,0.02)' : checked ? 'rgba(0, 191, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                                            border: `1px solid ${isClaimed ? 'rgba(255,255,255,0.05)' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
-                                            color: isClaimed ? 'rgba(255,255,255,0.2)' : checked ? '#fff' : 'var(--text-secondary)',
+                                            background: isClaimed ? '#f8fafc' : checked ? 'rgba(0, 191, 255, 0.2)' : '#f1f5f9',
+                                            border: `1px solid ${isClaimed ? '#f1f5f9' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                            color: isClaimed ? '#cbd5e1' : checked ? '#fff' : 'var(--text-secondary)',
                                             transition: 'all 0.2s', userSelect: 'none',
                                             opacity: isClaimed ? 0.4 : 1
                                         }}>
@@ -248,7 +254,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
 
                         <div>
                             <label style={inputLabelStyle}>Incoming Branches</label>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', background: 'rgba(0,0,0,0.2)', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f1f5f9', alignItems: 'flex-start' }}>
                                 {filteredIBs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No branches available for {targetV}kV.</div>}
                                 {filteredIBs.map((ib) => {
                                     const checked = (assetForm.incoming_branches || []).some(b => (typeof b === 'object' ? b.id : b) === ib.id);
@@ -259,9 +265,9 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                         <label key={ib.id} style={{
                                             display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px',
                                             cursor: isClaimed ? 'not-allowed' : 'pointer',
-                                            background: isClaimed ? 'rgba(255,255,255,0.02)' : checked ? 'rgba(0, 191, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                                            border: `1px solid ${isClaimed ? 'rgba(255,255,255,0.05)' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
-                                            color: isClaimed ? 'rgba(255,255,255,0.2)' : checked ? '#fff' : 'var(--text-secondary)',
+                                            background: isClaimed ? '#f8fafc' : checked ? 'rgba(0, 191, 255, 0.2)' : '#f1f5f9',
+                                            border: `1px solid ${isClaimed ? '#f1f5f9' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                            color: isClaimed ? '#cbd5e1' : checked ? '#fff' : 'var(--text-secondary)',
                                             transition: 'all 0.2s', userSelect: 'none',
                                             opacity: isClaimed ? 0.4 : 1
                                         }}>
@@ -331,8 +337,8 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
 
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                     <button onClick={onClose}
-                        style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#fff'; }}
+                        style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', background: 'transparent', border: '1px solid #e2e8f0', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#fff'; }}
                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
                     >
                         Cancel
@@ -582,14 +588,14 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
             gap: '8px',
             padding: '6px 8px',
             background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.05)',
+            border: '1px solid #f1f5f9',
             borderRadius: '6px',
             width: '100%',
         };
 
         const getPillStyle = () => ({
-            background: isActive ? 'rgba(0, 188, 212, 0.12)' : 'rgba(255,255,255,0.08)',
-            border: `1px solid ${isActive ? 'rgba(0, 188, 212, 0.25)' : 'rgba(255,255,255,0.1)'}`,
+            background: isActive ? 'rgba(0, 188, 212, 0.12)' : '#f1f5f9',
+            border: `1px solid ${isActive ? 'rgba(0, 188, 212, 0.25)' : '#e2e8f0'}`,
             color: isActive ? 'var(--accent-cyan)' : '#fff',
             fontSize: '0.6rem',
             padding: '1px 6px',
@@ -660,8 +666,8 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                     fontSize: '0.6rem',
                                     color: isActive ? 'var(--accent-cyan)' : '#fff',
                                     fontWeight: 700,
-                                    background: isActive ? 'rgba(0, 188, 212, 0.12)' : 'rgba(255,255,255,0.08)',
-                                    border: `1px solid ${isActive ? 'rgba(0, 188, 212, 0.25)' : 'rgba(255,255,255,0.1)'}`,
+                                    background: isActive ? 'rgba(0, 188, 212, 0.12)' : '#f1f5f9',
+                                    border: `1px solid ${isActive ? 'rgba(0, 188, 212, 0.25)' : '#e2e8f0'}`,
                                     padding: '1px 0',
                                     width: '42px',
                                     display: 'inline-flex',
@@ -710,7 +716,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
             <div style={{
                 position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                background: 'rgba(10, 12, 16, 0.4)', zIndex: 1000,
+                background: 'rgba(0, 0, 0, 0.4)', zIndex: 1000,
                 display: 'flex', justifyContent: 'center', alignItems: 'center',
                 backdropFilter: 'blur(4px)', padding: '1rem'
             }}>
@@ -718,7 +724,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="glass-card"
                     style={{
                         width: '100%',
                         maxWidth: '920px',
@@ -728,34 +733,37 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                         flexDirection: 'column',
                         padding: 0,
                         overflow: 'hidden',
-                        boxShadow: '0 24px 64px rgba(0, 0, 0, 0.6)'
+                        boxShadow: '0 24px 64px rgba(0, 0, 0, 0.2)',
+                        background: '#fff',
+                        borderRadius: '12px',
+                        border: '1px solid #e2e8f0'
                     }}
                 >
                     {/* Header */}
                     <div style={{
                         padding: '1.25rem 2rem',
-                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                        borderBottom: '1px solid #e2e8f0',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        background: 'rgba(255,255,255,0.01)'
+                        background: '#fff'
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                             <div style={{
                                 padding: '10px',
-                                background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(0, 255, 163, 0.1))',
+                                background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))',
                                 borderRadius: '10px',
-                                border: '1px solid rgba(0, 229, 255, 0.2)'
+                                border: '1px solid rgba(4, 125, 96, 0.2)'
                             }}>
-                                {substation?.substation_id ? <Edit2 size={20} color="var(--accent-cyan)" /> : <MapPin size={20} color="var(--accent-cyan)" />}
+                                {substation?.substation_id ? <Edit2 size={20} color="#047d60" /> : <MapPin size={20} color="#047d60" />}
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 600, color: '#fff', letterSpacing: '-0.3px' }}>
+                                <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 600, color: '#1e293b', letterSpacing: '-0.3px', fontFamily: "'Poppins', sans-serif" }}>
                                     {substation?.substation_id ? substation.name : 'Add New Substation'}
                                 </h2>
                                 {substation?.substation_id && (
                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-                                        <span className="mono" style={{ fontSize: '0.75rem', color: substation.voltage >= 500 ? '#ffffff' : (substation.voltage >= 275 ? '#15d5f6ff' : 'var(--accent-cyan)'), fontWeight: 600 }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#047d60', fontWeight: 700, fontFamily: "'Poppins', sans-serif" }}>
                                             {substation.substation_id}
                                         </span>
                                         {substation.region && <span style={pillStyle('default', null)}>{substation.region}</span>}
@@ -765,11 +773,11 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                             </div>
                         </div>
                         <button onClick={onCancel} style={{
-                            background: 'rgba(255,255,255,0.05)', border: 'none', color: 'var(--text-secondary)',
+                            background: '#f1f5f9', border: 'none', color: '#64748b',
                             cursor: 'pointer', padding: '8px', borderRadius: '8px', transition: 'all 0.2s'
                         }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#fff'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#334155'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b'; }}
                         >
                             <X size={20} />
                         </button>
@@ -779,8 +787,8 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                         {/* Sidebar */}
                         <div style={{
                             width: '240px',
-                            background: 'rgba(0,0,0,0.2)',
-                            borderRight: '1px solid rgba(255, 255, 255, 0.05)',
+                            background: '#f8fafc',
+                            borderRight: '1px solid #e2e8f0',
                             display: 'flex',
                             flexDirection: 'column',
                             padding: '1rem'
@@ -805,7 +813,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                         }}
                                         onMouseEnter={(e) => {
                                             if (activeTab !== tab.id && !(tab.id !== 'metadata' && !canManageAssets)) {
-                                                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                                                e.currentTarget.style.background = '#f1f5f9';
                                                 e.currentTarget.style.color = 'white';
                                             }
                                         }}
@@ -823,7 +831,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                         {tab.count !== undefined && (
                                             <span style={{
                                                 fontSize: '0.65rem',
-                                                background: activeTab === tab.id ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.1)',
+                                                background: activeTab === tab.id ? 'var(--accent-cyan)' : '#e2e8f0',
                                                 color: activeTab === tab.id ? 'var(--bg-deep)' : 'var(--text-secondary)',
                                                 padding: '2px 8px',
                                                 borderRadius: '12px',
@@ -838,7 +846,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                             </div>
 
                             {!canManageAssets && (
-                                <div style={{ marginTop: 'auto', padding: '1.25rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <div style={{ marginTop: 'auto', padding: '1.25rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                                         <AlertTriangle size={14} color="#ff9f43" />
                                         <span style={{ fontSize: '0.75rem', color: '#ff9f43', fontWeight: 600 }}>Assets Locked</span>
@@ -851,7 +859,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                         </div>
 
                         {/* Content Area */}
-                        <div style={{ flex: 1, padding: '2rem', overflowY: 'auto' }} className="custom-scrollbar">
+                        <div style={{ flex: 1, padding: '2rem', overflowY: 'auto', background: '#fff' }} className="custom-scrollbar">
                             <AnimatePresence mode="wait">
                                 <motion.div
                                     key={activeTab}
@@ -877,15 +885,15 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                         style={{
                                                             padding: '0.75rem 1rem',
                                                             borderRadius: '8px',
-                                                            background: status.type === 'success' ? 'rgba(74, 222, 128, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                                                            border: `1px solid ${status.type === 'success' ? 'rgba(74, 222, 128, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                                                            background: status.type === 'success' ? '#ecfdf5' : '#fef2f2',
+                                                            border: `1px solid ${status.type === 'success' ? '#047d60' : '#ef4444'}`,
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             gap: '8px'
                                                         }}
                                                     >
-                                                        {status.type === 'success' ? <CheckCircle2 size={16} color="#4ade80" /> : <AlertTriangle size={16} color="#ef4444" />}
-                                                        <span style={{ fontSize: '0.85rem', color: status.type === 'success' ? '#4ade80' : '#ef4444', fontWeight: 500 }}>{status.msg}</span>
+                                                        {status.type === 'success' ? <CheckCircle2 size={16} color="#047d60" /> : <AlertTriangle size={16} color="#ef4444" />}
+                                                        <span style={{ fontSize: '0.85rem', color: status.type === 'success' ? '#047d60' : '#ef4444', fontWeight: 500, fontFamily: "'Poppins', sans-serif" }}>{status.msg}</span>
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>
@@ -941,18 +949,18 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                 </div>
                                             </div>
 
-                                            <div style={{ marginTop: 'auto', paddingTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                            <div style={{ marginTop: 'auto', paddingTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid #f1f5f9' }}>
                                                 {substation?.substation_id && (
                                                     <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
                                                         <input type="file" id="sld-upload-input" hidden accept=".pdf,.dxf,.svg,image/*" onChange={(e) => e.target.files[0] && onSLDUpload?.(substation.substation_id, e.target.files[0])} />
                                                         <label htmlFor="sld-upload-input" style={{
-                                                            padding: '0.75rem 1.25rem', border: '1px dashed rgba(255,255,255,0.2)', borderRadius: '0.5rem',
+                                                            padding: '0.75rem 1.25rem', border: '1px dashed #cbd5e1', borderRadius: '0.5rem',
                                                             display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer',
-                                                            fontSize: '0.85rem', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.02)',
+                                                            fontSize: '0.85rem', color: 'var(--text-secondary)', background: '#f8fafc',
                                                             transition: 'all 0.2s'
                                                         }}
-                                                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'var(--accent-cyan)'; e.currentTarget.style.borderColor = 'var(--accent-cyan)'; }}
-                                                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
+                                                            onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = 'var(--accent-cyan)'; e.currentTarget.style.borderColor = 'var(--accent-cyan)'; }}
+                                                            onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
                                                         >
                                                             {substation.sld_file ? <FileText size={16} /> : <Upload size={16} />}
                                                             {substation.sld_file ? 'Update SLD File' : 'Upload SLD File'}
@@ -961,10 +969,10 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                 )}
                                                 <button type="button" onClick={onCancel} style={{
                                                     padding: '0.75rem 1.5rem', borderRadius: '0.5rem', fontSize: '0.9rem',
-                                                    background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)',
+                                                    background: 'transparent', border: '1px solid #e2e8f0', color: 'var(--text-secondary)',
                                                     fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s'
                                                 }}
-                                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#fff'; }}
+                                                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#fff'; }}
                                                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
                                                 >
                                                     Cancel
@@ -985,12 +993,12 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                                                     <button style={{
-                                                        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)',
+                                                        background: '#f1f5f9', border: '1px solid #e2e8f0', color: 'var(--text-secondary)',
                                                         cursor: 'pointer', padding: '8px', borderRadius: '8px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center'
                                                     }}
                                                         onClick={fetchAssets} disabled={assetLoading}
-                                                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#fff'; }}
-                                                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                                                        onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#fff'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
                                                     >
                                                         <RefreshCw size={16} className={assetLoading ? 'animate-spin' : ''} />
                                                     </button>
@@ -1018,7 +1026,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                         exit={{ opacity: 0, scale: 0.95 }}
                                                         style={{
                                                             background: 'rgba(255, 255, 255, 0.02)',
-                                                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                                                            border: '1px solid #e2e8f0',
                                                             borderRadius: '8px',
                                                             display: 'flex',
                                                             flexDirection: 'column',
@@ -1027,8 +1035,8 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                             cursor: 'pointer',
                                                         }}
                                                         onClick={() => { setEditingAsset({ type: activeTab, data: asset }); setAssetForm(asset); }}
-                                                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.2)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-                                                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)'; e.currentTarget.style.transform = 'translateY(0)' }}
+                                                        onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.2)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.transform = 'translateY(0)' }}
                                                     >
                                                         {/* Body */}
                                                         <div style={{ padding: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
@@ -1039,7 +1047,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                                             <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fff', padding: '0 4px' }}>
                                                                                 {asset.relay_name || 'Unnamed Relay'}
                                                                             </span>
-                                                                            <span style={{ fontSize: '0.75rem', background: asset.is_active ? 'rgba(74, 222, 128, 0.1)' : 'rgba(255, 255, 255, 0.05)', color: asset.is_active ? '#4ade80' : 'var(--text-secondary)', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                            <span style={{ fontSize: '0.75rem', background: asset.is_active ? 'rgba(74, 222, 128, 0.1)' : '#f1f5f9', color: asset.is_active ? '#4ade80' : 'var(--text-secondary)', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                                                                                 {asset.is_active ? <CheckCircle2 size={12} /> : <X size={12} />}
                                                                                 {asset.is_active ? 'Active' : 'Inactive'}
                                                                             </span>
@@ -1060,17 +1068,17 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                                     </div>
                                                                 ) : activeTab === 'branch' ? (
                                                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                                                        <span style={{ fontSize: '0.75rem', background: 'rgba(255, 255, 255, 0.05)', color: '#fff', padding: '4px 8px', borderRadius: '4px' }}>
+                                                                        <span style={{ fontSize: '0.75rem', background: '#f1f5f9', color: '#fff', padding: '4px 8px', borderRadius: '4px' }}>
                                                                             {asset.to_substation} {asset.ckt_id}
                                                                         </span>
-                                                                        <span style={{ fontSize: '0.75rem', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-secondary)', padding: '4px 8px', borderRadius: '4px', fontFamily: 'monospace' }}>
+                                                                        <span style={{ fontSize: '0.75rem', background: '#f1f5f9', color: 'var(--text-secondary)', padding: '4px 8px', borderRadius: '4px', fontFamily: 'monospace' }}>
                                                                             Breaker {asset.breaker_number || '---'}
                                                                         </span>
                                                                     </div>
                                                                 ) : (
                                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                                                            <span style={{ fontSize: '0.75rem', background: 'rgba(255, 255, 255, 0.05)', color: '#fff', padding: '4px 8px', borderRadius: '4px' }}>
+                                                                            <span style={{ fontSize: '0.75rem', background: '#f1f5f9', color: '#fff', padding: '4px 8px', borderRadius: '4px' }}>
                                                                                 T{asset.transformer_no}
                                                                             </span>
                                                                             <span style={{ fontSize: '0.75rem', background: 'rgba(0, 229, 255, 0.1)', color: 'var(--accent-cyan)', padding: '4px 8px', borderRadius: '4px' }}>
@@ -1105,8 +1113,8 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                 ))}
 
                                                 {(activeTab === 'lsr' ? loadSheddingRelays : activeTab === 'load' ? loadTransformers : activeTab === 'auto' ? autoTransformers : incomingBranches).length === 0 && (
-                                                    <div style={{ gridColumn: '1 / -1', padding: '4rem 2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.01)', borderRadius: '12px', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                                                        <Database size={32} color="rgba(255,255,255,0.1)" style={{ marginBottom: '1rem' }} />
+                                                    <div style={{ gridColumn: '1 / -1', padding: '4rem 2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.01)', borderRadius: '12px', border: '1px dashed #e2e8f0' }}>
+                                                        <Database size={32} color="#e2e8f0" style={{ marginBottom: '1rem' }} />
                                                         <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 500 }}>No assets found</div>
                                                         <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.3)', marginTop: '4px' }}>Click 'Add Asset' to create one.</div>
                                                     </div>

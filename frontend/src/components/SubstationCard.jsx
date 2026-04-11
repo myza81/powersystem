@@ -34,10 +34,10 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate, 
             {/* Header: ID + Name */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span className="mono" style={{ color: substation.voltage >= 500 ? '#ffffff' : (substation.voltage >= 275 ? '#15d5f6ff' : (substation.voltage >= 230 ? '#ffa500' : 'var(--accent-cyan)')), fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.5px' }}>
+                    <span style={{ color: substation.voltage >= 500 ? '#ffffff' : (substation.voltage >= 275 ? '#15d5f6ff' : (substation.voltage >= 230 ? '#ffa500' : 'var(--accent-cyan)')), fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.5px', fontFamily: "'Poppins', sans-serif" }}>
                         {substation.substation_id}
                     </span>
-                    <h3 style={{ fontSize: '0.9rem', margin: '2px 0 0 0', lineHeight: '1.2', fontWeight: 600, color: '#fff' }} title={substation.name}>
+                    <h3 style={{ fontSize: '1rem', margin: '4px 0 0 0', lineHeight: '1.2', fontWeight: 600, color: '#1e293b', fontFamily: "'Poppins', sans-serif" }} title={substation.name}>
                         {substation.name.length > 25 ? `${substation.name.substring(0, 25)}...` : substation.name}
                     </h3>
                 </div>
@@ -97,17 +97,17 @@ const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate, 
             {/* Body: Pills for Metadata */}
             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: 'auto' }}>
                 {substation.ownership && (
-                    <span style={{ fontSize: '0.65rem', background: 'rgba(255, 159, 67, 0.1)', color: '#ff9f43', padding: '2px 6px', borderRadius: '4px' }}>
+                    <span style={{ fontSize: '0.65rem', color: '#ff9f43', padding: '2px 6px', borderRadius: '4px' }}>
                         {substation.ownership}
                     </span>
                 )}
                 {substation.region && (
-                    <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: '4px' }}>
+                    <span style={{ fontSize: '0.65rem', color: '#64748b', padding: '2px 6px', borderRadius: '4px' }}>
                         {substation.region}
                     </span>
                 )}
                 {substation.grid && (
-                    <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: '4px' }}>
+                    <span style={{ fontSize: '0.65rem', color: '#64748b', padding: '2px 6px', borderRadius: '4px' }}>
                         {substation.grid}
                     </span>
                 )}

@@ -127,6 +127,13 @@ button, input {
   opacity: 0.6;
 }
 
+.filter-search-input::placeholder {
+  color: #64748b;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.8rem;
+  opacity: 1;
+}
+
 .input-field::-webkit-calendar-picker-indicator {
   cursor: pointer;
   opacity: 0.6;
