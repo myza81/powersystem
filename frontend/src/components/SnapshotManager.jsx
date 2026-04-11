@@ -434,7 +434,7 @@ fontSize: '0.7rem',
                                         ACTIVATE
                                     </button>
                                 ) : (
-                                    <div style={{ color: '#047d60', fontSize: '0.6rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <div style={{ color: '#047d60', fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
                                         <Check size={10} /> CURRENT
                                     </div>
                                 )}

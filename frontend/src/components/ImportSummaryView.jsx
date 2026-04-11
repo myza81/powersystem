@@ -29,12 +29,12 @@ const TabButton = ({ active, onClick, icon: Icon, label, color }) => (
 );
 
 const DataTable = ({ columns, data, keyField = 'id' }) => (
-    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', fontFamily: "'Poppins', sans-serif" }}>
             <thead>
-                <tr style={{ background: 'rgba(255,255,255,0.05)', color: '#cbd5e1' }}>
+                <tr style={{ background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.08), rgba(5, 150, 105, 0.04))', color: '#047d60' }}>
                     {columns.map((col, i) => (
-                        <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600 }}>{col.header}</th>
+                        <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontWeight: 600, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{col.header}</th>
                     ))}
                 </tr>
             </thead>
@@ -47,9 +47,9 @@ const DataTable = ({ columns, data, keyField = 'id' }) => (
                     </tr>
                 ) : (
                     data.map((row, i) => (
-                        <tr key={`${row[keyField] || 'row'}-${i}`} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <tr key={`${row[keyField] || 'row'}-${i}`} style={{ borderTop: '1px solid #f1f5f9' }}>
                             {columns.map((col, j) => (
-                                <td key={j} style={{ padding: '10px 16px', color: '#94a3b8' }}>
+                                <td key={j} style={{ padding: '10px 16px', color: '#334155' }}>
                                     {col.render ? col.render(row) : row[col.field]}
                                 </td>
                             ))}
@@ -306,9 +306,9 @@ const ImportSummaryView = ({ summary }) => {
             case 'islands':
                 return (
                     <div style={{ animation: 'fadeIn 0.3s' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0, color: '#8b5cf6', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Zap size={20} /> Detected Islands ({islandCount})
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <h3 style={{ margin: '0 0 0.5rem 0', color: '#047d60', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.1rem', fontWeight: 700, fontFamily: "'Poppins', sans-serif" }}>
+                                <Zap size={20} /> Detected Islands
                             </h3>
                         </div>
                         <div style={{ display: 'grid', gap: '12px' }}>
@@ -344,7 +344,7 @@ const ImportSummaryView = ({ summary }) => {
                                     ? '#10b981'
                                     : (island.status === 'Energized' ? '#22d3ee' : '#ef4444');
                                 return (
-                                    <div key={island.id} style={{ borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                                    <div key={island.id} style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                                         <button
                                             onClick={() => toggleIsland(island.id)}
                                             style={{
@@ -352,9 +352,9 @@ const ImportSummaryView = ({ summary }) => {
                                                 display: 'flex',
                                                 flexDirection: 'column',
                                                 padding: '16px 20px',
-                                                background: 'rgba(15, 23, 42, 0.6)',
+                                                background: '#fff',
                                                 border: 'none',
-                                                color: '#e2e8f0',
+                                                color: '#334155',
                                                 cursor: 'pointer',
                                                 gap: '12px'
                                             }}
@@ -362,15 +362,16 @@ const ImportSummaryView = ({ summary }) => {
                                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                     {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                                                    <div style={{ fontFamily: 'monospace', fontSize: '1rem', fontWeight: 700, letterSpacing: '0.5px' }}>ISLAND #{island.id}</div>
+                                                    <div style={{ fontFamily: "'Poppins', sans-serif", fontSize: '0.95rem', fontWeight: 600, color: '#334155' }}>ISLAND #{island.id}</div>
                                                     <span style={{
-                                                        background: `${statusColor}20`,
+                                                        background: `${statusColor}15`,
                                                         color: statusColor,
-                                                        border: `1px solid ${statusColor}40`,
+                                                        border: `1px solid ${statusColor}30`,
                                                         padding: '4px 10px',
                                                         borderRadius: '12px',
-                                                        fontSize: '0.75rem',
-                                                        fontWeight: 600
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: 600,
+                                                        fontFamily: "'Poppins', sans-serif"
                                                     }}>{island.status}</span>
                                                 </div>
                                             </div>
@@ -381,44 +382,44 @@ const ImportSummaryView = ({ summary }) => {
                                                 gap: '12px',
                                                 width: '100%',
                                                 textAlign: 'left',
-                                                background: 'rgba(0,0,0,0.2)',
+                                                background: '#f8fafc',
                                                 padding: '12px',
                                                 borderRadius: '8px',
-                                                border: '1px solid rgba(255,255,255,0.05)'
+                                                border: '1px solid #e2e8f0'
                                             }}>
                                                 <div>
-                                                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Network Size</div>
-                                                    <div style={{ fontSize: '0.9rem', color: '#cbd5e1', fontWeight: 600 }}>
-                                                        {island.bus_count} Buses <span style={{ color: '#475569', margin: '0 4px' }}>•</span> {island.substation_count} Subs
+                                                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', fontFamily: "'Poppins', sans-serif" }}>Network Size</div>
+                                                    <div style={{ fontSize: '0.85rem', color: '#334155', fontWeight: 600, fontFamily: "'Poppins', sans-serif" }}>
+                                                        {island.bus_count} Buses <span style={{ color: '#94a3b8', margin: '0 4px' }}>•</span> {island.substation_count} Subs
                                                     </div>
                                                 </div>
                                                 <div>
-                                                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Total Active Load</div>
-                                                    <div style={{ fontSize: '0.9rem', color: '#38bdf8', fontWeight: 600 }}>
+                                                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', fontFamily: "'Poppins', sans-serif" }}>Total Active Load</div>
+                                                    <div style={{ fontSize: '0.85rem', color: '#047d60', fontWeight: 600, fontFamily: "'Poppins', sans-serif" }}>
                                                         {Number(island.total_load_mw || 0).toFixed(2)} MW
                                                     </div>
                                                 </div>
                                                 <div>
-                                                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Total Reactive Load</div>
-                                                    <div style={{ fontSize: '0.9rem', color: '#818cf8', fontWeight: 600 }}>
+                                                    <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', fontFamily: "'Poppins', sans-serif" }}>Total Reactive Load</div>
+                                                    <div style={{ fontSize: '0.85rem', color: '#8b5cf6', fontWeight: 600, fontFamily: "'Poppins', sans-serif" }}>
                                                         {Number(island.total_load_mvar || 0).toFixed(2)} MVar
                                                     </div>
                                                 </div>
 
                                                 <div style={{
-                                                    borderLeft: island.orphan_count > 0 ? '2px solid #f59e0b' : '1px solid rgba(255,255,255,0.05)',
+                                                    borderLeft: island.orphan_count > 0 ? '2px solid #f59e0b' : '1px solid #e2e8f0',
                                                     paddingLeft: '12px'
                                                 }}>
-                                                    <div style={{ fontSize: '0.7rem', color: island.orphan_count > 0 ? '#f59e0b' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                    <div style={{ fontSize: '0.7rem', color: island.orphan_count > 0 ? '#f59e0b' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: "'Poppins', sans-serif" }}>
                                                         {island.orphan_count > 0 && <AlertCircle size={12} />}
                                                         Unmapped Substation
                                                     </div>
                                                     {island.orphan_count > 0 ? (
-                                                        <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                                                        <div style={{ fontSize: '0.8rem', color: '#334155', fontFamily: "'Poppins', sans-serif" }}>
                                                             <strong style={{ color: '#f59e0b' }}>{island.orphan_count}</strong> loads · {Number(island.orphan_load_mw || 0).toFixed(1)} MW / {Number(island.orphan_load_mvar || 0).toFixed(1)} MVar
                                                         </div>
                                                     ) : (
-                                                        <div style={{ fontSize: '0.8rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <div style={{ fontSize: '0.8rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: "'Poppins', sans-serif" }}>
                                                             <CheckCircle size={14} /> Fully Mapped
                                                         </div>
                                                     )}
@@ -432,10 +433,10 @@ const ImportSummaryView = ({ summary }) => {
                                                     initial={{ height: 0, opacity: 0 }}
                                                     animate={{ height: 'auto', opacity: 1 }}
                                                     exit={{ height: 0, opacity: 0 }}
-                                                    style={{ padding: '16px 20px', background: 'rgba(15, 23, 42, 0.4)', borderTop: '1px solid rgba(255,255,255,0.05)' }}
+                                                    style={{ padding: '16px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}
                                                 >
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                                        <div style={{ borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                                                        <div style={{ background: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                                                             <button
                                                                 onClick={() => toggleIslandLoads(island.id)}
                                                                 style={{
@@ -444,17 +445,17 @@ const ImportSummaryView = ({ summary }) => {
                                                                     alignItems: 'center',
                                                                     justifyContent: 'space-between',
                                                                     padding: '10px 14px',
-                                                                    background: 'rgba(0,0,0,0.2)',
+                                                                    background: '#f8fafc',
                                                                     border: 'none',
-                                                                    color: '#e2e8f0',
+                                                                    color: '#334155',
                                                                     cursor: 'pointer'
                                                                 }}
                                                             >
                                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                     {isLoadsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                                                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#38bdf8' }}>Load Contributors</div>
+                                                                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#047d60', fontFamily: "'Poppins', sans-serif" }}>Load Contributors</div>
                                                                 </div>
-                                                                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{loadCount} loads</div>
+                                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{loadCount} loads</div>
                                                             </button>
 
                                                             <AnimatePresence>
@@ -463,7 +464,7 @@ const ImportSummaryView = ({ summary }) => {
                                                                         initial={{ height: 0, opacity: 0 }}
                                                                         animate={{ height: 'auto', opacity: 1 }}
                                                                         exit={{ height: 0, opacity: 0 }}
-                                                                        style={{ padding: '12px 14px', background: 'rgba(15, 23, 42, 0.6)' }}
+                                                                        style={{ padding: '12px 14px', background: '#fff' }}
                                                                     >
                                                                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px', gap: '12px' }}>
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -475,38 +476,47 @@ const ImportSummaryView = ({ summary }) => {
                                                                                         value={loadQuery}
                                                                                         onChange={(e) => updateIslandLoadSearch(island.id, e.target.value)}
                                                                                         style={{
-                                                                                            background: 'rgba(15, 23, 42, 0.6)',
-                                                                                            border: '1px solid rgba(255,255,255,0.1)',
+                                                                                            background: '#f8fafc',
+                                                                                            border: '1px solid #e2e8f0',
                                                                                             borderRadius: '8px',
                                                                                             padding: '6px 10px 6px 30px',
-                                                                                            color: '#fff',
+                                                                                            color: '#334155',
                                                                                             fontSize: '0.75rem',
                                                                                             outline: 'none',
-                                                                                            width: '200px'
+                                                                                            width: '200px',
+                                                                                            fontFamily: "'Poppins', sans-serif"
                                                                                         }}
                                                                                     />
                                                                                 </div>
-                                                                                <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{filteredLoads.length} / {loadCount} rows</div>
+                                                                                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>{filteredLoads.length} / {loadCount} rows</div>
                                                                             </div>
                                                                         </div>
-                                                                        <DataTable
-                                                                            columns={[
-                                                                                { header: 'Load ID', field: 'load_id' },
-                                                                                { header: 'Bus No.', field: 'bus_number' },
-                                                                                { header: 'Bus Name', field: 'bus_name' },
-                                                                                { header: 'Substation', field: 'substation_name' },
-                                                                                {
-                                                                                    header: 'P (MW)',
-                                                                                    render: row => Number(row.p_mw || 0).toFixed(3)
-                                                                                },
-                                                                                {
-                                                                                    header: 'Q (MVar)',
-                                                                                    render: row => Number(row.q_mvar || 0).toFixed(3)
-                                                                                },
-                                                                            ]}
-                                                                            data={filteredLoads}
-                                                                            keyField="load_id"
-                                                                        />
+                                                                        <div style={{ background: '#fff', borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                                                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.8fr 1.2fr 1fr 0.8fr 0.8fr', gap: '1rem', padding: '0.75rem 1rem', background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.08), rgba(5, 150, 105, 0.04))', borderBottom: '1px solid #e2e8f0', fontSize: '0.65rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: "'Poppins', sans-serif" }}>
+                                                                                <div>Load ID</div>
+                                                                                <div>Bus No.</div>
+                                                                                <div>Bus Name</div>
+                                                                                <div>Substation</div>
+                                                                                <div>P (MW)</div>
+                                                                                <div>Q (MVar)</div>
+                                                                            </div>
+                                                                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                                                                {filteredLoads.length === 0 ? (
+                                                                                    <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem' }}>No loads found</div>
+                                                                                ) : (
+                                                                                    filteredLoads.map(load => (
+                                                                                        <div key={load.load_id} style={{ display: 'grid', gridTemplateColumns: '1fr 0.8fr 1.2fr 1fr 0.8fr 0.8fr', gap: '1rem', padding: '0.7rem 1rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.75rem', color: '#334155', fontFamily: "'Poppins', sans-serif" }}>
+                                                                                            <div style={{ fontWeight: 600 }}>{load.load_id}</div>
+                                                                                            <div>{load.bus_number}</div>
+                                                                                            <div>{load.bus_name || '--'}</div>
+                                                                                            <div>{load.substation_name || '--'}</div>
+                                                                                            <div>{Number(load.p_mw || 0).toFixed(3)}</div>
+                                                                                            <div>{Number(load.q_mvar || 0).toFixed(3)}</div>
+                                                                                        </div>
+                                                                                    ))
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
                                                                     </motion.div>
                                                                 )}
                                                             </AnimatePresence>
@@ -517,7 +527,7 @@ const ImportSummaryView = ({ summary }) => {
                                                             <React.Fragment>
 
                                                                 {missingFromIsland.length > 0 && (
-                                                                    <div style={{ borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                                                                    <div style={{ background: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                                                                         <button
                                                                             onClick={() => toggleIslandDiffMissing(island.id)}
                                                                             style={{
@@ -526,17 +536,17 @@ const ImportSummaryView = ({ summary }) => {
                                                                                 alignItems: 'center',
                                                                                 justifyContent: 'space-between',
                                                                                 padding: '10px 14px',
-                                                                                background: 'rgba(0,0,0,0.2)',
+                                                                                background: '#f8fafc',
                                                                                 border: 'none',
-                                                                                color: '#e2e8f0',
+                                                                                color: '#334155',
                                                                                 cursor: 'pointer'
                                                                             }}
                                                                         >
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                                 {isDiffMissingOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                                                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f87171' }}>Substations Not In This Island</div>
+                                                                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#ef4444', fontFamily: "'Poppins', sans-serif" }}>Substations Not In This Island</div>
                                                                             </div>
-                                                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{missingFromIsland.length} substations</div>
+                                                                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{missingFromIsland.length} substations</div>
                                                                         </button>
                                                                         <AnimatePresence>
                                                                             {isDiffMissingOpen && (
@@ -544,7 +554,7 @@ const ImportSummaryView = ({ summary }) => {
                                                                                     initial={{ height: 0, opacity: 0 }}
                                                                                     animate={{ height: 'auto', opacity: 1 }}
                                                                                     exit={{ height: 0, opacity: 0 }}
-                                                                                    style={{ padding: '12px 14px', background: 'rgba(15, 23, 42, 0.6)' }}
+                                                                                    style={{ padding: '12px 14px', background: '#fff' }}
                                                                                 >
                                                                                     <DataTable
                                                                                         columns={[
@@ -562,7 +572,7 @@ const ImportSummaryView = ({ summary }) => {
                                                                 )}
 
                                                                 {missingFromTopology.length > 0 && (
-                                                                    <div style={{ borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                                                                    <div style={{ background: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                                                                         <button
                                                                             onClick={() => toggleIslandDiffExtra(island.id)}
                                                                             style={{
@@ -571,17 +581,17 @@ const ImportSummaryView = ({ summary }) => {
                                                                                 alignItems: 'center',
                                                                                 justifyContent: 'space-between',
                                                                                 padding: '10px 14px',
-                                                                                background: 'rgba(0,0,0,0.2)',
+                                                                                background: '#f8fafc',
                                                                                 border: 'none',
-                                                                                color: '#e2e8f0',
+                                                                                color: '#334155',
                                                                                 cursor: 'pointer'
                                                                             }}
                                                                         >
                                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                                 {isDiffExtraOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                                                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fbbf24' }}>Island Substations Not In Topology</div>
+                                                                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#f59e0b', fontFamily: "'Poppins', sans-serif" }}>Island Substations Not In Topology</div>
                                                                             </div>
-                                                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{missingFromTopology.length} substations</div>
+                                                                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{missingFromTopology.length} substations</div>
                                                                         </button>
                                                                         <AnimatePresence>
                                                                             {isDiffExtraOpen && (
@@ -589,7 +599,7 @@ const ImportSummaryView = ({ summary }) => {
                                                                                     initial={{ height: 0, opacity: 0 }}
                                                                                     animate={{ height: 'auto', opacity: 1 }}
                                                                                     exit={{ height: 0, opacity: 0 }}
-                                                                                    style={{ padding: '12px 14px', background: 'rgba(15, 23, 42, 0.6)' }}
+                                                                                    style={{ padding: '12px 14px', background: '#fff' }}
                                                                                 >
                                                                                     <DataTable
                                                                                         columns={[
