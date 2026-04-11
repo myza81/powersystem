@@ -216,6 +216,91 @@ class LoadAnalyticsViewSet(viewsets.ViewSet):
                 'coverage_percent': round(linked_loads.count() / all_loads.count() * 100, 1) if all_loads.count() > 0 else 0
             }
         })
+    
+    @action(detail=False, methods=['get'], url_path='network-links')
+    def network_links(self, request):
+        """
+        GET /api/v1/load-analytics/network-links/
+        
+        Returns aggregated branch and transformer connections between substations
+        based on the active topology version of the provided snapshot.
+        """
+        from core.models import TopologyBranch, TopologyTransformer
+        from collections import defaultdict
+        from django.db import models
+        
+        snapshot_id = request.query_params.get('snapshot_id')
+        snapshot = self._get_snapshot(request, snapshot_id)
+        
+        if not snapshot or not snapshot.topology_version_id:
+            return Response({'error': 'No snapshot or topology version found'}, status=404)
+        
+        tv_id = snapshot.topology_version_id
+        
+        # We need branches where BOTH ends are attached to a known substation
+        # and from_sub != to_sub
+        branches = TopologyBranch.objects.filter(
+            topology_version_id=tv_id,
+            is_active=True,
+            from_bus__substation__isnull=False,
+            to_bus__substation__isnull=False
+        ).exclude(
+            from_bus__substation=models.F('to_bus__substation')
+        ).select_related('from_bus', 'to_bus')
+        
+        transformers = TopologyTransformer.objects.filter(
+            topology_version_id=tv_id,
+            is_active=True,
+            from_bus__substation__isnull=False,
+            to_bus__substation__isnull=False
+        ).exclude(
+            from_bus__substation=models.F('to_bus__substation')
+        ).select_related('from_bus', 'to_bus')
+        
+        # Group links by pair (SubstationA, SubstationB)
+        # Pair must be sorted to treat A->B and B->A as the same link
+        links = defaultdict(lambda: {
+            'voltage_kv': 0,
+            'circuit_count': 0,
+            'types': set()
+        })
+        
+        for b in branches:
+            sub1 = b.from_bus.substation_id
+            sub2 = b.to_bus.substation_id
+            k = tuple(sorted([sub1, sub2]))
+            
+            vk = max(b.from_bus.base_kv, b.to_bus.base_kv)
+            links[k]['voltage_kv'] = max(links[k]['voltage_kv'], vk)
+            links[k]['circuit_count'] += 1
+            links[k]['types'].add('branch')
+            
+        for t in transformers:
+            sub1 = t.from_bus.substation_id
+            sub2 = t.to_bus.substation_id
+            k = tuple(sorted([sub1, sub2]))
+            
+            vk = max(t.from_bus.base_kv, t.to_bus.base_kv)
+            links[k]['voltage_kv'] = max(links[k]['voltage_kv'], vk)
+            links[k]['circuit_count'] += 1
+            links[k]['types'].add('transformer')
+            
+        res_list = []
+        for (sub1, sub2), data in links.items():
+            res_list.append({
+                'from_substation_id': sub1,
+                'to_substation_id': sub2,
+                'voltage_kv': data['voltage_kv'],
+                'circuit_count': data['circuit_count'],
+                'type': 'mixed' if len(data['types']) > 1 else list(data['types'])[0]
+            })
+            
+        return Response({
+            'snapshot_id': str(snapshot.id),
+            'topology_version_id': str(tv_id),
+            'link_count': len(res_list),
+            'links': res_list
+        })
 
     
     @action(detail=False, methods=['get'], url_path='missing-substations')

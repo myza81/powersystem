@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap, useMapEvents, LayersControl, LayerGroup } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap, useMapEvents, LayersControl, LayerGroup, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import 'leaflet.heat';
@@ -126,7 +126,7 @@ const BayBreakdown = ({ bays, transformers, incoming_bays, color = '#333' }) => 
     );
 };
 
-const SubstationMap = ({ data, focusLocation, fuiMode = false }) => {
+const SubstationMap = ({ data, focusLocation, fuiMode = false, networkLinks = [], showNetworkLines = false, circuitDisplayMode = 'thickness' }) => {
     const defaultCenter = [4.2105, 101.9758];
     const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
     const [showSettings, setShowSettings] = useState(false);
@@ -135,6 +135,14 @@ const SubstationMap = ({ data, focusLocation, fuiMode = false }) => {
     const [showHeatmap, setShowHeatmap] = useState(true);
     const [showMarkers, setShowMarkers] = useState(true);
 
+    // Auto-hide heatmap when network lines are enabled
+    useEffect(() => {
+        if (showNetworkLines) {
+            setShowHeatmap(false);
+        } else {
+            setShowHeatmap(true);
+        }
+    }, [showNetworkLines]);
 
     // Search functionality state
     const [searchQuery, setSearchQuery] = useState('');
@@ -615,6 +623,91 @@ const SubstationMap = ({ data, focusLocation, fuiMode = false }) => {
                                     </CircleMarker>
                                 </React.Fragment>
                             );
+                        })}
+                    </LayerGroup>
+                )}
+
+                {/* ── GRID NETWORK DIAGRAM LAYER ── */}
+                {showNetworkLines && networkLinks.length > 0 && (
+                    <LayerGroup>
+                        {networkLinks.map((link, idx) => {
+                            const sub1 = data.find(s => s.substation_id === link.from_substation_id);
+                            const sub2 = data.find(s => s.substation_id === link.to_substation_id);
+                            
+                            // Only draw if both substations exist and have coordinates, and are currently in 'data' (filtered)
+                            if (!sub1 || !sub2 || !sub1.latitude || !sub1.longitude || !sub2.latitude || !sub2.longitude) return null;
+                            
+                            const latlng1 = [parseFloat(sub1.latitude), parseFloat(sub1.longitude)];
+                            const latlng2 = [parseFloat(sub2.latitude), parseFloat(sub2.longitude)];
+                            
+                            if (isNaN(latlng1[0]) || isNaN(latlng1[1]) || isNaN(latlng2[0]) || isNaN(latlng2[1])) {
+                                return null;
+                            }
+                            
+                            let color = '#ffffff'; // unknown
+                            if (link.voltage_kv >= 500) color = '#facc15'; // gold
+                            else if (link.voltage_kv >= 275) color = '#22d3ee'; // cyan
+                            else if (link.voltage_kv >= 132) color = '#4ade80'; // lime green
+                            
+                            // Rendering strategy based on circuitDisplayMode
+                            if (circuitDisplayMode === 'multiple' && link.circuit_count > 1) {
+                                // Calculate perpendicular offset for parallel lines
+                                const dx = latlng2[0] - latlng1[0];
+                                const dy = latlng2[1] - latlng1[1];
+                                const length = Math.sqrt(dx * dx + dy * dy);
+                                
+                                if (length === 0) return null; // avoid division by zero NaN
+                                
+                                // Normal vector
+                                const nx = -dy / length;
+                                const ny = dx / length;
+                                
+                                const lines = [];
+                                const offsetStep = 0.005; // degree offset
+                                const startOffset = -((link.circuit_count - 1) * offsetStep) / 2;
+                                
+                                for (let i = 0; i < link.circuit_count; i++) {
+                                    const offset = startOffset + i * offsetStep;
+                                    const p1 = [latlng1[0] + nx * offset, latlng1[1] + ny * offset];
+                                    const p2 = [latlng2[0] + nx * offset, latlng2[1] + ny * offset];
+                                    lines.push(
+                                        <Polyline 
+                                            key={`${link.from_substation_id}-${link.to_substation_id}-${i}`}
+                                            positions={[p1, p2]}
+                                            pathOptions={{
+                                                color: color, 
+                                                weight: 1.5,
+                                                opacity: 0.8
+                                            }}
+                                        />
+                                    );
+                                }
+                                return lines;
+                            } else {
+                                // Default thickness mode
+                                const weight = circuitDisplayMode === 'thickness' 
+                                    ? 1.5 + (link.circuit_count - 1) * 1.5 
+                                    : 1.5;
+                                
+                                return (
+                                    <Polyline 
+                                        key={`${link.from_substation_id}-${link.to_substation_id}-single`}
+                                        positions={[latlng1, latlng2]}
+                                        pathOptions={{
+                                            color: color, 
+                                            weight: weight,
+                                            opacity: 0.8
+                                        }}
+                                    >
+                                        <Tooltip direction="center" sticky>
+                                            <div style={{ fontSize: '0.75rem' }}>
+                                                <strong>{sub1.name} &harr; {sub2.name}</strong><br/>
+                                                {link.voltage_kv} kV &bull; {link.circuit_count} Circuit{link.circuit_count !== 1 ? 's' : ''}
+                                            </div>
+                                        </Tooltip>
+                                    </Polyline>
+                                );
+                            }
                         })}
                     </LayerGroup>
                 )}

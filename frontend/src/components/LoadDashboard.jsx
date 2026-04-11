@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SldViewer from './SldViewer';
 import SubstationMap from './SubstationMap';
+import SubstationSelectionPanel from './SubstationSelectionPanel';
+import useNetworkLinks from '../hooks/useNetworkLinks';
 
 import api from '../api';
 import SpiralChart from './SpiralChart';
@@ -14,6 +16,12 @@ const LoadDashboard = ({ substations = [] }) => {
     const [viewingSld, setViewingSld] = useState(null); // SLD Viewer State
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [topCount, setTopCount] = useState(5);
+    const [selectedSubstationIds, setSelectedSubstationIds] = useState(null); // null = show all; Set = active filter
+    const [showNetworkLines, setShowNetworkLines] = useState(false);
+    const [circuitDisplayMode, setCircuitDisplayMode] = useState('thickness');
+
+    // Fetch network links if viewing the dashboard
+    const { links: networkLinks } = useNetworkLinks();
 
 
     // Fetch grid overview on mount or when substations change
@@ -60,6 +68,13 @@ const LoadDashboard = ({ substations = [] }) => {
         }))
     ), [substations]);
 
+    // Derive filtered map points based on selection (null = show all)
+    const filteredMapPoints = useMemo(() =>
+        selectedSubstationIds === null
+            ? mapPoints
+            : mapPoints.filter(p => selectedSubstationIds.has(p.substation_id)),
+        [mapPoints, selectedSubstationIds]);
+
     if (loading) {
         return (
             <div style={{
@@ -79,12 +94,30 @@ const LoadDashboard = ({ substations = [] }) => {
             
             {/* Layer 0: Geospatial Backdrop */}
             <div className="fui-backdrop-map">
-                <SubstationMap data={mapPoints} fuiMode={true} />
+                <SubstationMap 
+                    data={filteredMapPoints} 
+                    fuiMode={true} 
+                    networkLinks={networkLinks}
+                    showNetworkLines={showNetworkLines}
+                    circuitDisplayMode={circuitDisplayMode}
+                />
             </div>
 
 
             {/* Layer 2: Interactive Modals & Sidebar */}
             <div style={{ position: 'relative', zIndex: 10, height: '100vh', pointerEvents: 'none', overflow: 'hidden' }}>
+                {/* Substation Selection Panel — bottom-center of map */}
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 20, pointerEvents: 'auto' }}>
+                    <SubstationSelectionPanel
+                        substations={substations}
+                        selectedIds={selectedSubstationIds}
+                        onChangeIds={setSelectedSubstationIds}
+                        showNetworkLines={showNetworkLines}
+                        onToggleNetworkLines={setShowNetworkLines}
+                        circuitDisplayMode={circuitDisplayMode}
+                        onChangeCircuitDisplayMode={setCircuitDisplayMode}
+                    />
+                </div>
                 <AnimatePresence>
                     {viewingSld && (
                         <div style={{ pointerEvents: 'auto', padding: '1.5rem', position: 'absolute', left: 0, top: 0, bottom: 0, width: '100%' }}>
