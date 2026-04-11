@@ -64,14 +64,25 @@ const pillStyle = (type, value) => {
     };
 };
 
+const LT_COLS = '56px 88px 65px 108px 108px 126px 44px';
+const AT_COLS = '56px 76px 76px 65px 108px 108px 44px';
+const BR_COLS = '1fr 80px 100px 44px';
+const LSR_COLS = '1fr 70px 44px 44px 68px 76px 44px';
+
 const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
-    const [form, setForm] = useState(asset || {});
+    const [form, setForm] = useState({});
     const [saving, setSaving] = useState(false);
-    const saveTimeoutRef = useRef(null);
+    const [hovering, setHovering] = useState(false);
 
     useEffect(() => {
         if (asset) setForm(asset);
     }, [asset]);
+
+    const handleSave = async () => {
+        setSaving(true);
+        await onSave(form);
+        setSaving(false);
+    };
 
     const generateBreakerNumbers = (no, lv) => {
         if (!no) return { hv: '', lv: '' };
@@ -88,15 +99,8 @@ const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
         return { hv: String(hv), lv: String(lvBreaker) };
     };
 
-    const handleSave = async () => {
-        setSaving(true);
-        await onSave(form);
-        setSaving(false);
-    };
-
     const handleChange = (e) => {
         let newForm = { ...form, [e.target.name]: e.target.value };
-        
         if (isNew && (e.target.name === 'transformer_no' || e.target.name === 'lv_voltage')) {
             const no = e.target.name === 'transformer_no' ? e.target.value : form.transformer_no;
             const lv = e.target.name === 'lv_voltage' ? e.target.value : form.lv_voltage;
@@ -106,63 +110,437 @@ const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
                 newForm.lv_breaker_number = breakers.lv;
             }
         }
-        
         setForm(newForm);
-        
-        if (!isNew && form.id) {
-            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-            saveTimeoutRef.current = setTimeout(async () => {
-                setSaving(true);
-                await onSave(newForm);
-                setSaving(false);
-            }, 1000);
-        }
     };
 
-    return (
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 600, color: '#1e293b' }}>T{form.transformer_no}</h4>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {!isNew && saving && <span style={{ fontSize: '0.65rem', color: '#047d60' }}>Saving...</span>}
-                    {isNew ? (
-                        <>
-                            <button type="button" onClick={handleSave} disabled={saving} style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', background: '#047d60', color: '#fff', cursor: 'pointer', fontSize: '0.75rem' }}>Create</button>
-                            <button type="button" onClick={onCancel} style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px' }}>Cancel</button>
-                        </>
-                    ) : (
-                        <button onClick={onDelete} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}><Trash2 size={14} /></button>
-                    )}
+    const cellInput = (extra = {}) => ({
+        width: '100%', padding: '5px 8px', fontSize: '0.72rem',
+        fontFamily: 'monospace', border: '1px solid transparent',
+        borderRadius: '5px', background: 'transparent',
+        color: '#1e293b', outline: 'none', transition: 'all 0.15s',
+        ...extra,
+    });
+
+    if (isNew) {
+        return (
+            <div style={{
+                display: 'grid', gridTemplateColumns: LT_COLS, gap: '6px',
+                alignItems: 'center', padding: '8px 16px',
+                background: 'rgba(4, 125, 96, 0.04)',
+                borderTop: '2px solid #047d60',
+                borderBottom: '1px solid rgba(4,125,96,0.12)',
+            }}>
+                <input
+                    name="transformer_no" type="text" inputMode="numeric"
+                    placeholder="T#" value={form.transformer_no || ''}
+                    onChange={handleChange} autoFocus
+                    style={cellInput({ textAlign: 'center', fontWeight: 700, fontSize: '0.8rem', border: '1px solid #cbd5e1', background: '#fff', color: '#047d60' })}
+                />
+                <select
+                    name="lv_voltage" value={form.lv_voltage || ''}
+                    onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', color: '#1d4ed8' })}
+                >
+                    <option value="">-- kV</option>
+                    {LOAD_LV.map(v => <option key={v} value={v}>{v} kV</option>)}
+                </select>
+                <input
+                    name="capacity_mva" type="text" inputMode="decimal"
+                    placeholder="0.00" value={form.capacity_mva || ''}
+                    onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff', textAlign: 'right' })}
+                />
+                <input
+                    name="hv_breaker_number" placeholder="HV—"
+                    value={form.hv_breaker_number || ''} onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff' })}
+                />
+                <input
+                    name="lv_breaker_number" placeholder="LV—"
+                    value={form.lv_breaker_number || ''} onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff' })}
+                />
+                <input
+                    name="commissioning_date" type="date"
+                    value={form.commissioning_date || ''} onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff', fontSize: '0.68rem' })}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'center', justifyContent: 'center' }}>
+                    <button
+                        type="button" onClick={handleSave} disabled={saving}
+                        style={{
+                            width: '100%', padding: '3px 0', borderRadius: '4px', border: 'none',
+                            background: '#047d60', color: '#fff', cursor: 'pointer',
+                            fontSize: '0.62rem', fontWeight: 700, opacity: saving ? 0.6 : 1,
+                            transition: 'all 0.15s', lineHeight: 1.4
+                        }}
+                    >
+                        {saving ? '…' : 'Add'}
+                    </button>
+                    <button
+                        type="button" onClick={onCancel}
+                        style={{
+                            width: '100%', padding: '3px 0', borderRadius: '4px',
+                            border: '1px solid #e2e8f0', background: '#fff',
+                            color: '#94a3b8', cursor: 'pointer', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.15s', lineHeight: 1.4
+                        }}
+                    >
+                        <X size={11} />
+                    </button>
                 </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
-                <div>
-                    <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Unit Number</label>
-                    <input name="transformer_no" className="input-field mono" type="number" value={form.transformer_no || ''} onChange={handleChange} />
+        );
+    }
+
+    const lvPalette = form.lv_voltage == 33
+        ? { bg: '#fef3c7', text: '#b45309' }
+        : form.lv_voltage == 22
+            ? { bg: '#dbeafe', text: '#1d4ed8' }
+            : { bg: '#ecfdf5', text: '#047d60' };
+
+    return (
+        <div
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
+            style={{
+                display: 'grid', gridTemplateColumns: LT_COLS, gap: '6px',
+                alignItems: 'center', padding: '6px 16px',
+                borderBottom: '1px solid #f1f5f9',
+                background: hovering ? '#f8fafc' : '#fff',
+                transition: 'background 0.15s',
+            }}
+        >
+            {/* Unit badge */}
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <span style={{
+                    fontSize: '0.7rem', fontWeight: 700, fontFamily: 'monospace',
+                    color: '#047d60', background: 'rgba(4,125,96,0.08)',
+                    padding: '3px 7px', borderRadius: '4px', letterSpacing: '0.3px'
+                }}>
+                    T{form.transformer_no}
+                </span>
+            </div>
+
+            {/* LV voltage select styled as pill */}
+            <select
+                name="lv_voltage" value={form.lv_voltage || ''} onChange={handleChange}
+                style={{
+                    width: '100%', padding: '4px 6px', fontSize: '0.72rem',
+                    fontFamily: 'monospace', fontWeight: 700, textAlign: 'center',
+                    background: lvPalette.bg, color: lvPalette.text,
+                    border: 'none', borderRadius: '5px', cursor: 'pointer', outline: 'none'
+                }}
+            >
+                {LOAD_LV.map(v => <option key={v} value={v}>{v} kV</option>)}
+            </select>
+
+            {/* Capacity */}
+            <input
+                name="capacity_mva" type="text" inputMode="decimal"
+                value={form.capacity_mva || ''} onChange={handleChange} onBlur={handleSave}
+                style={cellInput({
+                    textAlign: 'center', fontWeight: 600, color: '#92400e',
+                    background: hovering ? '#fffbeb' : 'transparent',
+                    border: hovering ? '1px solid #fde68a' : '1px solid transparent',
+                })}
+            />
+
+            {/* HV Breaker */}
+            <input
+                name="hv_breaker_number" value={form.hv_breaker_number || ''}
+                onChange={handleChange} onBlur={handleSave}
+                style={cellInput({
+                    textAlign: 'center', color: '#475569',
+                    border: hovering ? '1px solid #e2e8f0' : '1px solid transparent',
+                    background: hovering ? '#fff' : 'transparent',
+                })}
+            />
+
+            {/* LV Breaker */}
+            <input
+                name="lv_breaker_number" value={form.lv_breaker_number || ''}
+                onChange={handleChange} onBlur={handleSave}
+                style={cellInput({
+                    textAlign: 'center', color: '#475569',
+                    border: hovering ? '1px solid #e2e8f0' : '1px solid transparent',
+                    background: hovering ? '#fff' : 'transparent',
+                })}
+            />
+
+            {/* Commissioning date */}
+            <input
+                name="commissioning_date" type="date"
+                value={form.commissioning_date || ''}
+                onChange={handleChange} onBlur={handleSave}
+                style={cellInput({
+                    textAlign: 'center', fontSize: '0.68rem', color: '#64748b',
+                    border: hovering ? '1px solid #e2e8f0' : '1px solid transparent',
+                    background: hovering ? '#fff' : 'transparent',
+                })}
+            />
+
+            {/* Delete */}
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                    onClick={onDelete}
+                    title="Delete entry"
+                    style={{
+                        background: hovering ? '#fef2f2' : 'transparent',
+                        border: hovering ? '1px solid #fecaca' : '1px solid transparent',
+                        color: '#ef4444', cursor: 'pointer', padding: '4px 6px',
+                        borderRadius: '5px', display: 'flex', alignItems: 'center',
+                        transition: 'all 0.15s'
+                    }}
+                >
+                    <Trash2 size={13} />
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const AutoTransformerRow = ({ asset, onSave, onDelete, onCancel, isNew }) => {
+    const [form, setForm] = useState({});
+    const [saving, setSaving] = useState(false);
+    const [hovering, setHovering] = useState(false);
+
+    useEffect(() => { if (asset) setForm(asset); }, [asset]);
+
+    const handleSave = async () => { setSaving(true); await onSave(form); setSaving(false); };
+
+    const handleChange = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+    const cellInput = (extra = {}) => ({
+        width: '100%', padding: '5px 8px', fontSize: '0.72rem',
+        fontFamily: 'monospace', border: '1px solid transparent',
+        borderRadius: '5px', background: 'transparent',
+        color: '#1e293b', outline: 'none', transition: 'all 0.15s',
+        textAlign: 'center', ...extra,
+    });
+
+    if (isNew) {
+        return (
+            <div style={{
+                display: 'grid', gridTemplateColumns: AT_COLS, gap: '6px',
+                alignItems: 'center', padding: '8px 16px',
+                background: 'rgba(4, 125, 96, 0.04)',
+                borderTop: '2px solid #047d60',
+                borderBottom: '1px solid rgba(4,125,96,0.12)',
+            }}>
+                <input name="transformer_no" type="text" inputMode="numeric" placeholder="T#" value={form.transformer_no || ''} onChange={handleChange} autoFocus
+                    style={cellInput({ fontWeight: 700, fontSize: '0.8rem', border: '1px solid #cbd5e1', background: '#fff', color: '#047d60' })} />
+                <select name="hv_voltage" value={form.hv_voltage || ''} onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', color: '#1d4ed8' })}>
+                    <option value="">HV kV</option>
+                    {AUTO_LV.map(v => <option key={v} value={v}>{v} kV</option>)}
+                </select>
+                <select name="lv_voltage" value={form.lv_voltage || ''} onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', color: '#047d60' })}>
+                    <option value="">LV kV</option>
+                    {AUTO_LV.map(v => <option key={v} value={v}>{v} kV</option>)}
+                </select>
+                <input name="capacity_mva" type="text" inputMode="decimal" placeholder="0.00" value={form.capacity_mva || ''} onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff' })} />
+                <input name="hv_breaker_number" placeholder="HV—" value={form.hv_breaker_number || ''} onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff' })} />
+                <input name="lv_breaker_number" placeholder="LV—" value={form.lv_breaker_number || ''} onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff' })} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'center' }}>
+                    <button type="button" onClick={handleSave} disabled={saving}
+                        style={{ width: '100%', padding: '3px 0', borderRadius: '4px', border: 'none', background: '#047d60', color: '#fff', cursor: 'pointer', fontSize: '0.62rem', fontWeight: 700, opacity: saving ? 0.6 : 1 }}>
+                        {saving ? '…' : 'Add'}
+                    </button>
+                    <button type="button" onClick={onCancel}
+                        style={{ width: '100%', padding: '3px 0', borderRadius: '4px', border: '1px solid #e2e8f0', background: '#fff', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <X size={11} />
+                    </button>
                 </div>
-                <div>
-                    <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '4px' }}>LV Voltage (kV)</label>
-                    <select name="lv_voltage" className="input-field mono" value={form.lv_voltage || ''} onChange={handleChange}>
-                        <option value="">-- Select --</option>
-                        {LOAD_LV.map(v => <option key={v} value={v}>{v} kV</option>)}
-                    </select>
+            </div>
+        );
+    }
+
+    const hvPalette = { bg: '#dbeafe', text: '#1d4ed8' };
+    const lvPalette = { bg: '#ecfdf5', text: '#047d60' };
+
+    return (
+        <div onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}
+            style={{
+                display: 'grid', gridTemplateColumns: AT_COLS, gap: '6px',
+                alignItems: 'center', padding: '6px 16px',
+                borderBottom: '1px solid #f1f5f9',
+                background: hovering ? '#f8fafc' : '#fff',
+                transition: 'background 0.15s',
+            }}>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, fontFamily: 'monospace', color: '#047d60', background: 'rgba(4,125,96,0.08)', padding: '3px 7px', borderRadius: '4px' }}>
+                    T{form.transformer_no}
+                </span>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace', background: hvPalette.bg, color: hvPalette.text, padding: '3px 8px', borderRadius: '5px' }}>
+                    {form.hv_voltage} kV
+                </span>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace', background: lvPalette.bg, color: lvPalette.text, padding: '3px 8px', borderRadius: '5px' }}>
+                    {form.lv_voltage} kV
+                </span>
+            </div>
+            <input name="capacity_mva" type="text" inputMode="decimal" value={form.capacity_mva || ''} onChange={handleChange} onBlur={handleSave}
+                style={cellInput({ fontWeight: 600, color: '#92400e', background: hovering ? '#fffbeb' : 'transparent', border: hovering ? '1px solid #fde68a' : '1px solid transparent' })} />
+            <input name="hv_breaker_number" value={form.hv_breaker_number || ''} onChange={handleChange} onBlur={handleSave}
+                style={cellInput({ color: '#475569', border: hovering ? '1px solid #e2e8f0' : '1px solid transparent', background: hovering ? '#fff' : 'transparent' })} />
+            <input name="lv_breaker_number" value={form.lv_breaker_number || ''} onChange={handleChange} onBlur={handleSave}
+                style={cellInput({ color: '#475569', border: hovering ? '1px solid #e2e8f0' : '1px solid transparent', background: hovering ? '#fff' : 'transparent' })} />
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button onClick={onDelete} title="Delete entry"
+                    style={{ background: hovering ? '#fef2f2' : 'transparent', border: hovering ? '1px solid #fecaca' : '1px solid transparent', color: '#ef4444', cursor: 'pointer', padding: '4px 6px', borderRadius: '5px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                    <Trash2 size={13} />
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const IncomingBranchRow = ({ asset, substationOptions, onSave, onDelete, onCancel, isNew }) => {
+    const [form, setForm] = useState({});
+    const [saving, setSaving] = useState(false);
+    const [hovering, setHovering] = useState(false);
+
+    useEffect(() => { if (asset) setForm(asset); }, [asset]);
+
+    const handleSave = async () => { setSaving(true); await onSave(form); setSaving(false); };
+
+    const handleChange = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+    const cellInput = (extra = {}) => ({
+        width: '100%', padding: '5px 8px', fontSize: '0.72rem',
+        fontFamily: 'monospace', border: '1px solid transparent',
+        borderRadius: '5px', background: 'transparent',
+        color: '#1e293b', outline: 'none', transition: 'all 0.15s',
+        textAlign: 'center', ...extra,
+    });
+
+    if (isNew) {
+        return (
+            <div style={{
+                display: 'grid', gridTemplateColumns: BR_COLS, gap: '6px',
+                alignItems: 'center', padding: '8px 16px',
+                background: 'rgba(4, 125, 96, 0.04)',
+                borderTop: '2px solid #047d60',
+                borderBottom: '1px solid rgba(4,125,96,0.12)',
+            }}>
+                <select name="to_substation" value={form.to_substation || ''} onChange={handleChange} autoFocus
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', textAlign: 'left' })}>
+                    <option value="">-- Select substation</option>
+                    {substationOptions.map(s => <option key={s.substation_id} value={s.substation_id}>{s.name} ({s.substation_id})</option>)}
+                </select>
+                <input name="ckt_id" placeholder="Ckt" value={form.ckt_id || ''} onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff' })} />
+                <input name="breaker_number" placeholder="Breaker #" value={form.breaker_number || ''} onChange={handleChange}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff' })} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'center' }}>
+                    <button type="button" onClick={handleSave} disabled={saving}
+                        style={{ width: '100%', padding: '3px 0', borderRadius: '4px', border: 'none', background: '#047d60', color: '#fff', cursor: 'pointer', fontSize: '0.62rem', fontWeight: 700, opacity: saving ? 0.6 : 1 }}>
+                        {saving ? '…' : 'Add'}
+                    </button>
+                    <button type="button" onClick={onCancel}
+                        style={{ width: '100%', padding: '3px 0', borderRadius: '4px', border: '1px solid #e2e8f0', background: '#fff', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <X size={11} />
+                    </button>
                 </div>
-                <div>
-                    <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Capacity (MVA)</label>
-                    <input name="capacity_mva" className="input-field mono" type="number" value={form.capacity_mva || ''} onChange={handleChange} />
-                </div>
-                <div>
-                    <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '4px' }}>HV Breaker</label>
-                    <input name="hv_breaker_number" className="input-field mono" value={form.hv_breaker_number || ''} onChange={handleChange} placeholder="e.g., 101" />
-                </div>
-                <div>
-                    <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '4px' }}>LV Breaker</label>
-                    <input name="lv_breaker_number" className="input-field mono" value={form.lv_breaker_number || ''} onChange={handleChange} placeholder="e.g., 201" />
-                </div>
-                <div>
-                    <label style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Commission Date</label>
-                    <input name="commissioning_date" className="input-field mono" type="date" value={form.commissioning_date || ''} onChange={handleChange} />
-                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}
+            style={{
+                display: 'grid', gridTemplateColumns: BR_COLS, gap: '6px',
+                alignItems: 'center', padding: '6px 16px',
+                borderBottom: '1px solid #f1f5f9',
+                background: hovering ? '#f8fafc' : '#fff',
+                transition: 'background 0.15s',
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace', color: '#1e293b', background: '#f1f5f9', padding: '3px 8px', borderRadius: '4px' }}>
+                    {form.to_substation}
+                </span>
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                    {substationOptions.find(s => s.substation_id === form.to_substation)?.name || ''}
+                </span>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+                <span style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#475569', background: '#f8fafc', padding: '3px 7px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
+                    {form.ckt_id || '—'}
+                </span>
+            </div>
+            <input name="breaker_number" value={form.breaker_number || ''} onChange={handleChange} onBlur={handleSave}
+                style={cellInput({ color: '#475569', border: hovering ? '1px solid #e2e8f0' : '1px solid transparent', background: hovering ? '#fff' : 'transparent' })} />
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button onClick={onDelete} title="Delete entry"
+                    style={{ background: hovering ? '#fef2f2' : 'transparent', border: hovering ? '1px solid #fecaca' : '1px solid transparent', color: '#ef4444', cursor: 'pointer', padding: '4px 6px', borderRadius: '5px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                    <Trash2 size={13} />
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const LSRRow = ({ relay, onEdit, onDelete }) => {
+    const [hovering, setHovering] = useState(false);
+    return (
+        <div
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
+            onClick={onEdit}
+            style={{
+                display: 'grid', gridTemplateColumns: LSR_COLS,
+                gap: '6px', alignItems: 'center', padding: '7px 16px',
+                borderBottom: '1px solid #f1f5f9',
+                background: hovering ? '#f8fafc' : '#fff',
+                cursor: 'pointer', transition: 'background 0.15s',
+            }}
+        >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: relay.is_active !== false ? '#047d60' : '#cbd5e1', flexShrink: 0 }} />
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e293b', fontFamily: "'Poppins', sans-serif" }}>
+                    {relay.relay_name || 'Unnamed Relay'}
+                </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                {relay.target_voltage ? (
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: '20px', background: 'rgba(99,102,241,0.08)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.2)', fontFamily: 'monospace' }}>
+                        {relay.target_voltage}kV
+                    </span>
+                ) : <span style={{ color: '#cbd5e1', fontSize: '0.7rem' }}>—</span>}
+            </div>
+            <div style={{ textAlign: 'center', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace', color: relay.load_transformers?.length > 0 ? '#047d60' : '#cbd5e1' }}>
+                {relay.load_transformers?.length || 0}
+            </div>
+            <div style={{ textAlign: 'center', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace', color: relay.auto_transformers?.length > 0 ? '#047d60' : '#cbd5e1' }}>
+                {relay.auto_transformers?.length || 0}
+            </div>
+            <div style={{ textAlign: 'center', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace', color: relay.incoming_branches?.length > 0 ? '#047d60' : '#cbd5e1' }}>
+                {relay.incoming_branches?.length || 0}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <span style={{
+                    fontSize: '0.62rem', fontWeight: 700, padding: '2px 8px', borderRadius: '20px',
+                    background: relay.is_active !== false ? 'rgba(4,125,96,0.08)' : '#f1f5f9',
+                    color: relay.is_active !== false ? '#047d60' : '#94a3b8',
+                    border: `1px solid ${relay.is_active !== false ? 'rgba(4,125,96,0.2)' : '#e2e8f0'}`,
+                }}>
+                    {relay.is_active !== false ? 'Active' : 'Off'}
+                </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Delete relay"
+                    style={{ background: hovering ? '#fef2f2' : 'transparent', border: hovering ? '1px solid #fecaca' : '1px solid transparent', color: '#ef4444', cursor: 'pointer', padding: '4px 6px', borderRadius: '5px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                    <Trash2 size={13} />
+                </button>
             </div>
         </div>
     );
@@ -509,6 +887,10 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
     const [inlineEditKey, setInlineEditKey] = useState(null); // key of asset being edited inline (e.g., 'load-123')
     const [inlineForm, setInlineForm] = useState({});
     const [isAddingLT, setIsAddingLT] = useState(false);
+    const [isAddingAT, setIsAddingAT] = useState(false);
+    const [inlineATForm, setInlineATForm] = useState({});
+    const [isAddingBranch, setIsAddingBranch] = useState(false);
+    const [inlineBranchForm, setInlineBranchForm] = useState({});
 
     const handleInlineSave = async (type, formData) => {
         if (!substation?.substation_id) return;
@@ -520,11 +902,15 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
             const payload = {
                 substation: substation.substation_id,
                 transformer_no: parseInt(form.transformer_no) || undefined,
+                hv_voltage: parseInt(form.hv_voltage) || undefined,
                 lv_voltage: parseInt(form.lv_voltage) || undefined,
                 hv_breaker_number: form.hv_breaker_number || undefined,
                 lv_breaker_number: form.lv_breaker_number || undefined,
                 capacity_mva: parseFloat(form.capacity_mva) || undefined,
                 commissioning_date: form.commissioning_date || undefined,
+                to_substation: form.to_substation || undefined,
+                ckt_id: form.ckt_id || undefined,
+                breaker_number: form.breaker_number || undefined,
             };
             
             console.log('Saving payload:', payload);
@@ -875,9 +1261,9 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                     exit={{ opacity: 0, scale: 0.95 }}
                     style={{
                         width: '100%',
-                        maxWidth: '920px',
+                        maxWidth: '1000px',
                         height: '100%',
-                        maxHeight: '620px',
+                        maxHeight: '60vh',
                         display: 'flex',
                         flexDirection: 'column',
                         padding: 0,
@@ -1068,42 +1454,118 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
                                 {/* Section: Load Transformers */}
                                 <div id="load">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
-                                        <Zap size={18} color="#047d60" />
-                                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#1e293b', fontFamily: "'Poppins', sans-serif" }}>Load Transformers</h3>
-                                        <span style={{ fontSize: '0.7rem', background: '#e2e8f0', color: '#64748b', padding: '2px 8px', borderRadius: '12px', marginLeft: '8px' }}>{loadTransformers.length}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
+                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Zap size={15} color="#047d60" />
+                                        </div>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Load Transformers</h3>
+                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>HV/LV step-down units</div>
+                                        </div>
+                                        <span style={{
+                                            fontSize: '0.62rem', fontWeight: 700,
+                                            background: loadTransformers.length > 0 ? 'rgba(4,125,96,0.08)' : '#f1f5f9',
+                                            color: loadTransformers.length > 0 ? '#047d60' : '#94a3b8',
+                                            padding: '2px 8px', borderRadius: '20px',
+                                            border: `1px solid ${loadTransformers.length > 0 ? 'rgba(4,125,96,0.2)' : '#e2e8f0'}`
+                                        }}>
+                                            {loadTransformers.length} unit{loadTransformers.length !== 1 ? 's' : ''}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={fetchAssets}
+                                            disabled={assetLoading}
+                                            style={{
+                                                marginLeft: 'auto', background: 'transparent',
+                                                border: '1px solid #e2e8f0', color: '#94a3b8',
+                                                cursor: 'pointer', padding: '5px 8px',
+                                                borderRadius: '6px', display: 'flex', alignItems: 'center',
+                                                transition: 'all 0.15s'
+                                            }}
+                                        >
+                                            <RefreshCw size={13} className={assetLoading ? 'animate-spin' : ''} />
+                                        </button>
                                     </div>
+
                                     {canManageAssets ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                                                <button style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', cursor: 'pointer', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={fetchAssets} disabled={assetLoading}>
-                                                    <RefreshCw size={16} className={assetLoading ? 'animate-spin' : ''} />
-                                                </button>
-                                                <button type="button" className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => { setInlineForm({ transformer_no: loadTransformers.length + 1, lv_voltage: '', capacity_mva: '', hv_breaker_number: '', lv_breaker_number: '', commissioning_date: '' }); setIsAddingLT(true); }}>
-                                                    <Plus size={16} /> Add Load Transformer
-                                                </button>
+                                        <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                            {/* Column headers */}
+                                            <div style={{
+                                                display: 'grid', gridTemplateColumns: LT_COLS,
+                                                gap: '6px', padding: '8px 16px',
+                                                background: 'linear-gradient(135deg, rgba(4,125,96,0.07), rgba(5,150,105,0.03))',
+                                                borderBottom: '1px solid #e2e8f0',
+                                                fontSize: '0.7rem', fontWeight: 700,
+                                                color: '#047d60', textTransform: 'uppercase',
+                                                letterSpacing: '0.08em', fontFamily: "'Poppins', sans-serif"
+                                            }}>
+                                                <div style={{ textAlign: 'center' }}>Unit</div>
+                                                <div style={{ textAlign: 'center' }}>LV</div>
+                                                <div style={{ textAlign: 'center' }}>Capacity</div>
+                                                <div style={{ textAlign: 'center' }}>HV Breaker</div>
+                                                <div style={{ textAlign: 'center' }}>LV Breaker</div>
+                                                <div style={{ textAlign: 'center' }}>Commissioned</div>
+                                                <div style={{ textAlign: 'center' }}>Action</div>
                                             </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                {loadTransformers.map((asset) => (
-                                                    <TransformerForm key={asset.id} asset={asset} onSave={handleInlineSave} onDelete={() => handleAssetDelete('load', asset.id)} />
-                                                ))}
-                                                {loadTransformers.length === 0 && !isAddingLT && (
-                                                    <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
-                                                        <div style={{ fontSize: '0.85rem', color: '#64748b' }}>No load transformers. Click "Add Load Transformer" to create one.</div>
+
+                                            {/* Data rows */}
+                                            {loadTransformers.map((asset) => (
+                                                <TransformerForm
+                                                    key={asset.id}
+                                                    asset={asset}
+                                                    onSave={(formData) => handleInlineSave('load', formData)}
+                                                    onDelete={() => handleAssetDelete('load', asset.id)}
+                                                />
+                                            ))}
+
+                                            {/* Empty state */}
+                                            {loadTransformers.length === 0 && !isAddingLT && (
+                                                <div style={{ padding: '2.25rem 1rem', textAlign: 'center', background: '#fafafa' }}>
+                                                    <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.6rem' }}>
+                                                        <Zap size={15} color="#cbd5e1" />
                                                     </div>
-                                                )}
-                                                {isAddingLT && (
-                                                    <div style={{ background: '#fff', border: '2px solid #047d60', borderRadius: '8px', padding: '1rem' }}>
-                                                        <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                            <Zap size={16} color="#047d60" /> New Load Transformer
-                                                        </div>
-                                                        <TransformerForm asset={inlineForm} onSave={async (formData) => { setInlineForm(formData); await handleInlineSave('load', formData); setIsAddingLT(false); setInlineForm({}); }} onCancel={() => { setIsAddingLT(false); setInlineForm({}); }} isNew />
-                                                    </div>
-                                                )}
-                                            </div>
+                                                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>No load transformers</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#cbd5e1', marginTop: '2px' }}>Click "Add unit" to register one</div>
+                                                </div>
+                                            )}
+
+                                            {/* New row form */}
+                                            {isAddingLT && (
+                                                <TransformerForm
+                                                    asset={inlineForm}
+                                                    onSave={async (formData) => { setInlineForm(formData); await handleInlineSave('load', formData); setIsAddingLT(false); setInlineForm({}); }}
+                                                    onCancel={() => { setIsAddingLT(false); setInlineForm({}); }}
+                                                    isNew
+                                                />
+                                            )}
+
+                                            {/* Add button */}
+                                            {!isAddingLT && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setInlineForm({ transformer_no: loadTransformers.length + 1, lv_voltage: '', capacity_mva: '', hv_breaker_number: '', lv_breaker_number: '', commissioning_date: '' });
+                                                        setIsAddingLT(true);
+                                                    }}
+                                                    style={{
+                                                        width: '100%', padding: '9px 16px',
+                                                        border: 'none', borderTop: '1px dashed #e2e8f0',
+                                                        background: '#fafafa', color: '#94a3b8',
+                                                        cursor: 'pointer', display: 'flex',
+                                                        alignItems: 'center', justifyContent: 'center',
+                                                        gap: '6px', fontSize: '0.74rem', fontWeight: 600,
+                                                        fontFamily: "'Poppins', sans-serif",
+                                                        transition: 'all 0.15s'
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#047d60'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = '#fafafa'; e.currentTarget.style.color = '#94a3b8'; }}
+                                                >
+                                                    <Plus size={13} /> Add unit
+                                                </button>
+                                            )}
                                         </div>
                                     ) : (
-                                        <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
+                                        <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #e2e8f0' }}>
                                             <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Save substation details first to manage assets</div>
                                         </div>
                                     )}
@@ -1114,46 +1576,84 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
                                 {/* Section: Auto Transformers */}
                                 <div id="auto">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
-                                        <Database size={18} color="#047d60" />
-                                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#1e293b', fontFamily: "'Poppins', sans-serif" }}>Auto Transformers</h3>
-                                        <span style={{ fontSize: '0.7rem', background: '#e2e8f0', color: '#64748b', padding: '2px 8px', borderRadius: '12px', marginLeft: '8px' }}>{autoTransformers.length}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
+                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Database size={15} color="#047d60" />
+                                        </div>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Auto Transformers</h3>
+                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>HV/HV step-down units</div>
+                                        </div>
+                                        <span style={{
+                                            fontSize: '0.62rem', fontWeight: 700,
+                                            background: autoTransformers.length > 0 ? 'rgba(4,125,96,0.08)' : '#f1f5f9',
+                                            color: autoTransformers.length > 0 ? '#047d60' : '#94a3b8',
+                                            padding: '2px 8px', borderRadius: '20px',
+                                            border: `1px solid ${autoTransformers.length > 0 ? 'rgba(4,125,96,0.2)' : '#e2e8f0'}`
+                                        }}>
+                                            {autoTransformers.length} unit{autoTransformers.length !== 1 ? 's' : ''}
+                                        </span>
+                                        <button type="button" onClick={fetchAssets} disabled={assetLoading}
+                                            style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #e2e8f0', color: '#94a3b8', cursor: 'pointer', padding: '5px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                                            <RefreshCw size={13} className={assetLoading ? 'animate-spin' : ''} />
+                                        </button>
                                     </div>
                                     {canManageAssets ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                                                <button style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', cursor: 'pointer', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={fetchAssets} disabled={assetLoading}>
-                                                    <RefreshCw size={16} className={assetLoading ? 'animate-spin' : ''} />
+                                        <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                            <div style={{
+                                                display: 'grid', gridTemplateColumns: AT_COLS,
+                                                gap: '6px', padding: '8px 16px',
+                                                background: 'linear-gradient(135deg, rgba(4,125,96,0.07), rgba(5,150,105,0.03))',
+                                                borderBottom: '1px solid #e2e8f0',
+                                                fontSize: '0.7rem', fontWeight: 700,
+                                                color: '#047d60', textTransform: 'uppercase',
+                                                letterSpacing: '0.08em', fontFamily: "'Poppins', sans-serif"
+                                            }}>
+                                                <div style={{ textAlign: 'center' }}>Unit</div>
+                                                <div style={{ textAlign: 'center' }}>HV</div>
+                                                <div style={{ textAlign: 'center' }}>LV</div>
+                                                <div style={{ textAlign: 'center' }}>Capacity</div>
+                                                <div style={{ textAlign: 'center' }}>HV Breaker</div>
+                                                <div style={{ textAlign: 'center' }}>LV Breaker</div>
+                                                <div style={{ textAlign: 'center' }}>Action</div>
+                                            </div>
+                                            {autoTransformers.map((asset) => (
+                                                <AutoTransformerRow
+                                                    key={asset.id}
+                                                    asset={asset}
+                                                    onSave={(formData) => handleInlineSave('auto', formData)}
+                                                    onDelete={() => handleAssetDelete('auto', asset.id)}
+                                                />
+                                            ))}
+                                            {autoTransformers.length === 0 && !isAddingAT && (
+                                                <div style={{ padding: '2.25rem 1rem', textAlign: 'center', background: '#fafafa' }}>
+                                                    <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.6rem' }}>
+                                                        <Database size={15} color="#cbd5e1" />
+                                                    </div>
+                                                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>No auto transformers</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#cbd5e1', marginTop: '2px' }}>Click "Add unit" to register one</div>
+                                                </div>
+                                            )}
+                                            {isAddingAT && (
+                                                <AutoTransformerRow
+                                                    asset={inlineATForm}
+                                                    onSave={async (formData) => { setInlineATForm(formData); await handleInlineSave('auto', formData); setIsAddingAT(false); setInlineATForm({}); }}
+                                                    onCancel={() => { setIsAddingAT(false); setInlineATForm({}); }}
+                                                    isNew
+                                                />
+                                            )}
+                                            {!isAddingAT && (
+                                                <button type="button"
+                                                    onClick={() => { setInlineATForm({ transformer_no: autoTransformers.length + 1, hv_voltage: '', lv_voltage: '', capacity_mva: '', hv_breaker_number: '', lv_breaker_number: '' }); setIsAddingAT(true); }}
+                                                    style={{ width: '100%', padding: '9px 16px', border: 'none', borderTop: '1px dashed #e2e8f0', background: '#fafafa', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.74rem', fontWeight: 600, fontFamily: "'Poppins', sans-serif", transition: 'all 0.15s' }}
+                                                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#047d60'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = '#fafafa'; e.currentTarget.style.color = '#94a3b8'; }}>
+                                                    <Plus size={13} /> Add unit
                                                 </button>
-                                            </div>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                                                {autoTransformers.map((asset) => (
-                                                    <div key={asset.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.8rem', cursor: 'pointer', transition: 'all 0.2s' }}
-                                                        onClick={() => { setEditingAsset({ type: 'auto', data: asset }); setAssetForm(asset); }}
-                                                        onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#047d60'; }}
-                                                        onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                                                <span style={{ fontSize: '0.75rem', background: '#1e293b', color: '#fff', padding: '4px 8px', borderRadius: '4px' }}>T{asset.transformer_no}</span>
-                                                                <span style={{ fontSize: '0.75rem', background: '#dbeafe', color: '#1d4ed8', padding: '4px 8px', borderRadius: '4px' }}>{asset.hv_voltage}/{asset.lv_voltage}kV</span>
-                                                                <span style={{ fontSize: '0.75rem', background: '#fef3c7', color: '#b45309', padding: '4px 8px', borderRadius: '4px' }}>{asset.capacity_mva} MVA</span>
-                                                            </div>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleAssetDelete('auto', asset.id); }} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }} aria-label="Delete">
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        </div>
-                                                        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '6px' }}>Breakers: {asset.hv_breaker_number || '---'} / {asset.lv_breaker_number || '---'}</div>
-                                                    </div>
-                                                ))}
-                                                {autoTransformers.length === 0 && (
-                                                    <div style={{ gridColumn: '1 / -1', padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
-                                                        <div style={{ fontSize: '0.85rem', color: '#64748b' }}>No auto transformers</div>
-                                                    </div>
-                                                )}
-                                            </div>
+                                            )}
                                         </div>
                                     ) : (
-                                        <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
+                                        <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #e2e8f0' }}>
                                             <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Save substation details first to manage assets</div>
                                         </div>
                                     )}
@@ -1164,44 +1664,83 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
                                 {/* Section: Incoming Branches */}
                                 <div id="branch">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
-                                        <GitBranch size={18} color="#047d60" />
-                                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#1e293b', fontFamily: "'Poppins', sans-serif" }}>Incoming Branches</h3>
-                                        <span style={{ fontSize: '0.7rem', background: '#e2e8f0', color: '#64748b', padding: '2px 8px', borderRadius: '12px', marginLeft: '8px' }}>{incomingBranches.length}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
+                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <GitBranch size={15} color="#047d60" />
+                                        </div>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Incoming Branches</h3>
+                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Feeder & line connections</div>
+                                        </div>
+                                        <span style={{
+                                            fontSize: '0.62rem', fontWeight: 700,
+                                            background: incomingBranches.length > 0 ? 'rgba(4,125,96,0.08)' : '#f1f5f9',
+                                            color: incomingBranches.length > 0 ? '#047d60' : '#94a3b8',
+                                            padding: '2px 8px', borderRadius: '20px',
+                                            border: `1px solid ${incomingBranches.length > 0 ? 'rgba(4,125,96,0.2)' : '#e2e8f0'}`
+                                        }}>
+                                            {incomingBranches.length} line{incomingBranches.length !== 1 ? 's' : ''}
+                                        </span>
+                                        <button type="button" onClick={fetchAssets} disabled={assetLoading}
+                                            style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #e2e8f0', color: '#94a3b8', cursor: 'pointer', padding: '5px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                                            <RefreshCw size={13} className={assetLoading ? 'animate-spin' : ''} />
+                                        </button>
                                     </div>
                                     {canManageAssets ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                                                <button style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', cursor: 'pointer', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={fetchAssets} disabled={assetLoading}>
-                                                    <RefreshCw size={16} className={assetLoading ? 'animate-spin' : ''} />
+                                        <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                            <div style={{
+                                                display: 'grid', gridTemplateColumns: BR_COLS,
+                                                gap: '6px', padding: '8px 16px',
+                                                background: 'linear-gradient(135deg, rgba(4,125,96,0.07), rgba(5,150,105,0.03))',
+                                                borderBottom: '1px solid #e2e8f0',
+                                                fontSize: '0.7rem', fontWeight: 700,
+                                                color: '#047d60', textTransform: 'uppercase',
+                                                letterSpacing: '0.08em', fontFamily: "'Poppins', sans-serif"
+                                            }}>
+                                                <div>To Substation</div>
+                                                <div style={{ textAlign: 'center' }}>Ckt ID</div>
+                                                <div style={{ textAlign: 'center' }}>Breaker #</div>
+                                                <div style={{ textAlign: 'center' }}>Action</div>
+                                            </div>
+                                            {incomingBranches.map((asset) => (
+                                                <IncomingBranchRow
+                                                    key={asset.id}
+                                                    asset={asset}
+                                                    substationOptions={substationOptions}
+                                                    onSave={(formData) => handleInlineSave('branch', formData)}
+                                                    onDelete={() => handleAssetDelete('branch', asset.id)}
+                                                />
+                                            ))}
+                                            {incomingBranches.length === 0 && !isAddingBranch && (
+                                                <div style={{ padding: '2.25rem 1rem', textAlign: 'center', background: '#fafafa' }}>
+                                                    <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.6rem' }}>
+                                                        <GitBranch size={15} color="#cbd5e1" />
+                                                    </div>
+                                                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>No incoming branches</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#cbd5e1', marginTop: '2px' }}>Click "Add line" to register one</div>
+                                                </div>
+                                            )}
+                                            {isAddingBranch && (
+                                                <IncomingBranchRow
+                                                    asset={inlineBranchForm}
+                                                    substationOptions={substationOptions}
+                                                    onSave={async (formData) => { setInlineBranchForm(formData); await handleInlineSave('branch', formData); setIsAddingBranch(false); setInlineBranchForm({}); }}
+                                                    onCancel={() => { setIsAddingBranch(false); setInlineBranchForm({}); }}
+                                                    isNew
+                                                />
+                                            )}
+                                            {!isAddingBranch && (
+                                                <button type="button"
+                                                    onClick={() => { setInlineBranchForm({ to_substation: '', ckt_id: '', breaker_number: '' }); setIsAddingBranch(true); }}
+                                                    style={{ width: '100%', padding: '9px 16px', border: 'none', borderTop: '1px dashed #e2e8f0', background: '#fafafa', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.74rem', fontWeight: 600, fontFamily: "'Poppins', sans-serif", transition: 'all 0.15s' }}
+                                                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#047d60'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = '#fafafa'; e.currentTarget.style.color = '#94a3b8'; }}>
+                                                    <Plus size={13} /> Add line
                                                 </button>
-                                            </div>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                                                {incomingBranches.map((asset) => (
-                                                    <div key={asset.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.8rem', cursor: 'pointer', transition: 'all 0.2s' }}
-                                                        onClick={() => { setEditingAsset({ type: 'branch', data: asset }); setAssetForm(asset); }}
-                                                        onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#047d60'; }}
-                                                        onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                                                <span style={{ fontSize: '0.75rem', background: '#1e293b', color: '#fff', padding: '4px 8px', borderRadius: '4px' }}>{asset.to_substation} {asset.ckt_id}</span>
-                                                                <span style={{ fontSize: '0.75rem', background: '#e2e8f0', color: '#64748b', padding: '4px 8px', borderRadius: '4px' }}>Breaker {asset.breaker_number || '---'}</span>
-                                                            </div>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleAssetDelete('branch', asset.id); }} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }} aria-label="Delete">
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                                {incomingBranches.length === 0 && (
-                                                    <div style={{ gridColumn: '1 / -1', padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
-                                                        <div style={{ fontSize: '0.85rem', color: '#64748b' }}>No incoming branches</div>
-                                                    </div>
-                                                )}
-                                            </div>
+                                            )}
                                         </div>
                                     ) : (
-                                        <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
+                                        <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #e2e8f0' }}>
                                             <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Save substation details first to manage assets</div>
                                         </div>
                                     )}
@@ -1212,51 +1751,74 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
 {/* Section: Load Shedding Relays */}
                                 <div id="lsr">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
-                                        <ShieldAlert size={18} color="#047d60" />
-                                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#1e293b', fontFamily: "'Poppins', sans-serif" }}>Load Shedding Relays</h3>
-                                        <span style={{ fontSize: '0.7rem', background: '#e2e8f0', color: '#64748b', padding: '2px 8px', borderRadius: '12px', marginLeft: '8px' }}>{loadSheddingRelays.length}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
+                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <ShieldAlert size={15} color="#047d60" />
+                                        </div>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Load Shedding Relays</h3>
+                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Voltage-grouped relay assignments</div>
+                                        </div>
+                                        <span style={{
+                                            fontSize: '0.62rem', fontWeight: 700,
+                                            background: loadSheddingRelays.length > 0 ? 'rgba(4,125,96,0.08)' : '#f1f5f9',
+                                            color: loadSheddingRelays.length > 0 ? '#047d60' : '#94a3b8',
+                                            padding: '2px 8px', borderRadius: '20px',
+                                            border: `1px solid ${loadSheddingRelays.length > 0 ? 'rgba(4,125,96,0.2)' : '#e2e8f0'}`
+                                        }}>
+                                            {loadSheddingRelays.length} relay{loadSheddingRelays.length !== 1 ? 's' : ''}
+                                        </span>
+                                        <button type="button" onClick={fetchAssets} disabled={assetLoading}
+                                            style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #e2e8f0', color: '#94a3b8', cursor: 'pointer', padding: '5px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                                            <RefreshCw size={13} className={assetLoading ? 'animate-spin' : ''} />
+                                        </button>
                                     </div>
                                     {canManageAssets ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                                                <button style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b', cursor: 'pointer', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={fetchAssets} disabled={assetLoading}>
-                                                    <RefreshCw size={16} className={assetLoading ? 'animate-spin' : ''} />
-                                                </button>
+                                        <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                            <div style={{
+                                                display: 'grid', gridTemplateColumns: LSR_COLS,
+                                                gap: '6px', padding: '8px 16px',
+                                                background: 'linear-gradient(135deg, rgba(4,125,96,0.07), rgba(5,150,105,0.03))',
+                                                borderBottom: '1px solid #e2e8f0',
+                                                fontSize: '0.7rem', fontWeight: 700,
+                                                color: '#047d60', textTransform: 'uppercase',
+                                                letterSpacing: '0.08em', fontFamily: "'Poppins', sans-serif"
+                                            }}>
+                                                <div>Relay Name</div>
+                                                <div style={{ textAlign: 'center' }}>Voltage</div>
+                                                <div style={{ textAlign: 'center' }}>LTs</div>
+                                                <div style={{ textAlign: 'center' }}>ATs</div>
+                                                <div style={{ textAlign: 'center' }}>Branches</div>
+                                                <div style={{ textAlign: 'center' }}>Status</div>
+                                                <div style={{ textAlign: 'center' }}>Action</div>
                                             </div>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                                                {loadSheddingRelays.map((asset) => (
-                                                    <div key={asset.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.8rem', cursor: 'pointer', transition: 'all 0.2s' }}
-                                                        onClick={() => { setEditingAsset({ type: 'lsr', data: asset }); setAssetForm(asset); }}
-                                                        onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#047d60'; }}
-                                                        onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-                                                                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#1e293b' }}>{asset.relay_name || 'Unnamed Relay'}</span>
-                                                                <span style={{ fontSize: '0.7rem', background: asset.is_active ? '#dcfce7' : '#f1f5f9', color: asset.is_active ? '#16a34a' : '#64748b', padding: '2px 8px', borderRadius: '4px' }}>
-                                                                    {asset.is_active ? 'Active' : 'Inactive'}
-                                                                </span>
-                                                            </div>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleAssetDelete('lsr', asset.id); }} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }} aria-label="Delete">
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        </div>
-                                                        <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '6px', display: 'flex', gap: '12px' }}>
-                                                            <span>LTs: {asset.load_transformers?.length || 0}</span>
-                                                            <span>ATs: {asset.auto_transformers?.length || 0}</span>
-                                                            <span>Branches: {asset.incoming_branches?.length || 0}</span>
-                                                        </div>
+                                            {loadSheddingRelays.map((asset) => (
+                                                <LSRRow
+                                                    key={asset.id}
+                                                    relay={asset}
+                                                    onEdit={() => { setEditingAsset({ type: 'lsr', data: asset }); setAssetForm(asset); }}
+                                                    onDelete={() => handleAssetDelete('lsr', asset.id)}
+                                                />
+                                            ))}
+                                            {loadSheddingRelays.length === 0 && (
+                                                <div style={{ padding: '2.25rem 1rem', textAlign: 'center', background: '#fafafa' }}>
+                                                    <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.6rem' }}>
+                                                        <ShieldAlert size={15} color="#cbd5e1" />
                                                     </div>
-                                                ))}
-                                                {loadSheddingRelays.length === 0 && (
-                                                    <div style={{ gridColumn: '1 / -1', padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
-                                                        <div style={{ fontSize: '0.85rem', color: '#64748b' }}>No load shedding relays</div>
-                                                    </div>
-                                                )}
-                                            </div>
+                                                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>No load shedding relays</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#cbd5e1', marginTop: '2px' }}>Click "Add relay" to configure one</div>
+                                                </div>
+                                            )}
+                                            <button type="button"
+                                                onClick={() => { setEditingAsset({ type: 'lsr', data: null }); setAssetForm({}); }}
+                                                style={{ width: '100%', padding: '9px 16px', border: 'none', borderTop: '1px dashed #e2e8f0', background: '#fafafa', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.74rem', fontWeight: 600, fontFamily: "'Poppins', sans-serif", transition: 'all 0.15s' }}
+                                                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#047d60'; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = '#fafafa'; e.currentTarget.style.color = '#94a3b8'; }}>
+                                                <Plus size={13} /> Add relay
+                                            </button>
                                         </div>
                                     ) : (
-                                        <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
+                                        <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #e2e8f0' }}>
                                             <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Save substation details first to manage assets</div>
                                         </div>
                                     )}
