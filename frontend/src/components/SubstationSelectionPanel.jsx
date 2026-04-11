@@ -57,7 +57,7 @@ const SubstationSelectionPanel = ({
         [substations]);
 
     const uniqueVoltages = useMemo(() => {
-        const volts = new Set(substations.map(s => s.voltage).filter(Boolean));
+        const volts = new Set(substations.map(s => s.voltage).filter(v => v && v !== 230));
         return Array.from(volts).sort((a,b) => b - a);
     }, [substations]);
 

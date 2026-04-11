@@ -417,16 +417,14 @@ const App = () => {
                     </motion.div>
                 )}
 
-                {view !== 'critical-substations' && view !== 'load-shedding-designer' && view !== 'dashboard' && (
+                {view !== 'critical-substations' && view !== 'load-shedding-designer' && view !== 'dashboard' && view !== 'list' && view !== 'snapshots' && (
                     <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                             <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
                                 {view === 'dashboard' && 'Load Analytics'}
-                                {view === 'list' && 'Substation Assets'}
                                 {view === 'create' && 'Register New Entry'}
                                 {view === 'edit' && 'Edit Substation'}
                                 {view === 'config' && 'Configuration Editor'}
-                                {view === 'snapshots' && 'Snapshot View'}
                                 {view === 'dev-tools' && 'Developer Tools'}
                                 {view === 'load-shedding-viewer' && 'Load Shedding Viewer'}
                             </h2>
@@ -435,56 +433,104 @@ const App = () => {
                 )}
 
                 {view === 'list' && (
-                    <>
-                        <SubstationFilter
-                            substations={substations}
-                            currentFilters={filterCriteria}
-                            onUpdateFilters={setFilterCriteria}
-                            onRegister={() => { setSelectedSub(null); setView('create'); }}
-                            viewMode={listDisplayMode}
-                            onViewModeChange={setListDisplayMode}
-                        />
-
-                        {listDisplayMode === 'grid' ? (
-                            <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
-                                <AnimatePresence>
-                                    {filteredSubstations.map(sub => (
-                                        <SubstationCard
-                                            key={sub.substation_id}
-                                            substation={sub}
-                                            onEdit={() => { setSelectedSub(sub); setView('edit'); }}
-                                            onSLDUpload={handleSLDUpload}
-                                            onProcess={handleProcessSLD}
-                                            processing={loading}
-                                            onViewSld={setViewingSld}
-                                            onLocate={setLocatingSubstation}
-                                        />
-                                    ))}
-                                </AnimatePresence>
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        height: '100vh',
+                        color: '#1e293b',
+                        fontFamily: "'Poppins', 'IBM Plex Sans', sans-serif",
+                        letterSpacing: '-0.01em',
+                        width: '100%'
+                    }}>
+                        {/* Top Section: Header + Filter */}
+                        <div style={{ flexShrink: 0, padding: '1.5rem 2.5rem 1rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', marginBottom: '0.75rem' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.7rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(30, 41, 59, 0.6)', marginBottom: '0.5rem' }}>ASSET REGISTRY</div>
+                                    <h1 style={{ margin: 0, fontSize: '2.6rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.03em' }}>Substation Assets</h1>
+                                </div>
                             </div>
-                        ) : (
-                            <div className="substation-list" style={{ display: 'flex', flexDirection: 'column' }}>
-                                <AnimatePresence>
-                                    {filteredSubstations.map(sub => (
-                                        <SubstationListRow
-                                            key={sub.substation_id}
-                                            substation={sub}
-                                            onEdit={() => { setSelectedSub(sub); setView('edit'); }}
-                                            onSLDUpload={handleSLDUpload}
-                                            onProcess={handleProcessSLD}
-                                            processing={loading}
-                                            onViewSld={setViewingSld}
-                                            onLocate={setLocatingSubstation}
-                                        />
-                                    ))}
-                                </AnimatePresence>
+                            <div style={{ marginBottom: '0.75rem', fontSize: '0.85rem', color: 'rgba(30, 41, 59, 0.7)', textTransform: 'uppercase', letterSpacing: '0.3em' }}>
+                                {filteredSubstations.length} assets • {filterCriteria.region !== 'All' || filterCriteria.grid !== 'All' || filterCriteria.state !== 'All' || filterCriteria.voltage !== 'All' ? 'Filters Active' : 'All Regions'}
                             </div>
-                        )}
-
-                        <div style={{ marginTop: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                            Showing {filteredSubstations.length} of {substations.length} assets
+                            <SubstationFilter
+                                substations={substations}
+                                currentFilters={filterCriteria}
+                                onUpdateFilters={setFilterCriteria}
+                                onRegister={() => { setSelectedSub(null); setView('create'); }}
+                                viewMode={listDisplayMode}
+                                onViewModeChange={setListDisplayMode}
+                            />
                         </div>
-                    </>
+
+                        {/* Bottom Section: Table - takes remaining space */}
+                        <div style={{ flex: 1, padding: '0 2.5rem 1.5rem', overflowY: 'auto', minHeight: 0 }}>
+                            {listDisplayMode === 'grid' ? (
+                                <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
+                                    <AnimatePresence>
+                                        {filteredSubstations.map(sub => (
+                                            <SubstationCard
+                                                key={sub.substation_id}
+                                                substation={sub}
+                                                onEdit={() => { setSelectedSub(sub); setView('edit'); }}
+                                                onSLDUpload={handleSLDUpload}
+                                                onProcess={handleProcessSLD}
+                                                processing={loading}
+                                                onViewSld={setViewingSld}
+                                                onLocate={setLocatingSubstation}
+                                            />
+                                        ))}
+                                    </AnimatePresence>
+                                </div>
+                            ) : (
+                                <div style={{ 
+                                    background: 'rgba(255, 255, 255, 0.7)', 
+                                    borderRadius: '12px', 
+                                    border: '1px solid rgba(4, 125, 96, 0.15)',
+                                    boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    height: '100%',
+                                    overflow: 'hidden'
+                                }}>
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: '1.5fr 0.8fr 1fr 0.8fr 120px',
+                                        gap: '1rem',
+                                        padding: '0.75rem 1.25rem',
+                                        background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))',
+                                        borderBottom: '1px solid rgba(4, 125, 96, 0.15)',
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 10,
+                                        flexShrink: 0
+                                    }}>
+                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Substation</div>
+                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Voltage</div>
+                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ownership</div>
+                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Region</div>
+                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</div>
+                                    </div>
+                                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                                        <AnimatePresence>
+                                            {filteredSubstations.map(sub => (
+                                                <SubstationListRow
+                                                    key={sub.substation_id}
+                                                    substation={sub}
+                                                    onEdit={() => { setSelectedSub(sub); setView('edit'); }}
+                                                    onSLDUpload={handleSLDUpload}
+                                                    onProcess={handleProcessSLD}
+                                                    processing={loading}
+                                                    onViewSld={setViewingSld}
+                                                    onLocate={setLocatingSubstation}
+                                                />
+                                            ))}
+                                        </AnimatePresence>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 )}
 
                 {/* Substation Location Map Modal */}

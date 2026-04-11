@@ -261,11 +261,10 @@ const LoadDashboard = ({ substations = [] }) => {
                                     </div>
                                     <div style={{ border: '1px solid rgba(34, 211, 238, 0.2)', borderRadius: '8px', overflow: 'hidden', maxHeight: '250px', overflowY: 'auto' }}>
                                         <table className="fui-table" style={{ margin: 0, fontSize: '0.7rem' }}>
-                                            <thead style={{ background: 'rgba(34, 211, 238, 0.1)', position: 'sticky', top: 0, zIndex: 5 }}>
+                                            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                                                 <tr>
-                                                    <th style={{ color: '#fff', borderBottom: 'none', padding: '0.5rem 0.75rem' }}>Substation ID</th>
-                                                    <th style={{ color: '#fff', borderBottom: 'none', padding: '0.5rem 0.75rem' }}>Substation Name</th>
-                                                    <th style={{ textAlign: 'right', color: '#fff', borderBottom: 'none', padding: '0.5rem 0.75rem' }}>Load (MW)</th>
+                                                    <th style={{ color: '#fff', background: 'rgba(15, 23, 42, 0.95)', borderBottom: 'none', padding: '0.5rem 0.75rem' }}>Substation</th>
+                                                    <th style={{ color: '#fff', background: 'rgba(15, 23, 42, 0.95)', borderBottom: 'none', padding: '0.5rem 0.75rem', textAlign: 'right' }}>Load (MW)</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -274,8 +273,7 @@ const LoadDashboard = ({ substations = [] }) => {
                                                     .slice(0, topCount)
                                                     .map((p, idx) => (
                                                         <tr key={idx} style={{ background: idx % 2 === 0 ? 'rgba(0,0,0,0.2)' : 'transparent' }}>
-                                                            <td style={{ color: 'var(--fui-red)', fontWeight: 600, padding: '0.5rem 0.75rem' }}>{p.substation_id}</td>
-                                                            <td style={{ opacity: 0.7, padding: '0.5rem 0.75rem' }}>{p.name}</td>
+                                                            <td style={{ padding: '0.5rem 0.75rem' }}>{p.name} ({p.substation_id})</td>
                                                             <td style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, padding: '0.5rem 0.75rem' }}>
                                                                 {p.load_mw.toFixed(1)}
                                                             </td>

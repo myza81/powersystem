@@ -10,16 +10,17 @@ const TabButton = ({ active, onClick, icon: Icon, label, color }) => (
     <button
         onClick={onClick}
         style={{
-            background: active ? `${color}20` : 'transparent',
-            color: active ? color : '#94a3b8',
-            border: active ? `1px solid ${color}40` : '1px solid transparent',
+            background: active ? '#047d60' : 'transparent',
+            color: active ? '#fff' : '#64748b',
+            border: active ? '1px solid #047d60' : '1px solid #e2e8f0',
             padding: '8px 16px',
             borderRadius: '8px',
             display: 'flex', alignItems: 'center', gap: '8px',
             cursor: 'pointer',
             transition: 'all 0.2s',
             fontWeight: 600,
-            fontSize: '0.9rem'
+            fontSize: '0.85rem',
+            fontFamily: "'Poppins', sans-serif"
         }}
     >
         <Icon size={16} />
@@ -616,32 +617,61 @@ const ImportSummaryView = ({ summary }) => {
                         </div>
                     </div>
                 );
-            case 'topology':
+case 'topology':
                 return (
                     <div style={{ animation: 'fadeIn 0.3s' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0, color: '#06b6d4', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <h3 style={{ margin: '0 0 1rem 0', color: '#047d60', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.1rem', fontWeight: 700, fontFamily: "'Poppins', sans-serif" }}>
                                 <Grid size={20} /> Network Topology
                             </h3>
                         </div>
 
-                        {/* Sub-Tabs for Network Topology View */}
-                        <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '1rem', overflowX: 'auto' }}>
-                            <TabButton
-                                active={topologyTab === 'mapped'} onClick={() => setTopologyTab('mapped')}
-                                icon={CheckCircle} label={`Mapped Substations (${topologySubstations.length})`} color="#10b981"
-                            />
+                        {/* Sub-Tabs */}
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem', overflowX: 'auto' }}>
+                            <button
+                                onClick={() => setTopologyTab('mapped')}
+                                style={{
+                                    background: topologyTab === 'mapped' ? '#047d60' : 'transparent',
+                                    color: topologyTab === 'mapped' ? '#fff' : '#64748b',
+                                    border: 'none',
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    cursor: 'pointer', transition: 'all 0.2s',
+                                    fontWeight: 600, fontSize: '0.85rem', fontFamily: "'Poppins', sans-serif"
+                                }}
+                            >
+                                <CheckCircle size={16} /> Mapped ({topologySubstations.length})
+                            </button>
                             {missingFromTopologyList.length > 0 && (
-                                <TabButton
-                                    active={topologyTab === 'missing_topology'} onClick={() => setTopologyTab('missing_topology')}
-                                    icon={AlertTriangle} label={`Missing From Raw File (${missingFromTopologyList.length})`} color="#f87171"
-                                />
+                                <button
+                                    onClick={() => setTopologyTab('missing_topology')}
+                                    style={{
+                                        background: topologyTab === 'missing_topology' ? '#f59e0b' : 'transparent',
+                                        color: topologyTab === 'missing_topology' ? '#fff' : '#64748b',
+                                        border: 'none', padding: '8px 16px', borderRadius: '8px',
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        cursor: 'pointer', transition: 'all 0.2s',
+                                        fontWeight: 600, fontSize: '0.85rem', fontFamily: "'Poppins', sans-serif"
+                                    }}
+                                >
+                                    <AlertTriangle size={16} /> Missing ({missingFromTopologyList.length})
+                                </button>
                             )}
                             {missingFromMasterList.length > 0 && (
-                                <TabButton
-                                    active={topologyTab === 'missing_master'} onClick={() => setTopologyTab('missing_master')}
-                                    icon={AlertTriangle} label={`Unregistered Substations (${missingFromMasterList.length})`} color="#fbbf24"
-                                />
+                                <button
+                                    onClick={() => setTopologyTab('missing_master')}
+                                    style={{
+                                        background: topologyTab === 'missing_master' ? '#fbbf24' : 'transparent',
+                                        color: topologyTab === 'missing_master' ? '#fff' : '#64748b',
+                                        border: 'none', padding: '8px 16px', borderRadius: '8px',
+                                        display: 'flex', alignItems: 'center', gap: '8px',
+                                        cursor: 'pointer', transition: 'all 0.2s',
+                                        fontWeight: 600, fontSize: '0.85rem', fontFamily: "'Poppins', sans-serif"
+                                    }}
+                                >
+                                    <AlertTriangle size={16} /> Unregistered ({missingFromMasterList.length})
+                                </button>
                             )}
                         </div>
 
@@ -655,7 +685,7 @@ const ImportSummaryView = ({ summary }) => {
                                     (s.state || '').toLowerCase().includes(q);
                             });
                             return (
-                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                                     <div style={{ marginBottom: '1rem', position: 'relative' }}>
                                         <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                                         <input
@@ -664,30 +694,85 @@ const ImportSummaryView = ({ summary }) => {
                                             value={searchMissingTopology}
                                             onChange={(e) => setSearchMissingTopology(e.target.value)}
                                             style={{
-                                                width: '100%',
-                                                background: 'rgba(15, 23, 42, 0.4)',
-                                                border: '1px solid rgba(255,255,255,0.1)',
-                                                borderRadius: '8px',
-                                                padding: '10px 10px 10px 36px',
-                                                color: '#fff',
-                                                fontSize: '0.85rem',
-                                                outline: 'none'
+                                                width: '100%', background: '#f8fafc',
+                                                border: '1px solid #e2e8f0', borderRadius: '8px',
+                                                padding: '10px 10px 10px 36px', color: '#334155',
+                                                fontSize: '0.85rem', outline: 'none', fontFamily: "'Poppins', sans-serif"
                                             }}
                                         />
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
-                                        <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{filteredData.length} / {missingFromTopologyList.length} rows</div>
+                                    <div style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr 1fr', gap: '1rem', padding: '0.85rem 1.25rem', background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))', borderBottom: '1px solid #e2e8f0', fontSize: '0.68rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                            <div>Substation ID</div>
+                                            <div>Name</div>
+                                            <div>Grid</div>
+                                            <div>State</div>
+                                        </div>
+                                        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                            {filteredData.length === 0 ? (
+                                                <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>No data found</div>
+                                            ) : (
+                                                filteredData.map(s => (
+                                                    <div key={s.substation_id} style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr 1fr', gap: '1rem', padding: '0.85rem 1.25rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.8rem', color: '#334155' }}>
+                                                        <div style={{ fontWeight: 600 }}>{s.substation_id}</div>
+                                                        <div>{s.name || '--'}</div>
+                                                        <div>{s.grid || '--'}</div>
+                                                        <div>{s.state || '--'}</div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
-                                    <DataTable
-                                        columns={[
-                                            { header: 'Substation ID', field: 'substation_id' },
-                                            { header: 'Substation Name', field: 'name' },
-                                            { header: 'Grid', field: 'grid' },
-                                            { header: 'State', field: 'state' },
-                                        ]}
-                                        data={filteredData}
-                                        keyField="substation_id"
-                                    />
+                                    <div style={{ marginTop: '0.5rem', color: '#64748b', fontSize: '0.75rem' }}>Showing {filteredData.length} of {missingFromTopologyList.length} rows</div>
+                                </motion.div>
+                            );
+                        })()}
+
+                        {topologyTab === 'missing_master' && (() => {
+                            const filteredData = missingFromMasterList.filter(s => {
+                                if (!searchMissingMaster) return true;
+                                const q = searchMissingMaster.toLowerCase();
+                                return (s.substation_id || '').toLowerCase().includes(q) ||
+                                    (s.substation_name || '').toLowerCase().includes(q);
+                            });
+                            return (
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                    <div style={{ marginBottom: '1rem', position: 'relative' }}>
+                                        <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                        <input
+                                            type="text"
+                                            placeholder="Search Unregistered..."
+                                            value={searchMissingMaster}
+                                            onChange={(e) => setSearchMissingMaster(e.target.value)}
+                                            style={{
+                                                width: '100%', background: '#f8fafc',
+                                                border: '1px solid #e2e8f0', borderRadius: '8px',
+                                                padding: '10px 10px 10px 36px', color: '#334155',
+                                                fontSize: '0.85rem', outline: 'none', fontFamily: "'Poppins', sans-serif"
+                                            }}
+                                        />
+                                    </div>
+                                    <div style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '1rem', padding: '0.85rem 1.25rem', background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))', borderBottom: '1px solid #e2e8f0', fontSize: '0.68rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                            <div>Substation ID</div>
+                                            <div>Name</div>
+                                            <div>Buses</div>
+                                        </div>
+                                        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                            {filteredData.length === 0 ? (
+                                                <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>No data found</div>
+                                            ) : (
+                                                filteredData.map(s => (
+                                                    <div key={s.substation_id} style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '1rem', padding: '0.85rem 1.25rem', borderBottom: '1px solid #f1f5f9', fontSize: '0.8rem', color: '#334155' }}>
+                                                        <div style={{ fontWeight: 600 }}>{s.substation_id}</div>
+                                                        <div>{s.substation_name || '--'}</div>
+                                                        <div>{s.buses?.length || 0}</div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: '0.5rem', color: '#64748b', fontSize: '0.75rem' }}>Showing {filteredData.length} of {missingFromMasterList.length} rows</div>
                                 </motion.div>
                             );
                         })()}
@@ -736,257 +821,163 @@ const ImportSummaryView = ({ summary }) => {
                             );
                         })()}
 
-                        {topologyTab === 'mapped' && (
-                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                <div style={{ position: 'relative', marginBottom: '4px' }}>
-                                    <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                                    <input
-                                        type="text"
-                                        placeholder="Search by Substation ID, Name, or Bus Number..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        style={{
-                                            width: '100%',
-                                            background: 'rgba(15, 23, 42, 0.6)',
-                                            border: '1px solid rgba(255,255,255,0.1)',
-                                            borderRadius: '8px',
-                                            padding: '10px 10px 10px 36px',
-                                            color: '#fff',
-                                            fontSize: '0.85rem',
-                                            outline: 'none'
-                                        }}
-                                    />
-                                </div>
-
-                                <div style={{ display: 'grid', gap: '12px' }}>
-                                    {topologySubstations
-                                        .filter(sub => {
-                                            if (!searchQuery) return true;
-                                            const query = searchQuery.toLowerCase();
-                                            const matchSubId = (sub.substation_id || '').toLowerCase().includes(query);
-                                            const matchSubName = (sub.substation_name || '').toLowerCase().includes(query);
-                                            const matchBus = (sub.buses || []).some(b =>
-                                                String(b.bus_number).includes(query) ||
-                                                (b.bus_name || '').toLowerCase().includes(query)
-                                            );
-                                            return matchSubId || matchSubName || matchBus;
-                                        })
-                                        .map(sub => {
-                                            const subId = sub.substation_id || 'UNKNOWN';
-                                            const isOpen = expandedSubstations.has(subId);
-                                            const busCount = Array.isArray(sub.buses) ? sub.buses.length : 0;
-                                            const branchCount = (sub.buses || []).reduce((acc, b) => acc + (b.branches?.length || 0), 0);
-                                            const loadCount = sub.load_transformers?.length || 0;
-                                            return (
-                                                <div key={subId} style={{ borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                                                    <button
-                                                        onClick={() => toggleSubstation(subId)}
-                                                        style={{
-                                                            width: '100%',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'space-between',
-                                                            padding: '12px 16px',
-                                                            background: 'rgba(15, 23, 42, 0.6)',
-                                                            border: 'none',
-                                                            color: '#e2e8f0',
-                                                            cursor: 'pointer'
-                                                        }}
-                                                    >
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                            {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                                            <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{subId}</div>
-                                                            <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{sub.substation_name || 'Unknown Substation'}</div>
-                                                        </div>
-                                                        <div style={{ display: 'flex', gap: '14px', color: '#94a3b8', fontSize: '0.75rem' }}>
-                                                            <span>{busCount} buses</span>
-                                                            <span>{branchCount} branches</span>
-                                                            <span>{loadCount} load-tx</span>
-                                                        </div>
-                                                    </button>
-
-                                                    <AnimatePresence>
-                                                        {isOpen && (
-                                                            <motion.div
-                                                                initial={{ height: 0, opacity: 0 }}
-                                                                animate={{ height: 'auto', opacity: 1 }}
-                                                                exit={{ height: 0, opacity: 0 }}
-                                                                style={{ padding: '12px 16px', background: 'rgba(15, 23, 42, 0.35)' }}
+                        {topologyTab === 'mapped' && (() => {
+                            const filteredSubs = topologySubstations.filter(sub => {
+                                if (!searchQuery) return true;
+                                const query = searchQuery.toLowerCase();
+                                return (sub.substation_id || '').toLowerCase().includes(query) ||
+                                    (sub.substation_name || '').toLowerCase().includes(query) ||
+                                    (sub.buses || []).some(b => String(b.bus_number).includes(query) || (b.bus_name || '').toLowerCase().includes(query));
+                            });
+                            return (
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                                    <div style={{ marginBottom: '1rem', position: 'relative' }}>
+                                        <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                                        <input
+                                            type="text"
+                                            placeholder="Search by Substation ID, Name, or Bus Number..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            style={{
+                                                width: '100%', background: '#f8fafc',
+                                                border: '1px solid #e2e8f0', borderRadius: '8px',
+                                                padding: '10px 10px 10px 36px', color: '#334155',
+                                                fontSize: '0.85rem', outline: 'none', fontFamily: "'Poppins', sans-serif"
+                                            }}
+                                        />
+                                    </div>
+                                    <div style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 100px 100px 100px', gap: '1rem', padding: '0.85rem 1.25rem', background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))', borderBottom: '1px solid #e2e8f0', fontSize: '0.65rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                                            <div>Substation ID</div>
+                                            <div>Name</div>
+                                            <div>Buses</div>
+                                            <div>Branches</div>
+                                            <div>Loads</div>
+                                        </div>
+                                        <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                                            {filteredSubs.length === 0 ? (
+                                                <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>No substations found</div>
+                                            ) : (
+                                                filteredSubs.map(sub => {
+                                                    const subId = sub.substation_id || 'UNKNOWN';
+                                                    const busCount = Array.isArray(sub.buses) ? sub.buses.length : 0;
+                                                    const branchCount = (sub.buses || []).reduce((acc, b) => acc + (b.branches?.length || 0), 0);
+                                                    const loadCount = sub.load_transformers?.length || 0;
+                                                    const isOpen = expandedSubstations.has(subId);
+                                                    return (
+                                                        <div key={subId}>
+                                                            <div 
+                                                                onClick={() => toggleSubstation(subId)}
+                                                                style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 100px 100px 100px', gap: '1rem', padding: '0.85rem 1.25rem', borderBottom: '1px solid #f1f5f9', alignItems: 'center', fontSize: '0.8rem', color: '#334155', cursor: 'pointer', background: isOpen ? '#f0fdf4' : 'transparent' }}
                                                             >
-                                                                {(sub.buses || []).map(bus => {
-                                                                    const busKey = `${subId}-${bus.bus_number}`;
-                                                                    const busOpen = expandedBuses.has(busKey);
-                                                                    return (
-                                                                        <div key={busKey} style={{ marginBottom: '10px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                                                                            <button
-                                                                                onClick={() => toggleBus(busKey)}
-                                                                                style={{
-                                                                                    width: '100%',
-                                                                                    display: 'flex',
-                                                                                    alignItems: 'center',
-                                                                                    justifyContent: 'space-between',
-                                                                                    padding: '10px 12px',
-                                                                                    background: 'rgba(30, 41, 59, 0.5)',
-                                                                                    border: 'none',
-                                                                                    color: '#cbd5e1',
-                                                                                    cursor: 'pointer'
-                                                                                }}
-                                                                            >
-                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                    {busOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                                                                    <span style={{ fontWeight: 600 }}>{bus.bus_number}</span>
-                                                                                    <span style={{ color: '#94a3b8' }}>{bus.bus_name}</span>
-                                                                                </div>
-                                                                                <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{bus.branches?.length || 0} branches</div>
-                                                                            </button>
-
-                                                                            <AnimatePresence>
-                                                                                {busOpen && (
-                                                                                    <motion.div
-                                                                                        initial={{ height: 0, opacity: 0 }}
-                                                                                        animate={{ height: 'auto', opacity: 1 }}
-                                                                                        exit={{ height: 0, opacity: 0 }}
-                                                                                        style={{ padding: '10px 12px' }}
-                                                                                    >
-                                                                                        {(bus.branches || []).map((br, idx) => {
-                                                                                            const isMother = br.from_bus?.bus_id === bus.bus_id;
-                                                                                            const displayFrom = isMother ? br.from_bus : br.to_bus;
-                                                                                            const displayTo = isMother ? br.to_bus : br.from_bus;
-                                                                                            return (
-                                                                                                <div key={`${busKey}-br-${idx}`} style={{
-                                                                                                    display: 'flex',
-                                                                                                    justifyContent: 'space-between',
-                                                                                                    padding: '6px 8px',
-                                                                                                    borderBottom: '1px solid rgba(255,255,255,0.05)'
-                                                                                                }}>
-                                                                                                    <div style={{ fontSize: '0.75rem', color: '#e2e8f0' }}>
-                                                                                                        {displayFrom?.substation_name || displayFrom?.substation_id} ({displayFrom?.bus_number}) → {displayTo?.substation_name || displayTo?.substation_id} ({displayTo?.bus_number})
-                                                                                                        <span style={{ color: '#94a3b8', marginLeft: '8px' }}>{br.ckt_id}</span>
-                                                                                                    </div>
-                                                                                                    <span style={{
-                                                                                                        fontSize: '0.75rem',
-                                                                                                        padding: '2px 6px',
-                                                                                                        borderRadius: '6px',
-                                                                                                        background: br.is_active ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                                                                                                        color: br.is_active ? '#10b981' : '#ef4444'
-                                                                                                    }}>
-                                                                                                        {br.is_active ? 'Active' : 'Inactive'}
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                            );
-                                                                                        })}
-                                                                                    </motion.div>
-                                                                                )}
-                                                                            </AnimatePresence>
-                                                                        </div>
-                                                                    );
-                                                                })}
-
-                                                                {(sub.load_transformers || []).length > 0 && (
-                                                                    <div style={{ marginTop: '12px' }}>
-                                                                        {(() => {
-                                                                            const loadKey = `load-${subId}`;
-                                                                            const loadOpen = expandedLoads.has(loadKey);
-                                                                            return (
-                                                                                <div style={{ borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                                                                                    <button
-                                                                                        onClick={() => toggleLoad(loadKey)}
-                                                                                        style={{
-                                                                                            width: '100%',
-                                                                                            display: 'flex',
-                                                                                            alignItems: 'center',
-                                                                                            justifyContent: 'space-between',
-                                                                                            padding: '10px 12px',
-                                                                                            background: 'rgba(30, 41, 59, 0.5)',
-                                                                                            border: 'none',
-                                                                                            color: '#67e8f9',
-                                                                                            cursor: 'pointer'
-                                                                                        }}
-                                                                                    >
-                                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                                                            {loadOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                                                                            <span style={{ fontWeight: 600 }}>Load Transformers</span>
+                                                                <div style={{ fontWeight: 600, color: '#047d60', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                    {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                                    {subId}
+                                                                </div>
+                                                                <div>{sub.substation_name || '--'}</div>
+                                                                <div style={{ textAlign: 'center' }}>{busCount}</div>
+                                                                <div style={{ textAlign: 'center' }}>{branchCount}</div>
+                                                                <div style={{ textAlign: 'center' }}>{loadCount}</div>
+                                                            </div>
+                                                            {isOpen && (
+                                                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ padding: '1rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                                                    {(sub.buses || []).length > 0 && (
+                                                                        <div style={{ marginBottom: '1rem' }}>
+                                                                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Buses / Branches</div>
+                                                                            {(sub.buses || []).map(bus => {
+                                                                                const busKey = `${subId}-${bus.bus_number}`;
+                                                                                const busOpen = expandedBuses.has(busKey);
+                                                                                return (
+                                                                                    <div key={busKey} style={{ marginBottom: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                                                                        <div 
+                                                                                            onClick={() => toggleBus(busKey)}
+                                                                                            style={{ padding: '10px 12px', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                                                                                        >
+                                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
+                                                                                                {busOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                                                                <span style={{ fontWeight: 600 }}>{bus.bus_number}</span>
+                                                                                                <span style={{ color: '#64748b' }}>{bus.bus_name}</span>
+                                                                                            </div>
+                                                                                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{bus.branches?.length || 0} branches</div>
                                                                                         </div>
-                                                                                        <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{(sub.load_transformers || []).length} units</div>
-                                                                                    </button>
-
-                                                                                    <AnimatePresence>
-                                                                                        {loadOpen && (
-                                                                                            <motion.div
-                                                                                                initial={{ height: 0, opacity: 0 }}
-                                                                                                animate={{ height: 'auto', opacity: 1 }}
-                                                                                                exit={{ height: 0, opacity: 0 }}
-                                                                                                style={{ padding: '10px 12px' }}
-                                                                                            >
-                                                                                                {(sub.load_transformers || []).map((tx, idx) => (
-                                                                                                    <div key={`${subId}-tx-${idx}`} style={{
-                                                                                                        display: 'flex',
-                                                                                                        justifyContent: 'space-between',
-                                                                                                        padding: '6px 8px',
-                                                                                                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                                                                                        color: '#cbd5e1',
-                                                                                                        fontSize: '0.75rem'
-                                                                                                    }}>
-                                                                                                        <div>{tx.load_id}</div>
-                                                                                                        <div>{tx.p_mw} MW / {tx.q_mvar} MVar</div>
-                                                                                                        <span style={{
-                                                                                                            fontSize: '0.75rem',
-                                                                                                            padding: '2px 6px',
-                                                                                                            borderRadius: '6px',
-                                                                                                            background: tx.is_active ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                                                                                                            color: tx.is_active ? '#10b981' : '#ef4444'
-                                                                                                        }}>
-                                                                                                            {tx.is_active ? 'Active' : 'Inactive'}
-                                                                                                        </span>
-                                                                                                    </div>
-                                                                                                ))}
+                                                                                        {busOpen && (
+                                                                                            <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} style={{ padding: '10px 12px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+                                                                                                {(bus.branches || []).map((br, idx) => {
+                                                                                                    const isMother = br.from_bus?.bus_id === bus.bus_id;
+                                                                                                    const from = isMother ? br.from_bus : br.to_bus;
+                                                                                                    const to = isMother ? br.to_bus : br.from_bus;
+                                                                                                    return (
+                                                                                                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.8rem', color: '#334155' }}>
+                                                                                                            <div>{from?.substation_name || from?.substation_id} ({from?.bus_number}) → {to?.substation_name || to?.substation_id} ({to?.bus_number})</div>
+                                                                                                            <span style={{ padding: '2px 8px', borderRadius: '4px', background: br.is_active ? '#dcfce7' : '#fee2e2', color: br.is_active ? '#16a34a' : '#dc2626', fontSize: '0.7rem' }}>{br.is_active ? 'Active' : 'Inactive'}</span>
+                                                                                                        </div>
+                                                                                                    );
+                                                                                                })}
                                                                                             </motion.div>
                                                                                         )}
-                                                                                    </AnimatePresence>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    )}
+                                                                    {(sub.load_transformers || []).length > 0 && (
+                                                                        <div>
+                                                                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Load Transformers</div>
+                                                                            {(sub.load_transformers || []).map((tx, idx) => (
+                                                                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', marginBottom: '8px', fontSize: '0.8rem', color: '#334155' }}>
+                                                                                    <div>{tx.load_id}</div>
+                                                                                    <div>{tx.p_mw} MW / {tx.q_mvar} MVar</div>
+                                                                                    <span style={{ padding: '2px 8px', borderRadius: '4px', background: tx.is_active ? '#dcfce7' : '#fee2e2', color: tx.is_active ? '#16a34a' : '#dc2626', fontSize: '0.7rem' }}>{tx.is_active ? 'Active' : 'Inactive'}</span>
                                                                                 </div>
-                                                                            );
-                                                                        })()}
-                                                                    </div>
-                                                                )}
-                                                            </motion.div>
-                                                        )}
-                                                    </AnimatePresence>
-                                                </div>
-                                            );
-                                        })}
-                                </div>
-                            </motion.div>
-                        )}
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </motion.div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: '0.5rem', color: '#64748b', fontSize: '0.75rem' }}>Showing {filteredSubs.length} of {topologySubstations.length} substations</div>
+                                </motion.div>
+                            );
+                        })()}
                     </div >
                 );
             default: // Overview
                 return (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', animation: 'fadeIn 0.3s' }}>
-                        {/* Summary Cards */}
-                        <div style={{ background: 'rgba(30, 41, 59, 0.4)', borderRadius: '16px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ color: '#f59e0b', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <AlertTriangle size={20} /> <span style={{ fontWeight: 600 }}>Missing Data</span>
-                            </div>
-                            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#fff' }}>{missingCount}</div>
-                            <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Unmapped Buses</div>
+                    <div>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <h3 style={{ margin: '0 0 0.5rem 0', color: '#047d60', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.1rem', fontWeight: 700, fontFamily: "'Poppins', sans-serif" }}>
+                                <Grid size={20} /> Active Snapshot Overview
+                            </h3>
                         </div>
-
-                        <div style={{ background: 'rgba(30, 41, 59, 0.4)', borderRadius: '16px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ color: '#8b5cf6', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Zap size={20} /> <span style={{ fontWeight: 600 }}>Islands</span>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', animation: 'fadeIn 0.3s' }}>
+                            <div style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                <div style={{ color: '#f59e0b', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <AlertTriangle size={20} /> <span style={{ fontWeight: 600, color: '#334155' }}>Missing Data</span>
+                                </div>
+                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#0f172a' }}>{missingCount}</div>
+                                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Unmapped Buses</div>
                             </div>
-                            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#fff' }}>{islandCount}</div>
-                            <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Detected Networks</div>
-                        </div>
 
-
-
-                        <div style={{ background: 'rgba(30, 41, 59, 0.4)', borderRadius: '16px', padding: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ color: '#06b6d4', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <Grid size={20} /> <span style={{ fontWeight: 600 }}>Topology</span>
+                            <div style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                <div style={{ color: '#8b5cf6', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Zap size={20} /> <span style={{ fontWeight: 600, color: '#334155' }}>Islands</span>
+                                </div>
+                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#0f172a' }}>{islandCount}</div>
+                                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Detected Networks</div>
                             </div>
-                            <div style={{ fontSize: '2rem', fontWeight: 700, color: '#fff' }}>{topologySubstations.length}</div>
-                            <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Substations Identified</div>
+
+                            <div style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                <div style={{ color: '#047d60', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <Grid size={20} /> <span style={{ fontWeight: 600, color: '#334155' }}>Topology</span>
+                                </div>
+                                <div style={{ fontSize: '2rem', fontWeight: 700, color: '#0f172a' }}>{topologySubstations.length}</div>
+                                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Substations Identified</div>
+                            </div>
                         </div>
                     </div>
                 );
@@ -999,51 +990,114 @@ const ImportSummaryView = ({ summary }) => {
             animate={{ opacity: 1, y: 0 }}
             style={{
                 marginTop: '3rem',
-                background: 'rgba(30, 41, 59, 0.3)',
-                backdropFilter: 'blur(10px)',
-                borderRadius: '24px',
-                border: '1px solid rgba(255,255,255,0.05)',
-                overflow: 'hidden'
+                background: '#fff',
+                borderRadius: '16px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                overflow: 'hidden',
+                display: 'flex'
             }}
         >
+            {/* Sidebar Tabs */}
             <div style={{
-                padding: '1.5rem 2rem',
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                background: 'rgba(15, 23, 42, 0.6)'
+                width: '220px',
+                minWidth: '220px',
+                background: '#f8fafc',
+                borderRight: '1px solid #e2e8f0',
+                padding: '1.5rem 0'
             }}>
-                <div>
-                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#f8fafc' }}>Detailed Network Analysis</h3>
-                    <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '0.8rem' }}>
-                        Breakdown of network components for the currently active snapshot.
+                <div style={{ padding: '0 1.5rem', marginBottom: '1.5rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif" }}>Network Analysis</h3>
+                    <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '0.75rem' }}>
+                        Active Snapshot
                     </p>
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <TabButton
-                        active={activeTab === 'overview'}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 0.75rem' }}>
+                    <button
                         onClick={() => setActiveTab('overview')}
-                        icon={Grid} label="Overview" color="#f8fafc"
-                    />
-                    <TabButton
-                        active={activeTab === 'topology'}
+                        style={{
+                            background: activeTab === 'overview' ? '#047d60' : 'transparent',
+                            color: activeTab === 'overview' ? '#fff' : '#64748b',
+                            border: 'none',
+                            padding: '12px 16px',
+                            borderRadius: '8px',
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            fontWeight: 600,
+                            fontSize: '0.85rem',
+                            fontFamily: "'Poppins', sans-serif",
+                            textAlign: 'left'
+                        }}
+                    >
+                        <Grid size={18} />
+                        Overview
+                    </button>
+                    <button
                         onClick={() => setActiveTab('topology')}
-                        icon={Grid} label="Topology" color="#06b6d4"
-                    />
-                    <TabButton
-                        active={activeTab === 'islands'}
+                        style={{
+                            background: activeTab === 'topology' ? '#047d60' : 'transparent',
+                            color: activeTab === 'topology' ? '#fff' : '#64748b',
+                            border: 'none',
+                            padding: '12px 16px',
+                            borderRadius: '8px',
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            fontWeight: 600,
+                            fontSize: '0.85rem',
+                            fontFamily: "'Poppins', sans-serif",
+                            textAlign: 'left'
+                        }}
+                    >
+                        <Grid size={18} />
+                        Topology
+                    </button>
+                    <button
                         onClick={() => setActiveTab('islands')}
-                        icon={Zap} label="Islands" color="#8b5cf6"
-                    />
-                    <TabButton
-                        active={activeTab === 'missing'}
+                        style={{
+                            background: activeTab === 'islands' ? '#047d60' : 'transparent',
+                            color: activeTab === 'islands' ? '#fff' : '#64748b',
+                            border: 'none',
+                            padding: '12px 16px',
+                            borderRadius: '8px',
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            fontWeight: 600,
+                            fontSize: '0.85rem',
+                            fontFamily: "'Poppins', sans-serif",
+                            textAlign: 'left'
+                        }}
+                    >
+                        <Zap size={18} />
+                        Islands
+                    </button>
+                    <button
                         onClick={() => setActiveTab('missing')}
-                        icon={AlertTriangle} label="Missing Data" color="#f59e0b"
-                    />
+                        style={{
+                            background: activeTab === 'missing' ? '#047d60' : 'transparent',
+                            color: activeTab === 'missing' ? '#fff' : '#64748b',
+                            border: 'none',
+                            padding: '12px 16px',
+                            borderRadius: '8px',
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            fontWeight: 600,
+                            fontSize: '0.85rem',
+                            fontFamily: "'Poppins', sans-serif",
+                            textAlign: 'left'
+                        }}
+                    >
+                        <AlertTriangle size={18} />
+                        Missing Data
+                    </button>
                 </div>
             </div>
 
-            <div style={{ padding: '2rem', minHeight: '300px' }}>
+            {/* Content Area */}
+            <div style={{ flex: 1, padding: '2rem', minHeight: '400px', background: '#fff' }}>
                 {renderContent()}
             </div>
         </motion.div>

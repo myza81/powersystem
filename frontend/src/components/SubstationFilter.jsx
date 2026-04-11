@@ -93,10 +93,9 @@ const SubstationFilter = ({
     const hasActiveFilters = region !== 'All' || grid !== 'All' || state !== 'All' || voltage !== 'All' || currentExtraValue !== 'All' || search !== '' || hasRelay !== 'All' || commissionYear !== 'All' || transformerYear !== 'All';
 
     return (
-        <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
-            {/* Top Row: Title, Search, and Actions */}
+        <div style={{ background: 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(12px)', borderRadius: '12px', border: '1px solid rgba(34, 211, 238, 0.2)', marginBottom: '1.5rem', padding: '1.25rem', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-cyan)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f766e' }}>
                     <Filter size={18} />
                     <span style={{ fontWeight: 600 }}>Filter Assets</span>
                 </div>
@@ -104,18 +103,17 @@ const SubstationFilter = ({
                 <div style={{ display: 'flex', gap: '0.75rem', flex: 1, justifyContent: 'flex-end', alignItems: 'center' }}>
                     {/* Search Bar */}
                     <div style={{ position: 'relative', minWidth: '200px', flex: '0 1 350px' }}>
-                        <Search size={16} color="var(--text-secondary)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                        <Search size={16} color="#64748b" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                         <input
-                            className="input-field"
                             placeholder="Search name, ID, mnemonic..."
                             value={search}
                             onChange={(e) => updateFilter('search', e.target.value)}
-                            style={{ paddingLeft: '2.2rem', paddingRight: '2rem', width: '100%', height: '36px' }}
+                            style={{ paddingLeft: '2.2rem', paddingRight: '2rem', width: '100%', height: '36px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', color: '#0f172a', outline: 'none' }}
                         />
                         {search !== '' && (
                             <X
                                 size={14}
-                                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#64748b' }}
                                 onClick={() => updateFilter('search', '')}
                             />
                         )}
@@ -125,9 +123,9 @@ const SubstationFilter = ({
                     <button
                         onClick={() => setShowAdvanced(!showAdvanced)}
                         style={{
-                            background: showAdvanced ? 'rgba(0, 229, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-                            border: `1px solid ${showAdvanced ? 'var(--accent-blue)' : 'rgba(255, 255, 255, 0.1)'}`,
-                            color: showAdvanced ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                            background: showAdvanced ? 'rgba(4, 125, 96, 0.1)' : '#f8fafc',
+                            border: `1px solid ${showAdvanced ? '#047d60' : '#e2e8f0'}`,
+                            color: showAdvanced ? '#047d60' : '#64748b',
                             padding: '0 12px', height: '36px', borderRadius: '6px', cursor: 'pointer',
                             display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s'
                         }}
@@ -139,17 +137,17 @@ const SubstationFilter = ({
 
                     <div style={{ 
                         display: 'flex', 
-                        background: 'rgba(255, 255, 255, 0.05)', 
+                        background: '#f1f5f9', 
                         padding: '3px', 
                         borderRadius: '8px',
-                        border: '1px solid rgba(255, 255, 255, 0.1)'
+                        border: '1px solid #e2e8f0'
                     }}>
                         <button
                             onClick={() => onViewModeChange('grid')}
                             style={{
-                                background: viewMode === 'grid' ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
+                                background: viewMode === 'grid' ? '#fff' : 'transparent',
                                 border: 'none',
-                                color: viewMode === 'grid' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                color: viewMode === 'grid' ? '#047d60' : '#64748b',
                                 padding: '6px 10px',
                                 borderRadius: '6px',
                                 cursor: 'pointer',
@@ -164,9 +162,9 @@ const SubstationFilter = ({
                         <button
                             onClick={() => onViewModeChange('list')}
                             style={{
-                                background: viewMode === 'list' ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
+                                background: viewMode === 'list' ? '#fff' : 'transparent',
                                 border: 'none',
-                                color: viewMode === 'list' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                color: viewMode === 'list' ? '#047d60' : '#64748b',
                                 padding: '6px 10px',
                                 borderRadius: '6px',
                                 cursor: 'pointer',
@@ -182,11 +180,19 @@ const SubstationFilter = ({
 
                     <button
                         onClick={onRegister}
-                        className="btn-primary"
                         style={{
-                            display: 'flex', alignItems: 'center', gap: '6px',
-                            borderRadius: '6px', padding: '0 12px',
-                            fontSize: '0.8rem', height: '36px'
+                            background: 'linear-gradient(135deg, #047d60, #059669)',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '0 12px',
+                            fontSize: '0.8rem',
+                            height: '36px',
+                            color: '#fff',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            cursor: 'pointer'
                         }}
                     >
                         <PlusCircle size={14} /> Register
@@ -229,16 +235,15 @@ const SubstationFilter = ({
 
 const FilterDropdown = ({ label, value, options, onChange, disabled, suffix = '' }) => (
     <div style={{ opacity: disabled ? 0.5 : 1 }}>
-        <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>{label}</label>
+        <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', marginBottom: '4px' }}>{label}</label>
         <select
-            className="input-field"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={disabled}
-            style={{ width: '100%', padding: '8px', fontSize: '0.85rem' }}
+            style={{ width: '100%', padding: '8px', fontSize: '0.85rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', color: '#0f172a' }}
         >
             {options.map(opt => (
-                <option key={opt} value={opt}>
+                <option key={opt} value={opt} style={{ background: '#fff' }}>
                     {opt === 'All' ? `All ${label} s` : `${opt}${suffix} `}
                 </option>
             ))}

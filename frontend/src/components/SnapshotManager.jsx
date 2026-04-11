@@ -20,39 +20,15 @@ const StatusBadge = ({ active }) => (
         gap: '4px',
         padding: '2px 8px',
         borderRadius: '4px',
-        background: active ? 'rgba(0, 229, 255, 0.05)' : 'rgba(255, 255, 255, 0.02)',
-        color: active ? 'var(--accent-blue)' : 'rgba(255, 255, 255, 0.3)',
+        background: active ? 'rgba(4, 125, 96, 0.1)' : 'rgba(100, 116, 139, 0.1)',
+        color: active ? '#047d60' : '#64748b',
         fontSize: '0.65rem',
-        fontWeight: 800,
+        fontWeight: 600,
         letterSpacing: '0.5px',
-        border: `1px solid ${active ? 'rgba(0, 229, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)'}`
+        border: `1px solid ${active ? 'rgba(4, 125, 96, 0.2)' : 'rgba(100, 116, 139, 0.2)'}`
     }}>
         {active ? <Activity size={10} /> : <Server size={10} />}
-        {active ? 'ACTIVE_SYSTEM_MODEL' : 'ARCHIVED_DATASET'}
-    </div>
-);
-
-const StatCard = ({ icon: Icon, label, value, subLabel, color }) => (
-    <div
-        style={{
-            background: 'rgba(255, 255, 255, 0.03)',
-            borderRadius: '4px',
-            padding: '1rem',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.25rem',
-            minWidth: '0'
-        }}
-    >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-            <Icon size={12} style={{ color: 'rgba(255, 255, 255, 0.4)' }} />
-            <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}>{label}</span>
-        </div>
-        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {value}
-        </div>
-        {subLabel && <div style={{ fontSize: '0.6rem', color: 'rgba(255, 255, 255, 0.25)', fontFamily: 'monospace' }}>{subLabel}</div>}
+        {active ? 'ACTIVE' : 'ARCHIVED'}
     </div>
 );
 
@@ -191,8 +167,8 @@ const SnapshotManager = () => {
         <div style={{
             minHeight: '100%',
             padding: '2rem',
-            color: '#f8fafc',
-            fontFamily: "'Inter', sans-serif"
+            color: '#1e293b',
+            fontFamily: "'Poppins', 'IBM Plex Sans', sans-serif"
         }}>
             {/* Status Toast */}
             <AnimatePresence>
@@ -224,64 +200,32 @@ const SnapshotManager = () => {
             </AnimatePresence>
 
             {/* Header Section */}
-            <div style={{ marginBottom: '2rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem', borderBottom: '1px solid rgba(4, 125, 96, 0.1)' }}>
                     <div>
+                        <div style={{ fontSize: '0.7rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: '#64748b', marginBottom: '0.5rem' }}>
+                            SNAPSHOT REGISTRY
+                        </div>
                         <h1 style={{
-                            fontSize: '1.5rem', fontWeight: 900, margin: '0 0 0.5rem 0',
-                            color: '#fff', letterSpacing: '-0.02em', textTransform: 'uppercase'
+                            fontSize: '2.6rem', fontWeight: 600, margin: 0,
+                            color: '#0f172a', letterSpacing: '-0.03em'
                         }}>
-                            Model Registry
+                            Grid Snapshot Manager
                         </h1>
-                        <p style={{ color: 'rgba(255, 255, 255, 0.3)', fontSize: '0.75rem', letterSpacing: '0.5px' }}>
-                            CORE_VERSION_CONTROL / PPS/E_NETWORK_MODELS
-                        </p>
                     </div>
 
                     <button
                         onClick={() => setShowUpload(true)}
-                        className="btn-primary"
                         style={{
-                            padding: '10px 20px', borderRadius: '4px',
-                            fontSize: '0.8rem', height: '40px',
+                            background: 'linear-gradient(135deg, #047d60, #059669)',
+                            padding: '12px 24px', borderRadius: '10px',
+                            fontSize: '0.8rem', height: '44px',
                             display: 'flex', alignItems: 'center', gap: '8px',
+                            color: '#fff', fontWeight: 600, border: 'none', cursor: 'pointer'
                         }}
                     >
-                        <Plus size={16} /> NEW_IMPORT
+                        <Plus size={16} /> New Import
                     </button>
-                </div>
-
-                {/* KPI Area */}
-                <div style={{
-                    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-                    gap: '0.75rem', marginTop: '1.5rem'
-                }}>
-                    <StatCard
-                        icon={Database}
-                        label="Registry Capacity"
-                        value={`${totalSnapshots} Snapshots`}
-                        color="var(--accent-blue)"
-                    />
-                    <StatCard
-                        icon={Activity}
-                        label="Active Model"
-                        value={activeSnapshot ? activeSnapshot.name : 'NULL'}
-                        subLabel={activeSnapshot ? `UID: ${activeSnapshot.id.substring(0, 12)}...` : 'NONE_ACTIVE'}
-                        color="#10b981"
-                    />
-                    <StatCard
-                        icon={Calendar}
-                        label="Last Modification"
-                        value={lastUpdate}
-                        color="#8b5cf6"
-                    />
-                    <StatCard
-                        icon={Zap}
-                        label="System State"
-                        value={activeSnapshot ? 'SYNCHRONIZED' : 'IDLE'}
-                        subLabel="TOPOLOGY_ENGINE_V1"
-                        color="#06b6d4"
-                    />
                 </div>
             </div>
 
@@ -388,170 +332,131 @@ const SnapshotManager = () => {
                 )}
             </AnimatePresence>
 
-            {/* Registry List Section */}
-            <div style={{
-                background: '#0f1115',
-                borderRadius: '8px',
-                border: '1px solid rgba(255,255,255,0.08)',
-                overflow: 'hidden'
+            {/* Registry Table */}
+            <div style={{ 
+                background: '#fff', 
+                borderRadius: '12px', 
+                overflow: 'hidden',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.06)'
             }}>
-                <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <h3 style={{ margin: 0, fontSize: '0.7rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Available_Datasets</h3>
-                        <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)' }} />
-                        <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>COUNT:{snapshots.length}</span>
-                    </div>
-                    <div style={{ position: 'relative' }}>
-                        <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.2)' }} />
-                        <input
-                            placeholder="FILTER_REGISTRY..."
-                            className="platinum-input"
-                            style={{ padding: '6px 10px 6px 30px', fontSize: '0.75rem', width: '220px', background: 'rgba(0,0,0,0.2)' }}
-                        />
-                    </div>
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(300px, 2fr) 180px 1fr 120px',
+                    gap: '1rem',
+                    padding: '0.85rem 1.25rem',
+                    background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))',
+                    borderBottom: '1px solid rgba(4, 125, 96, 0.15)',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    color: '#047d60',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.18em',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10
+                }}>
+                    <div>Model Reference</div>
+                    <div>Timestamp</div>
+                    <div>Description</div>
+                    <div style={{ textAlign: 'center' }}>Status</div>
                 </div>
-
-                <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                    {/* Table Header */}
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'minmax(300px, 2fr) 180px 1fr 120px',
-                        gap: '1rem',
-                        padding: '0.75rem 1.5rem',
-                        background: 'rgba(0,0,0,0.2)',
-                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                        fontSize: '0.6rem',
-                        fontWeight: 800,
-                        color: 'rgba(255,255,255,0.3)',
-                        textTransform: 'uppercase',
-                        letterSpacing: '1px'
-                    }}>
-                        <div>Identifier / State</div>
-                        <div>Synchronization Time</div>
-                        <div>Context_Notes</div>
-                        <div style={{ textAlign: 'right' }}>Integration</div>
+                    
+                <div style={{ maxHeight: 'calc(100vh - 480px)', overflowY: 'auto' }}>
+                {loading ? (
+                    <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
+                        <Loader2 className="animate-spin" size={32} style={{ marginBottom: '1rem', opacity: 0.5 }} />
+                        <div>Loading registry...</div>
                     </div>
-                    {loading ? (
-                        <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
-                            <Loader2 className="animate-spin" size={32} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-                            <div>Loading registry...</div>
-                        </div>
-                    ) : snapshots.length === 0 ? (
-                        <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
-                            <Database size={48} style={{ marginBottom: '1rem', opacity: 0.2 }} />
-                            <div>No snapshots found. Import your first PSS/E case.</div>
-                        </div>
-                    ) : (
-                        snapshots.map((snap, i) => (
-                            <div
-                                key={snap.id}
-                                style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'minmax(300px, 2fr) 180px 1fr 120px',
-                                    gap: '1rem',
-                                    padding: '1rem 1.5rem',
-                                    borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                    alignItems: 'center',
-                                    background: snap.is_active ? 'rgba(0, 229, 255, 0.02)' : 'transparent',
-                                    borderLeft: snap.is_active ? '2px solid var(--accent-blue)' : '2px solid transparent'
-                                }}
-                                className="snapshot-row"
-                                onClick={() => !snap.is_active && handleActivate(snap.id)}
-                            >
-                                {/* Column 1: Info */}
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: snap.is_active ? '#fff' : 'rgba(255,255,255,0.7)' }}>
-                                            {snap.name}
-                                        </div>
-                                        <StatusBadge active={snap.is_active} />
+                ) : snapshots.length === 0 ? (
+                    <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
+                        <Database size={48} style={{ marginBottom: '1rem', opacity: 0.2 }} />
+                        <div>No snapshots found. Import your first PSS/E case.</div>
+                    </div>
+                ) : (
+                    snapshots.map((snap, i) => (
+                        <div
+                            key={snap.id}
+                            style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'minmax(300px, 2fr) 180px 1fr 120px',
+                                gap: '1rem',
+                                padding: '1rem 1.5rem',
+                                borderBottom: '1px solid rgba(4, 125, 96, 0.08)',
+                                alignItems: 'center',
+                                background: snap.is_active ? 'rgba(4, 125, 96, 0.04)' : 'transparent',
+                                borderLeft: snap.is_active ? '3px solid #047d60' : '3px solid transparent'
+                            }}
+                            onClick={() => !snap.is_active && handleActivate(snap.id)}
+                        >
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: snap.is_active ? '#047d60' : '#334155' }}>
+                                        {snap.name}
                                     </div>
-                                    <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>
-                                        UID:{snap.id}
-                                    </div>
+                                    <StatusBadge active={snap.is_active} />
                                 </div>
-
-                                {/* Column 2: Date */}
-                                <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}>
-                                    {new Date(snap.timestamp).toLocaleDateString()}
-                                    <span style={{ marginLeft: '8px', opacity: 0.5 }}>
-                                        {new Date(snap.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
+                                <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                                    UID: {snap.id}
                                 </div>
+                            </div>
 
-                                {/* Column 3: Description */}
-                                <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {snap.description || '--'}
-                                </div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'monospace' }}>
+                                {new Date(snap.timestamp).toLocaleDateString()}
+                                <span style={{ marginLeft: '8px', opacity: 0.5 }}>
+                                    {new Date(snap.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            </div>
 
-                                {/* Column 4: Actions */}
-                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                                    {!snap.is_active ? (
-                                        <button
-                                            onClick={(e) => handleActivate(snap.id, e)}
-                                            style={{
-                                                background: 'rgba(255,255,255,0.03)',
-                                                border: '1px solid rgba(255,255,255,0.1)',
-                                                color: '#fff',
-                                                padding: '4px 8px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.65rem',
-                                                fontWeight: 800,
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            ACTIVATE
-                                        </button>
-                                    ) : (
-                                        <div style={{ color: 'var(--accent-blue)', fontSize: '0.6rem', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <Check size={10} /> CURRENT
-                                        </div>
-                                    )}
+                            <div style={{ color: '#64748b', fontSize: '0.75rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {snap.description || '--'}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                {!snap.is_active ? (
                                     <button
-                                        onClick={(e) => handleDelete(snap.id, e)}
+                                        onClick={(e) => handleActivate(snap.id, e)}
                                         style={{
-                                            background: 'transparent',
+                                            background: '#047d60',
                                             border: 'none',
-                                            color: 'rgba(239, 68, 68, 0.4)',
-                                            padding: '4px',
+                                            color: '#fff',
+                                            padding: '4px 12px',
+                                            borderRadius: '6px',
+                                            fontSize: '0.65rem',
+                                            fontWeight: 600,
                                             cursor: 'pointer'
                                         }}
                                     >
-                                        <Trash2 size={14} />
+                                        ACTIVATE
                                     </button>
-                                </div>
+                                ) : (
+                                    <div style={{ color: '#047d60', fontSize: '0.6rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <Check size={10} /> CURRENT
+                                    </div>
+                                )}
+                                <button
+                                    onClick={(e) => handleDelete(snap.id, e)}
+                                    style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: '#94a3b8',
+                                        padding: '4px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
                             </div>
-                        ))
-                    )}
+                        </div>
+                    ))
+                )}
                 </div>
             </div>
 
-            <style>{`
-                .snapshot-row:hover {
-                    background: rgba(255,255,255,0.03);
-                }
-                .action-btn:hover {
-                    background: rgba(16, 185, 129, 0.1) !important;
-                    border-color: #34d399 !important;
-                }
-                .delete-btn:hover {
-                    background: rgba(239, 68, 68, 0.2) !important;
-                    color: #ef4444 !important;
-                }
-                @keyframes pulse-glow {
-                    0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.4); }
-                    70% { box-shadow: 0 0 0 10px rgba(6, 182, 212, 0); }
-                    100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
-                }
-            `}</style>
-
-            <AnimatePresence>
-                {summaryData && (
-                    <ImportSummaryView summary={summaryData} />
-                )}
-            </AnimatePresence>
+            {summaryData && (
+                <ImportSummaryView summary={summaryData} />
+            )}
         </div>
     );
-};
+}
 
 export default SnapshotManager;

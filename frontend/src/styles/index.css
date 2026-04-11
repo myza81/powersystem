@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=Poppins:wght@400;700&display=swap');
 
 :root {
   --bg-deep: #FAFBFC; 
@@ -28,21 +28,14 @@
   padding: 0;
 }
 
-body {
+html, body {
   background-color: var(--bg-deep);
   color: var(--text-primary);
-  font-family: var(--font-sans);
+  font-family: 'Poppins', 'IBM Plex Sans', sans-serif;
   font-size: 15.5px;
   overflow: hidden; 
   height: 100vh;
   margin: 0;
-  /* Multi-layered background for depth */
-  background-image: 
-    radial-gradient(circle at 10% 20%, rgba(22, 192, 152, 0.03) 0%, transparent 40%),
-    radial-gradient(circle at 90% 80%, rgba(2, 64, 49, 0.02) 0%, transparent 40%),
-    linear-gradient(rgba(209, 213, 219, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(209, 213, 219, 0.1) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
 }
 
 .dashboard-container {
@@ -50,6 +43,7 @@ body {
   width: 100%;
   margin: 0 auto;
   padding: 0;
+  min-height: 100vh;
 }
 
 .glass-card {
@@ -60,17 +54,19 @@ body {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -2px rgba(0, 0, 0, 0.03); /* very soft elegant shadow */
 }
 
-h1, h2, h3 {
+h1, h2, h3, h4, h5, h6 {
   letter-spacing: -0.02em;
+  font-family: 'Poppins', 'IBM Plex Sans', sans-serif;
 }
 
 .mono {
   font-family: 'JetBrains Mono', monospace;
 }
 
-button {
+button, input {
   cursor: pointer;
   transition: all 0.2s ease;
+  font-family: inherit;
 }
 
 .btn-primary {
@@ -181,14 +177,19 @@ button {
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(16, 185, 129, 0.2);
+  background: rgba(4, 125, 96, 0.15);
   border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(4, 125, 96, 0.3);
 }
 
 
