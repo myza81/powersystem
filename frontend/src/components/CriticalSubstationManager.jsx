@@ -428,12 +428,12 @@ const CriticalSubstationManager = () => {
     }, [grouped, substationLookup]);
 
     const tabList = [
-        { id: 'assets', label: 'Critical Assets', icon: <LayoutGrid size={18} />, count: Object.keys(grouped).length },
-        { id: 'analysis', label: 'Analysis', icon: <BarChart2 size={18} />, count: tags.length },
-        { id: 'geo', label: 'Geo Location', icon: <MapPin size={18} />, count: Object.keys(grouped).length }
+        { id: 'assets', label: 'Critical Substations', icon: <LayoutGrid size={18} /> },
+        { id: 'analysis', label: 'Analytics', icon: <BarChart2 size={18} /> },
+        { id: 'geo', label: 'Geo Location', icon: <MapPin size={18} /> }
     ];
 
-    const tabButtonStyle = (isActive, count = 0) => ({
+    const tabButtonStyle = (isActive) => ({
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
@@ -441,7 +441,7 @@ const CriticalSubstationManager = () => {
         background: isActive ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
         border: 'none',
         borderBottom: isActive ? '2px solid var(--accent-blue)' : '2px solid transparent',
-        color: isActive ? 'var(--accent-blue)' : 'var(--text-secondary)',
+        color: isActive ? 'var(--accent-blue)' : '#64748b',
         cursor: 'pointer',
         fontWeight: isActive ? '600' : '400',
         transition: 'all 0.2s ease',
@@ -505,28 +505,16 @@ const CriticalSubstationManager = () => {
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        style={tabButtonStyle(activeTab === tab.id, tab.count)}
+                        style={tabButtonStyle(activeTab === tab.id)}
                     >
                         {tab.icon}
                         {tab.label}
-                        {tab.count > 0 && (
-                            <span style={{
-                                fontSize: '0.65rem',
-                                background: activeTab === tab.id ? 'rgba(0, 229, 255, 0.2)' : 'rgba(255,255,255,0.08)',
-                                color: activeTab === tab.id ? 'var(--accent-blue)' : 'var(--text-secondary)',
-                                padding: '2px 8px',
-                                borderRadius: '12px',
-                                fontWeight: 600
-                            }}>
-                                {tab.count}
-                            </span>
-                        )}
                     </button>
                 ))}
             </div>
 
             {/* ROW 2: Header — fixed, no scroll, changes per tab */}
-            <div style={{ flexShrink: 0, background: '#fff', zIndex: 10, padding: '1.25rem 2rem 0', display: activeTab === 'geo' ? 'none' : undefined }}>
+            <div style={{ flexShrink: 0, zIndex: 10, padding: '1.25rem 2rem 0', display: activeTab === 'geo' ? 'none' : undefined }}>
                 {status && (
                     <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: status.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: status.type === 'success' ? '#10b981' : '#ef4444', border: `1px solid ${status.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}` }}>
                         {status.msg}
@@ -534,24 +522,14 @@ const CriticalSubstationManager = () => {
                 )}
 
                 {activeTab === 'assets' && (
-                    <>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
-                            <div style={{ ...ICON_WRAP_STYLE, background: 'rgba(255, 159, 67, 0.1)', border: '1px solid rgba(255, 159, 67, 0.2)' }}>
-                                <ShieldAlert size={18} color="#ff9f43" />
+                    <div style={{ flexShrink: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', marginBottom: '0.75rem' }}>
+                            <div>
+                                <div style={{fontSize: '0.7rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(30, 41, 59, 0.6)', marginBottom: '0.5rem' }}>Critical Substation Registry</div>
+                                <h1 style={{ margin: 0, fontSize: '2.6rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.03em' }}>Critical Substations</h1>
                             </div>
-                            <div style={{ flex: 1 }}>
-                                <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif" }}>Critical Assets</h2>
-                                <div style={{ fontSize: '0.65rem', color: '#64748b', fontFamily: "'Poppins', sans-serif", marginTop: '1px' }}>Substations serving critical customers (hospitals, airports, essential services)</div>
-                            </div>
-                            <span style={{
-                                ...COUNT_STYLE,
-                                background: Object.keys(filteredGrouped).length > 0 ? 'rgba(255, 159, 67, 0.1)' : 'rgba(100, 116, 139, 0.08)',
-                                color: Object.keys(filteredGrouped).length > 0 ? '#ff9f43' : '#64748b',
-                                borderColor: Object.keys(filteredGrouped).length > 0 ? 'rgba(255, 159, 67, 0.3)' : 'rgba(100, 116, 139, 0.15)'
-                            }}>
-                                {Object.keys(filteredGrouped).length} station{Object.keys(filteredGrouped).length !== 1 ? 's' : ''}
-                            </span>
                         </div>
+                        <div style={{ fontSize: '0.85rem', color: 'rgba(30, 41, 59, 0.7)', textTransform: 'uppercase', letterSpacing: '0.3em', marginBottom: '0.75rem'}}>{Object.keys(grouped).length} critical substations • All Regions</div>
                         <SubstationFilter
                             substations={substations}
                             currentFilters={filterCriteria}
@@ -565,26 +543,31 @@ const CriticalSubstationManager = () => {
                             viewMode={listDisplayMode}
                             onViewModeChange={setListDisplayMode}
                         />
-                    </>
+                    </div>
                 )}
 
                 {activeTab === 'analysis' && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
-                        <div style={{ ...ICON_WRAP_STYLE, background: 'rgba(0, 229, 255, 0.1)', border: '1px solid rgba(0, 229, 255, 0.2)' }}>
-                            <BarChart2 size={18} color="var(--accent-blue)" />
+                    <div style={{ flexShrink: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', marginBottom: '0.75rem' }}>
+                            <div>
+                                <div style={{ fontSize: '0.7rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(30, 41, 59, 0.6)', marginBottom: '0.5rem' }}>Analytics</div>
+                                <h1 style={{ margin: 0, fontSize: '2.6rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.03em' }}>Stats Overview</h1>
+                            </div>
                         </div>
-                        <div style={{ flex: 1 }}>
-                            <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif" }}>Analysis</h2>
-                            <div style={{ fontSize: '0.65rem', color: '#64748b', fontFamily: "'Poppins', sans-serif", marginTop: '1px' }}>Statistics and distribution summary</div>
-                        </div>
-                        <span style={{
-                            ...COUNT_STYLE,
-                            background: 'rgba(0, 229, 255, 0.1)',
-                            color: 'var(--accent-blue)',
-                            borderColor: 'rgba(0, 229, 255, 0.3)'
-                        }}>
-                            {tags.length} asset{tags.length !== 1 ? 's' : ''}
-                        </span>
+                        <div style={{ fontSize: '0.85rem', color: 'rgba(30, 41, 59, 0.7)', textTransform: 'uppercase', letterSpacing: '0.3em', marginBottom: '0.75rem'}}>{tags.length} critical customers • {Object.keys(grouped).length} critical substations</div>
+                        <SubstationFilter
+                            substations={substations}
+                            currentFilters={filterCriteria}
+                            onUpdateFilters={setFilterCriteria}
+                            onRegister={() => openAddModal('')}
+                            extraLabel="Category"
+                            extraValue={filterCriteria.category}
+                            onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, category: val }))}
+                            extraOptions={['All', ...categories.map(c => c.category_name)].sort()}
+                            showVoltage={false}
+                            viewMode={listDisplayMode}
+                            onViewModeChange={setListDisplayMode}
+                        />
                     </div>
                 )}
 
@@ -622,7 +605,7 @@ const CriticalSubstationManager = () => {
                                     top: '0.75rem',
                                     zIndex: 10,
                                 }}>
-                                    {['Substation', 'Voltage', 'Region', 'Critical Assets', 'Actions'].map((col, i) => (
+                                    {['Substation', 'Voltage', 'Region', 'Critical Substations', 'Actions'].map((col, i) => (
                                         <div key={col} style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: i === 4 ? 'right' : 'left' }}>
                                             {col}
                                         </div>

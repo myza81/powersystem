@@ -16,7 +16,7 @@ import SubstationMap from './components/SubstationMap';
 import SubstationListRow from './components/SubstationListRow';
 
 import SnapshotManager from './components/SnapshotManager';
-import LoadSheddingViewer from './components/LoadSheddingViewer';
+import LoadSheddingSchemeReviewer from './components/LoadSheddingSchemeReviewer';
 import LoadSheddingDesigner from './components/LoadSheddingDesigner';
 import CriticalSubstationManager from './components/CriticalSubstationManager';
 import api from './api';
@@ -417,7 +417,7 @@ const App = () => {
                     </motion.div>
                 )}
 
-                {view !== 'critical-substations' && view !== 'load-shedding-designer' && view !== 'dashboard' && view !== 'list' && view !== 'snapshots' && (
+                {view !== 'critical-substations' && view !== 'load-shedding-designer' && view !== 'dashboard' && view !== 'list' && view !== 'snapshots' && view !== 'load-shedding-viewer' && (
                     <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                             <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
@@ -673,7 +673,7 @@ const App = () => {
 
 
                 {view === 'load-shedding-viewer' && (
-                    <LoadSheddingViewer />
+                    <LoadSheddingSchemeReviewer />
                 )}
 
                 {view === 'load-shedding-designer' && (
