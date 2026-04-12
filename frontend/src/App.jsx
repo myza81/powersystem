@@ -405,7 +405,7 @@ const App = () => {
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         style={{
-                            position: 'fixed', top: '2rem', right: '2rem', zIndex: 1000,
+                            position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999,
                             background: status.type === 'success' ? 'var(--accent-cyan)' : '#f56565',
                             color: '#000', padding: '1rem 2rem', borderRadius: '0.5rem',
                             display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 600, boxShadow: '0 10px 30px rgba(0,0,0,0.5)'

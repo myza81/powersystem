@@ -26,16 +26,30 @@ const HeatmapLayer = ({ points, gradient }) => {
     useEffect(() => {
         if (!points || points.length === 0) return;
 
-        const heat = L.heatLayer(points, {
-            radius: 35,
-            blur: 25,
-            maxZoom: 17,
-            max: 1.0,
-            gradient: gradient || { 0.4: 'blue', 0.65: 'lime', 1: 'red' }
-        }).addTo(map);
+        let heat = null;
+
+        const addHeat = () => {
+            const size = map.getSize();
+            if (size.y === 0) return;
+            heat = L.heatLayer(points, {
+                radius: 35,
+                blur: 25,
+                maxZoom: 17,
+                max: 1.0,
+                gradient: gradient || { 0.4: 'blue', 0.65: 'lime', 1: 'red' }
+            }).addTo(map);
+        };
+
+        // If map is already sized, add immediately; otherwise wait for resize
+        if (map.getSize().y > 0) {
+            addHeat();
+        } else {
+            map.once('resize', addHeat);
+        }
 
         return () => {
-            map.removeLayer(heat);
+            map.off('resize', addHeat);
+            if (heat) map.removeLayer(heat);
         };
     }, [points, map, gradient]);
 

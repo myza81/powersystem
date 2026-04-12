@@ -29,11 +29,10 @@ const tabButtonStyle = (isActive) => {
 
 const inputLabelStyle = {
     display: 'block',
-    fontSize: '0.7rem',
-    color: '#334155',
-    marginBottom: '6px',
+    fontSize: '0.65rem',
+    color: '#64748b',
+    marginBottom: '4px',
     fontWeight: 600,
-    letterSpacing: '0.5px',
     fontFamily: "'Poppins', sans-serif"
 };
 
@@ -67,12 +66,13 @@ const pillStyle = (type, value) => {
 const LT_COLS = '56px 88px 65px 108px 108px 126px 44px';
 const AT_COLS = '56px 76px 76px 65px 108px 108px 44px';
 const BR_COLS = '1fr 80px 100px 44px';
-const LSR_COLS = '1fr 80px 80px 80px 72px 44px';
+const LSR_COLS = '90px 1fr 1fr 1fr 60px 60px';
 
 const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
     const [form, setForm] = useState({});
     const [saving, setSaving] = useState(false);
     const [hovering, setHovering] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
 
     useEffect(() => {
         if (asset) setForm(asset);
@@ -82,6 +82,7 @@ const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
         setSaving(true);
         await onSave(form);
         setSaving(false);
+        setIsEditing(false);
     };
 
     const generateBreakerNumbers = (no, lv) => {
@@ -121,7 +122,7 @@ const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
         ...extra,
     });
 
-    if (isNew) {
+    if (isNew || isEditing) {
         return (
             <div style={{
                 display: 'grid', gridTemplateColumns: LT_COLS, gap: '6px',
@@ -172,13 +173,14 @@ const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
                             width: '100%', padding: '3px 0', borderRadius: '4px', border: 'none',
                             background: '#047d60', color: '#fff', cursor: 'pointer',
                             fontSize: '0.62rem', fontWeight: 700, opacity: saving ? 0.6 : 1,
-                            transition: 'all 0.15s', lineHeight: 1.4
+                            transition: 'all 0.15s', lineHeight: 1.4,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}
                     >
-                        {saving ? '…' : 'Add'}
+                        {saving ? '…' : <Save size={11} />}
                     </button>
                     <button
-                        type="button" onClick={onCancel}
+                        type="button" onClick={() => { if (isEditing) { setIsEditing(false); setForm(asset); } onCancel?.(); }}
                         style={{
                             width: '100%', padding: '3px 0', borderRadius: '4px',
                             border: '1px solid #e2e8f0', background: '#fff',
@@ -212,25 +214,39 @@ const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
                 transition: 'background 0.15s',
             }}
         >
-            {/* Unit badge */}
+            {/* Unit number */}
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <span style={{
-                    fontSize: '0.7rem', fontWeight: 700, fontFamily: 'monospace',
-                    color: '#047d60', background: 'rgba(4,125,96,0.08)',
-                    padding: '3px 7px', borderRadius: '4px', letterSpacing: '0.3px'
-                }}>
-                    T{form.transformer_no}
-                </span>
+                <input
+                    name="transformer_no"
+                    type="text"
+                    inputMode="numeric"
+                    value={form.transformer_no || ''}
+                    onChange={handleChange}
+                    onBlur={handleSave}
+                    readOnly={!isEditing}
+                    style={{
+                        width: '100%', padding: '4px 6px', fontSize: '0.72rem',
+                        fontFamily: 'monospace', fontWeight: 700, textAlign: 'center',
+                        background: isEditing ? 'rgba(4,125,96,0.08)' : 'rgba(4,125,96,0.08)',
+                        color: '#047d60',
+                        border: isEditing ? '1px solid #cbd5e1' : '1px solid transparent',
+                        borderRadius: '4px',
+                        outline: 'none', cursor: isEditing ? 'text' : 'default'
+                    }}
+                />
             </div>
 
             {/* LV voltage select styled as pill */}
             <select
                 name="lv_voltage" value={form.lv_voltage || ''} onChange={handleChange}
+                disabled={!isEditing}
                 style={{
                     width: '100%', padding: '4px 6px', fontSize: '0.72rem',
                     fontFamily: 'monospace', fontWeight: 700, textAlign: 'center',
                     background: lvPalette.bg, color: lvPalette.text,
-                    border: 'none', borderRadius: '5px', cursor: 'pointer', outline: 'none'
+                    border: 'none', borderRadius: '5px', cursor: isEditing ? 'pointer' : 'default', outline: 'none',
+                    appearance: isEditing ? 'auto' : 'none',
+                    WebkitAppearance: isEditing ? 'auto' : 'none',
                 }}
             >
                 {LOAD_LV.map(v => <option key={v} value={v}>{v} kV</option>)}
@@ -240,10 +256,11 @@ const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
             <input
                 name="capacity_mva" type="text" inputMode="decimal"
                 value={form.capacity_mva || ''} onChange={handleChange} onBlur={handleSave}
+                readOnly={!isEditing}
                 style={cellInput({
                     textAlign: 'center', fontWeight: 600, color: '#92400e',
-                    background: hovering ? '#fffbeb' : 'transparent',
-                    border: hovering ? '1px solid #fde68a' : '1px solid transparent',
+                    background: isEditing ? '#fffbeb' : 'transparent',
+                    border: isEditing ? '1px solid #fde68a' : '1px solid transparent',
                 })}
             />
 
@@ -251,10 +268,11 @@ const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
             <input
                 name="hv_breaker_number" value={form.hv_breaker_number || ''}
                 onChange={handleChange} onBlur={handleSave}
+                readOnly={!isEditing}
                 style={cellInput({
                     textAlign: 'center', color: '#475569',
-                    border: hovering ? '1px solid #e2e8f0' : '1px solid transparent',
-                    background: hovering ? '#fff' : 'transparent',
+                    border: isEditing ? '1px solid #e2e8f0' : '1px solid transparent',
+                    background: isEditing ? '#fff' : 'transparent',
                 })}
             />
 
@@ -262,10 +280,11 @@ const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
             <input
                 name="lv_breaker_number" value={form.lv_breaker_number || ''}
                 onChange={handleChange} onBlur={handleSave}
+                readOnly={!isEditing}
                 style={cellInput({
                     textAlign: 'center', color: '#475569',
-                    border: hovering ? '1px solid #e2e8f0' : '1px solid transparent',
-                    background: hovering ? '#fff' : 'transparent',
+                    border: isEditing ? '1px solid #e2e8f0' : '1px solid transparent',
+                    background: isEditing ? '#fff' : 'transparent',
                 })}
             />
 
@@ -274,15 +293,20 @@ const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
                 name="commissioning_date" type="date"
                 value={form.commissioning_date || ''}
                 onChange={handleChange} onBlur={handleSave}
+                readOnly={!isEditing}
                 style={cellInput({
                     textAlign: 'center', fontSize: '0.68rem', color: '#64748b',
-                    border: hovering ? '1px solid #e2e8f0' : '1px solid transparent',
-                    background: hovering ? '#fff' : 'transparent',
+                    border: isEditing ? '1px solid #e2e8f0' : '1px solid transparent',
+                    background: isEditing ? '#fff' : 'transparent',
                 })}
             />
 
             {/* Delete */}
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
+                <button onClick={() => setIsEditing(true)} title="Edit entry"
+                    style={{ background: hovering ? '#f0f9ff' : 'transparent', border: hovering ? '1px solid #bae6fd' : '1px solid transparent', color: '#0284c7', cursor: 'pointer', padding: '4px 6px', borderRadius: '5px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                    <Edit2 size={13} />
+                </button>
                 <button
                     onClick={onDelete}
                     title="Delete entry"
@@ -320,39 +344,30 @@ const AutoTransformerRow = ({ asset, onSave, onDelete, onCancel, isNew }) => {
         textAlign: 'center', ...extra,
     });
 
-    if (isNew) {
+if (isNew || isEditing) {
         return (
             <div style={{
-                display: 'grid', gridTemplateColumns: AT_COLS, gap: '6px',
+                display: 'grid', gridTemplateColumns: BR_COLS, gap: '6px',
                 alignItems: 'center', padding: '8px 16px',
                 background: 'rgba(4, 125, 96, 0.04)',
                 borderTop: '2px solid #047d60',
                 borderBottom: '1px solid rgba(4,125,96,0.12)',
             }}>
-                <input name="transformer_no" type="text" inputMode="numeric" placeholder="T#" value={form.transformer_no || ''} onChange={handleChange} autoFocus
-                    style={cellInput({ fontWeight: 700, fontSize: '0.8rem', border: '1px solid #cbd5e1', background: '#fff', color: '#047d60' })} />
-                <select name="hv_voltage" value={form.hv_voltage || ''} onChange={handleChange}
-                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', color: '#1d4ed8' })}>
-                    <option value="">HV kV</option>
-                    {AUTO_LV.map(v => <option key={v} value={v}>{v} kV</option>)}
+                <select name="to_substation" value={form.to_substation || ''} onChange={handleChange} autoFocus={isNew}
+                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', textAlign: 'left' })}>
+                    <option value="">-- Select substation</option>
+                    {substationOptions.map(s => <option key={s.substation_id} value={s.substation_id}>{s.name} ({s.substation_id})</option>)}
                 </select>
-                <select name="lv_voltage" value={form.lv_voltage || ''} onChange={handleChange}
-                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', color: '#047d60' })}>
-                    <option value="">LV kV</option>
-                    {AUTO_LV.map(v => <option key={v} value={v}>{v} kV</option>)}
-                </select>
-                <input name="capacity_mva" type="text" inputMode="decimal" placeholder="0.00" value={form.capacity_mva || ''} onChange={handleChange}
+                <input name="ckt_id" placeholder="Ckt" value={form.ckt_id || ''} onChange={handleChange}
                     style={cellInput({ border: '1px solid #cbd5e1', background: '#fff' })} />
-                <input name="hv_breaker_number" placeholder="HV—" value={form.hv_breaker_number || ''} onChange={handleChange}
-                    style={cellInput({ border: '1px solid #cbd5e1', background: '#fff' })} />
-                <input name="lv_breaker_number" placeholder="LV—" value={form.lv_breaker_number || ''} onChange={handleChange}
+                <input name="breaker_number" placeholder="Breaker #" value={form.breaker_number || ''} onChange={handleChange}
                     style={cellInput({ border: '1px solid #cbd5e1', background: '#fff' })} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'center' }}>
                     <button type="button" onClick={handleSave} disabled={saving}
-                        style={{ width: '100%', padding: '3px 0', borderRadius: '4px', border: 'none', background: '#047d60', color: '#fff', cursor: 'pointer', fontSize: '0.62rem', fontWeight: 700, opacity: saving ? 0.6 : 1 }}>
-                        {saving ? '…' : 'Add'}
+                        style={{ width: '100%', padding: '3px 0', borderRadius: '4px', border: 'none', background: '#047d60', color: '#fff', cursor: 'pointer', fontSize: '0.62rem', fontWeight: 700, opacity: saving ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {saving ? '…' : <Save size={11} />}
                     </button>
-                    <button type="button" onClick={onCancel}
+                    <button type="button" onClick={() => { if (isEditing) setIsEditing(false); onCancel?.(); }}
                         style={{ width: '100%', padding: '3px 0', borderRadius: '4px', border: '1px solid #e2e8f0', background: '#fff', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <X size={11} />
                     </button>
@@ -374,9 +389,21 @@ const AutoTransformerRow = ({ asset, onSave, onDelete, onCancel, isNew }) => {
                 transition: 'background 0.15s',
             }}>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 700, fontFamily: 'monospace', color: '#047d60', background: 'rgba(4,125,96,0.08)', padding: '3px 7px', borderRadius: '4px' }}>
-                    T{form.transformer_no}
-                </span>
+                <input
+                    name="transformer_no"
+                    type="text"
+                    inputMode="numeric"
+                    value={form.transformer_no || ''}
+                    onChange={handleChange}
+                    onBlur={handleSave}
+                    style={{
+                        width: '100%', padding: '4px 6px', fontSize: '0.72rem',
+                        fontFamily: 'monospace', fontWeight: 700, textAlign: 'center',
+                        background: 'rgba(4,125,96,0.08)', color: '#047d60',
+                        border: '1px solid transparent', borderRadius: '4px',
+                        outline: 'none'
+                    }}
+                />
             </div>
             <div style={{ textAlign: 'center' }}>
                 <span style={{ fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace', background: hvPalette.bg, color: hvPalette.text, padding: '3px 8px', borderRadius: '5px' }}>
@@ -408,10 +435,11 @@ const IncomingBranchRow = ({ asset, substationOptions, onSave, onDelete, onCance
     const [form, setForm] = useState({});
     const [saving, setSaving] = useState(false);
     const [hovering, setHovering] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
 
     useEffect(() => { if (asset) setForm(asset); }, [asset]);
 
-    const handleSave = async () => { setSaving(true); await onSave(form); setSaving(false); };
+    const handleSave = async () => { setSaving(true); await onSave(form); setSaving(false); setIsEditing(false); };
 
     const handleChange = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -423,7 +451,7 @@ const IncomingBranchRow = ({ asset, substationOptions, onSave, onDelete, onCance
         textAlign: 'center', ...extra,
     });
 
-    if (isNew) {
+    if (isNew || isEditing) {
         return (
             <div style={{
                 display: 'grid', gridTemplateColumns: BR_COLS, gap: '6px',
@@ -443,10 +471,10 @@ const IncomingBranchRow = ({ asset, substationOptions, onSave, onDelete, onCance
                     style={cellInput({ border: '1px solid #cbd5e1', background: '#fff' })} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'center' }}>
                     <button type="button" onClick={handleSave} disabled={saving}
-                        style={{ width: '100%', padding: '3px 0', borderRadius: '4px', border: 'none', background: '#047d60', color: '#fff', cursor: 'pointer', fontSize: '0.62rem', fontWeight: 700, opacity: saving ? 0.6 : 1 }}>
-                        {saving ? '…' : 'Add'}
+                        style={{ width: '100%', padding: '3px 0', borderRadius: '4px', border: 'none', background: '#047d60', color: '#fff', cursor: 'pointer', fontSize: '0.62rem', fontWeight: 700, opacity: saving ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {saving ? '…' : <Save size={11} />}
                     </button>
-                    <button type="button" onClick={onCancel}
+                    <button type="button" onClick={() => { if (isEditing) { setIsEditing(false); setForm(asset); } onCancel?.(); }}
                         style={{ width: '100%', padding: '3px 0', borderRadius: '4px', border: '1px solid #e2e8f0', background: '#fff', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <X size={11} />
                     </button>
@@ -477,9 +505,13 @@ const IncomingBranchRow = ({ asset, substationOptions, onSave, onDelete, onCance
                     {form.ckt_id || '—'}
                 </span>
             </div>
-            <input name="breaker_number" value={form.breaker_number || ''} onChange={handleChange} onBlur={handleSave}
-                style={cellInput({ color: '#475569', border: hovering ? '1px solid #e2e8f0' : '1px solid transparent', background: hovering ? '#fff' : 'transparent' })} />
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <input name="breaker_number" value={form.breaker_number || ''} readOnly
+                style={cellInput({ color: '#475569', border: '1px solid transparent', background: 'transparent' })} />
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
+                <button onClick={() => setIsEditing(true)} title="Edit entry"
+                    style={{ background: hovering ? '#f0f9ff' : 'transparent', border: hovering ? '1px solid #bae6fd' : '1px solid transparent', color: '#0284c7', cursor: 'pointer', padding: '4px 6px', borderRadius: '5px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                    <Edit2 size={13} />
+                </button>
                 <button onClick={onDelete} title="Delete entry"
                     style={{ background: hovering ? '#fef2f2' : 'transparent', border: hovering ? '1px solid #fecaca' : '1px solid transparent', color: '#ef4444', cursor: 'pointer', padding: '4px 6px', borderRadius: '5px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
                     <Trash2 size={13} />
@@ -489,33 +521,63 @@ const IncomingBranchRow = ({ asset, substationOptions, onSave, onDelete, onCance
     );
 };
 
-const LSRRow = ({ relay, onEdit, onDelete, isSelected }) => {
+const LSRRow = ({ relay, onEdit, onDelete, isSelected, loadTransformers, autoTransformers, incomingBranches }) => {
     const [hovering, setHovering] = useState(false);
+
+    const getLTNames = () => {
+        if (!relay.load_transformers?.length) return '—';
+        const names = relay.load_transformers.map(lt => {
+            const ltId = typeof lt === 'object' ? lt.id : lt;
+            const found = loadTransformers?.find(t => t.id === ltId);
+            return found ? `T${found.transformer_no}` : '';
+        }).filter(Boolean);
+        return names.length > 0 ? names.join(', ') : '—';
+    };
+
+    const getATNames = () => {
+        if (!relay.auto_transformers?.length) return '—';
+        const names = relay.auto_transformers.map(at => {
+            const atId = typeof at === 'object' ? at.id : at;
+            const found = autoTransformers?.find(t => t.id === atId);
+            return found ? `T${found.transformer_no}` : '';
+        }).filter(Boolean);
+        return names.length > 0 ? names.join(', ') : '—';
+    };
+
+    const getBranchNames = () => {
+        if (!relay.incoming_branches?.length) return '—';
+        const names = relay.incoming_branches.map(ib => {
+            const ibId = typeof ib === 'object' ? ib.id : ib;
+            const found = incomingBranches?.find(b => b.id === ibId);
+            return found ? `${found.to_substation}${found.ckt_id ? ' '+found.ckt_id : ''}` : '';
+        }).filter(Boolean);
+        return names.length > 0 ? names.join(', ') : '—';
+    };
+
     return (
         <div
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
-            onClick={onEdit}
             style={{
                 display: 'grid', gridTemplateColumns: LSR_COLS,
                 gap: '6px', alignItems: 'center', padding: '7px 16px',
                 borderBottom: isSelected ? 'none' : '1px solid #f1f5f9',
                 background: isSelected ? 'rgba(4,125,96,0.04)' : hovering ? '#f8fafc' : '#fff',
                 borderLeft: isSelected ? '3px solid #047d60' : '3px solid transparent',
-                cursor: 'pointer', transition: 'all 0.15s',
+                transition: 'all 0.15s',
             }}
         >
-            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e293b', fontFamily: 'monospace' }}>
+            <div style={{ fontSize: '0.7rem', fontWeight: 400, color: 'rgb(30, 41, 59)', fontFamily: 'monospace' }}>
                 {relay.target_voltage ? `${relay.target_voltage}kV` : '—'}
             </div>
             <div style={{ textAlign: 'center', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace', color: relay.load_transformers?.length > 0 ? '#047d60' : '#cbd5e1' }}>
-                {relay.load_transformers?.length || 0}
+                {getLTNames()}
             </div>
             <div style={{ textAlign: 'center', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace', color: relay.auto_transformers?.length > 0 ? '#047d60' : '#cbd5e1' }}>
-                {relay.auto_transformers?.length || 0}
+                {getATNames()}
             </div>
-            <div style={{ textAlign: 'center', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace', color: relay.incoming_branches?.length > 0 ? '#047d60' : '#cbd5e1' }}>
-                {relay.incoming_branches?.length || 0}
+            <div style={{ textAlign: 'center', fontSize: '0.6rem', fontWeight: 700, fontFamily: 'monospace', color: relay.incoming_branches?.length > 0 ? '#047d60' : '#cbd5e1' }}>
+                {getBranchNames()}
             </div>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <span style={{
@@ -527,7 +589,11 @@ const LSRRow = ({ relay, onEdit, onDelete, isSelected }) => {
                     {relay.is_active !== false ? 'Active' : 'Off'}
                 </span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
+                <button onClick={(e) => { e.stopPropagation(); onEdit(); }} title="Edit relay"
+                    style={{ background: hovering ? '#f0f9ff' : 'transparent', border: hovering ? '1px solid #bae6fd' : '1px solid transparent', color: '#0284c7', cursor: 'pointer', padding: '4px 6px', borderRadius: '5px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                    <Edit2 size={13} />
+                </button>
                 <button onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Delete relay"
                     style={{ background: hovering ? '#fef2f2' : 'transparent', border: hovering ? '1px solid #fecaca' : '1px solid transparent', color: '#ef4444', cursor: 'pointer', padding: '4px 6px', borderRadius: '5px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
                     <Trash2 size={13} />
@@ -606,8 +672,7 @@ const LSRInlineForm = ({ data, substation, loadTransformers, autoTransformers, i
                     <select
                         value={form.target_voltage || ''}
                         onChange={e => handleVoltageChange(e.target.value)}
-                        disabled={isEditing}
-                        style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.78rem', fontFamily: 'monospace', background: isEditing ? '#f8fafc' : '#fff', color: '#1e293b', cursor: isEditing ? 'not-allowed' : 'pointer', outline: 'none' }}
+                        style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.78rem', fontFamily: 'monospace', background: '#fff', color: '#1e293b', cursor: 'pointer', outline: 'none' }}
                     >
                         {availableVoltages.length === 0 && <option value="">No voltages available</option>}
                         {availableVoltages.map(v => <option key={v} value={v}>{v}kV</option>)}
@@ -1017,6 +1082,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
         latitude: '',
         longitude: ''
     });
+    const [isEditingDetails, setIsEditingDetails] = useState(false);
 
     useEffect(() => {
         if (substation) {
@@ -1594,6 +1660,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                 e.preventDefault();
                                 const { substation_id, sld, sld_file, transformers, incoming_bays, created_at, updated_at, state, region, ...editableData } = formData;
                                 onSave(editableData);
+                                setIsEditingDetails(false);
                             }} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
                                 {/* Section: Details & Location */}
@@ -1602,64 +1669,73 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                         <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             <MapPin size={15} color="#047d60" />
                                         </div>
-                                        <div>
+                                        <div style={{ flex: 1 }}>
                                             <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Details & Location</h3>
                                             <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Substation identity and coordinates</div>
                                         </div>
+                                        <button type="button" onClick={() => { if (isEditingDetails) { setFormData(substation || { mnemonic: '', name: '', ownership: 'TNB', voltage: '', grid: '', latitude: '', longitude: '' }); } setIsEditingDetails(!isEditingDetails); }} disabled={loading} style={{
+                                            padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0',
+                                            background: isEditingDetails ? '#047d60' : '#fff', color: isEditingDetails ? '#fff' : '#64748b',
+                                            cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600,
+                                            transition: 'all 0.15s', opacity: loading ? 0.7 : 1
+                                        }}>
+                                            {loading ? <RefreshCw size={14} className="animate-spin" /> : (isEditingDetails ? <Save size={14} /> : <Edit2 size={14} />)}
+                                            {isEditingDetails ? 'Save' : 'Edit'}
+                                        </button>
                                     </div>
-                                    <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '13px' }}>
+                                    <div style={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                         {/* Row 1: Name + Mnemonic */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '12px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 240px', gap: '10px' }}>
                                             <div>
-                                                <label style={inputLabelStyle}>Substation Name</label>
-                                                <input name="name" className="input-field" value={formData.name} onChange={handleChange} required placeholder="e.g. Pencawang Masuk Utama ..." />
+                                                <label style={inputLabelStyle}>Name</label>
+                                                <input name="name" className="input-field" value={formData.name} onChange={handleChange} required placeholder="Name" readOnly={!isEditingDetails} style={{ background: isEditingDetails ? '#fff' : '#f8fafc' }} />
                                             </div>
                                             <div>
-                                                <label style={inputLabelStyle}>Mnemonic (ID)</label>
-                                                <input name="mnemonic" className="input-field mono" value={formData.mnemonic} onChange={handleChange} required placeholder="ABCD" />
+                                                <label style={inputLabelStyle}>Mnemonic</label>
+                                                <input name="mnemonic" className="input-field mono" value={formData.mnemonic} onChange={handleChange} required placeholder="ABCD" readOnly={!isEditingDetails} style={{ background: isEditingDetails ? '#fff' : '#f8fafc' }} />
                                             </div>
                                         </div>
                                         {/* Row 2: Voltage + Grid + Ownership */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '200px 200px 1fr', gap: '10px' }}>
                                             <div>
-                                                <label style={inputLabelStyle}>Nominal Voltage</label>
-                                                <select name="voltage" className="input-field" value={formData.voltage || ''} onChange={handleChange} required>
-                                                    <option value="">-- Select --</option>
-                                                    {VOLTAGES.map(v => <option key={v} value={v}>{v} kV</option>)}
+                                                <label style={inputLabelStyle}>Voltage</label>
+                                                <select name="voltage" className="input-field" value={formData.voltage || ''} onChange={handleChange} required disabled={!isEditingDetails}>
+                                                    <option value="">--</option>
+                                                    {VOLTAGES.map(v => <option key={v} value={v}>{v}</option>)}
                                                 </select>
                                             </div>
                                             <div>
-                                                <label style={inputLabelStyle}>Grid Unit</label>
-                                                <select name="grid" className="input-field" value={formData.grid || ''} onChange={handleChange} required>
-                                                    <option value="">-- Select --</option>
+                                                <label style={inputLabelStyle}>Grid</label>
+                                                <select name="grid" className="input-field" value={formData.grid || ''} onChange={handleChange} required disabled={!isEditingDetails}>
+                                                    <option value="">--</option>
                                                     {GRIDS.map(g => <option key={g} value={g}>{g}</option>)}
                                                 </select>
                                             </div>
                                             <div>
-                                                <label style={inputLabelStyle}>Ownership</label>
-                                                <select name="ownership" className="input-field" value={formData.ownership || ''} onChange={handleChange}>
+                                                <label style={inputLabelStyle}>Owner</label>
+                                                <select name="ownership" className="input-field" value={formData.ownership || ''} onChange={handleChange} disabled={!isEditingDetails}>
                                                     <option value="TNB">TNB</option>
-                                                    <option value="DC">Data Centre (DC)</option>
-                                                    <option value="LSS">Large Scale Solar (LSS)</option>
-                                                    <option value="IPP">Independent Power Producer (IPP)</option>
-                                                    <option value="LPC">Large Power Consumer (LPC)</option>
-                                                    <option value="Tie-Line">Tie-Line</option>
+                                                    <option value="DC">DC</option>
+                                                    <option value="LSS">LSS</option>
+                                                    <option value="IPP">IPP</option>
+                                                    <option value="LPC">LPC</option>
+                                                    <option value="Tie-Line">Tie</option>
                                                 </select>
                                             </div>
                                         </div>
                                         {/* Row 3: Latitude + Longitude + Commission Date */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 160px', gap: '12px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '200px 200px 1fr', gap: '10px' }}>
                                             <div>
                                                 <label style={inputLabelStyle}>Latitude</label>
-                                                <input name="latitude" type="number" step="any" className="input-field mono" value={formData.latitude || ''} onChange={handleChange} placeholder="e.g. 3.1390" />
+                                                <input name="latitude" type="number" step="any" className="input-field mono" value={formData.latitude || ''} onChange={handleChange} placeholder="0.0000" readOnly={!isEditingDetails} style={{ background: isEditingDetails ? '#fff' : '#f8fafc' }} />
                                             </div>
                                             <div>
                                                 <label style={inputLabelStyle}>Longitude</label>
-                                                <input name="longitude" type="number" step="any" className="input-field mono" value={formData.longitude || ''} onChange={handleChange} placeholder="e.g. 101.6869" />
+                                                <input name="longitude" type="number" step="any" className="input-field mono" value={formData.longitude || ''} onChange={handleChange} placeholder="0.0000" readOnly={!isEditingDetails} style={{ background: isEditingDetails ? '#fff' : '#f8fafc' }} />
                                             </div>
                                             <div>
                                                 <label style={inputLabelStyle}>Commission Date</label>
-                                                <input name="commission_date" type="date" className="input-field mono" value={formData.commission_date || ''} onChange={handleChange} style={{ colorScheme: 'dark' }} />
+                                                <input name="commission_date" type="date" className="input-field mono" value={formData.commission_date || ''} onChange={handleChange} disabled={!isEditingDetails} style={{ colorScheme: 'dark' }} />
                                             </div>
                                         </div>
                                         {/* Row 4: SLD File */}
@@ -2035,6 +2111,9 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                         isSelected={editingLSRId === asset.id}
                                                         onEdit={() => setEditingLSRId(editingLSRId === asset.id ? null : asset.id)}
                                                         onDelete={() => handleAssetDelete('lsr', asset.id)}
+                                                        loadTransformers={loadTransformers}
+                                                        autoTransformers={autoTransformers}
+                                                        incomingBranches={incomingBranches}
                                                     />
                                                     {editingLSRId === asset.id && (
                                                         <LSRInlineForm

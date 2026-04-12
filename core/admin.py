@@ -131,29 +131,31 @@ class LoadSheddingRelayAdmin(admin.ModelAdmin):
     form = LoadSheddingRelayForm
     list_display = (
         'substation',
+        'relay_name',
+        'target_voltage',
         'is_active',
         'load_transformer_bays',
-        'incoming_branch_bays',
         'auto_transformer_bays',
+        'incoming_branch_bays',
     )
     list_filter = ('is_active', 'substation')
-    search_fields = ('id', 'substation__substation_id')
+    search_fields = ('id', 'substation__substation_id', 'relay_name')
     raw_id_fields = ('substation',)
     filter_horizontal = ('load_transformers', 'incoming_branches', 'auto_transformers')
 
     def load_transformer_bays(self, obj):
-        bays = obj.load_transformers.values_list('bay_id', flat=True)
-        return ', '.join([bay.split('_')[-1] for bay in bays if bay and '_' in bay])
+        nums = obj.load_transformers.values_list('transformer_no', flat=True)
+        return ', '.join([f"T{n}" for n in nums if n])
     load_transformer_bays.short_description = 'Load Transformers'
 
     def incoming_branch_bays(self, obj):
-        bays = obj.incoming_branches.values_list('bay_id', flat=True)
-        return ', '.join([bay.split('_')[-1] for bay in bays if bay and '_' in bay])
-    incoming_branch_bays.short_description = 'Circuit (Line/Cable)'
+        bays = obj.incoming_branches.values_list('to_substation', 'ckt_id')
+        return ', '.join([f"{b[0]}{b[1]}" for b in bays if b[0]])
+    incoming_branch_bays.short_description = 'Incoming Branches'
 
     def auto_transformer_bays(self, obj):
-        bays = obj.auto_transformers.values_list('bay_id', flat=True)
-        return ', '.join([bay.split('_')[-1] for bay in bays if bay and '_' in bay])
+        nums = obj.auto_transformers.values_list('transformer_no', flat=True)
+        return ', '.join([f"T{n}" for n in nums if n])
     auto_transformer_bays.short_description = 'Auto Transformers'
 
 @admin.register(EquipmentTopologyMap)
