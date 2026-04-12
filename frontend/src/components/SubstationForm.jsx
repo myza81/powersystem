@@ -67,7 +67,7 @@ const pillStyle = (type, value) => {
 const LT_COLS = '56px 88px 65px 108px 108px 126px 44px';
 const AT_COLS = '56px 76px 76px 65px 108px 108px 44px';
 const BR_COLS = '1fr 80px 100px 44px';
-const LSR_COLS = '1fr 70px 44px 44px 68px 76px 44px';
+const LSR_COLS = '1fr 80px 80px 80px 72px 44px';
 
 const TransformerForm = ({ asset, onSave, onDelete, onCancel, isNew }) => {
     const [form, setForm] = useState({});
@@ -489,7 +489,7 @@ const IncomingBranchRow = ({ asset, substationOptions, onSave, onDelete, onCance
     );
 };
 
-const LSRRow = ({ relay, onEdit, onDelete }) => {
+const LSRRow = ({ relay, onEdit, onDelete, isSelected }) => {
     const [hovering, setHovering] = useState(false);
     return (
         <div
@@ -499,23 +499,14 @@ const LSRRow = ({ relay, onEdit, onDelete }) => {
             style={{
                 display: 'grid', gridTemplateColumns: LSR_COLS,
                 gap: '6px', alignItems: 'center', padding: '7px 16px',
-                borderBottom: '1px solid #f1f5f9',
-                background: hovering ? '#f8fafc' : '#fff',
-                cursor: 'pointer', transition: 'background 0.15s',
+                borderBottom: isSelected ? 'none' : '1px solid #f1f5f9',
+                background: isSelected ? 'rgba(4,125,96,0.04)' : hovering ? '#f8fafc' : '#fff',
+                borderLeft: isSelected ? '3px solid #047d60' : '3px solid transparent',
+                cursor: 'pointer', transition: 'all 0.15s',
             }}
         >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: relay.is_active !== false ? '#047d60' : '#cbd5e1', flexShrink: 0 }} />
-                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e293b', fontFamily: "'Poppins', sans-serif" }}>
-                    {relay.relay_name || 'Unnamed Relay'}
-                </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-                {relay.target_voltage ? (
-                    <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: '20px', background: 'rgba(99,102,241,0.08)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.2)', fontFamily: 'monospace' }}>
-                        {relay.target_voltage}kV
-                    </span>
-                ) : <span style={{ color: '#cbd5e1', fontSize: '0.7rem' }}>—</span>}
+            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e293b', fontFamily: 'monospace' }}>
+                {relay.target_voltage ? `${relay.target_voltage}kV` : '—'}
             </div>
             <div style={{ textAlign: 'center', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'monospace', color: relay.load_transformers?.length > 0 ? '#047d60' : '#cbd5e1' }}>
                 {relay.load_transformers?.length || 0}
@@ -540,6 +531,183 @@ const LSRRow = ({ relay, onEdit, onDelete }) => {
                 <button onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Delete relay"
                     style={{ background: hovering ? '#fef2f2' : 'transparent', border: hovering ? '1px solid #fecaca' : '1px solid transparent', color: '#ef4444', cursor: 'pointer', padding: '4px 6px', borderRadius: '5px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
                     <Trash2 size={13} />
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const LSRInlineForm = ({ data, substation, loadTransformers, autoTransformers, incomingBranches, loadSheddingRelays, onSave, onCancel }) => {
+    const isEditing = !!data?.id;
+
+    const availableVoltages = React.useMemo(() => {
+        const vSet = new Set();
+        loadTransformers?.forEach(lt => { if (lt.lv_voltage) vSet.add(lt.lv_voltage); });
+        autoTransformers?.forEach(at => { if (at.lv_voltage) vSet.add(at.lv_voltage); });
+        if (incomingBranches?.length > 0 && substation?.voltage) vSet.add(substation.voltage);
+        return Array.from(vSet).sort((a, b) => b - a);
+    }, [loadTransformers, autoTransformers, incomingBranches, substation]);
+
+    const [form, setForm] = useState(() => {
+        if (data?.id) {
+            return {
+                ...data,
+                load_transformers: (data.load_transformers || []).map(t => typeof t === 'object' ? t.id : t),
+                auto_transformers: (data.auto_transformers || []).map(t => typeof t === 'object' ? t.id : t),
+                incoming_branches: (data.incoming_branches || []).map(b => typeof b === 'object' ? b.id : b),
+            };
+        }
+        const v = availableVoltages[0] || '';
+        return { target_voltage: v, relay_name: v ? `${v}kV System` : '', is_active: true, load_transformers: [], auto_transformers: [], incoming_branches: [], notes: '' };
+    });
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState(null);
+
+    const targetV = form.target_voltage;
+    const filteredLTs = React.useMemo(() => loadTransformers?.filter(lt => lt.lv_voltage === targetV) || [], [loadTransformers, targetV]);
+    const filteredATs = React.useMemo(() => autoTransformers?.filter(at => at.lv_voltage === targetV) || [], [autoTransformers, targetV]);
+    const filteredIBs = React.useMemo(() => substation?.voltage === targetV ? (incomingBranches || []) : [], [incomingBranches, substation, targetV]);
+
+    const handleVoltageChange = (v) => {
+        const parsed = parseInt(v);
+        setForm(f => ({ ...f, target_voltage: parsed, relay_name: `${parsed}kV System`, load_transformers: [], auto_transformers: [], incoming_branches: [] }));
+    };
+
+    const toggleLT = (id, checked) => setForm(f => ({ ...f, load_transformers: checked ? [...(f.load_transformers || []), id] : (f.load_transformers || []).filter(x => x !== id) }));
+    const toggleAT = (id, checked) => setForm(f => ({ ...f, auto_transformers: checked ? [...(f.auto_transformers || []), id] : (f.auto_transformers || []).filter(x => x !== id) }));
+    const toggleIB = (id, checked) => setForm(f => ({ ...f, incoming_branches: checked ? [...(f.incoming_branches || []), id] : (f.incoming_branches || []).filter(x => (typeof x === 'object' ? x.id : x) !== id) }));
+
+    const handleSave = async () => {
+        setSaving(true);
+        setError(null);
+        const err = await onSave(form);
+        if (err) setError(err);
+        setSaving(false);
+    };
+
+    const chipStyle = (checked, isClaimed) => ({
+        display: 'inline-flex', alignItems: 'center', gap: '3px',
+        fontSize: '0.65rem', padding: '2px 7px', borderRadius: '999px',
+        cursor: isClaimed ? 'not-allowed' : 'pointer', userSelect: 'none',
+        background: isClaimed ? '#f1f5f9' : checked ? 'rgba(4,125,96,0.1)' : '#fff',
+        border: `1px solid ${isClaimed ? '#e2e8f0' : checked ? 'rgba(4,125,96,0.35)' : '#e2e8f0'}`,
+        color: isClaimed ? '#cbd5e1' : checked ? '#047d60' : '#64748b',
+        opacity: isClaimed ? 0.5 : 1, transition: 'all 0.12s',
+    });
+
+    const chipBox = { display: 'flex', flexWrap: 'wrap', gap: '4px', padding: '7px', border: '1px solid #e2e8f0', borderRadius: '7px', background: '#f8fafc', minHeight: '38px', alignItems: 'flex-start' };
+
+    return (
+        <div style={{ borderTop: '2px solid #047d60', background: 'rgba(4,125,96,0.025)', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '13px' }}>
+            {/* Row 1: voltage + status */}
+            <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '16px', alignItems: 'start' }}>
+                <div>
+                    <div style={{ ...inputLabelStyle, marginBottom: '5px' }}>Voltage Level</div>
+                    <select
+                        value={form.target_voltage || ''}
+                        onChange={e => handleVoltageChange(e.target.value)}
+                        disabled={isEditing}
+                        style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.78rem', fontFamily: 'monospace', background: isEditing ? '#f8fafc' : '#fff', color: '#1e293b', cursor: isEditing ? 'not-allowed' : 'pointer', outline: 'none' }}
+                    >
+                        {availableVoltages.length === 0 && <option value="">No voltages available</option>}
+                        {availableVoltages.map(v => <option key={v} value={v}>{v}kV</option>)}
+                    </select>
+                </div>
+                <div>
+                    <div style={{ ...inputLabelStyle, marginBottom: '5px' }}>Status</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '33px' }}>
+                        <div onClick={() => setForm(f => ({ ...f, is_active: !f.is_active }))}
+                            style={{ width: '40px', height: '20px', background: form.is_active !== false ? 'rgba(4,125,96,0.4)' : '#e2e8f0', borderRadius: '20px', padding: '2px', cursor: 'pointer', position: 'relative', border: `1px solid ${form.is_active !== false ? 'rgba(4,125,96,0.5)' : '#cbd5e1'}`, transition: 'all 0.3s' }}>
+                            <motion.div animate={{ x: form.is_active !== false ? 20 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                style={{ width: '14px', height: '14px', background: '#fff', borderRadius: '50%', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }} />
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: form.is_active !== false ? '#047d60' : '#94a3b8', fontWeight: 600 }}>
+                            {form.is_active !== false ? 'Active' : 'Off'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Row 2: asset selectors */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                <div>
+                    <div style={{ ...inputLabelStyle, marginBottom: '5px' }}>Trip Load Transformers</div>
+                    <div style={chipBox}>
+                        {filteredLTs.length === 0 && <span style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>None for {targetV}kV</span>}
+                        {filteredLTs.map(lt => {
+                            const checked = (form.load_transformers || []).includes(lt.id);
+                            const OWNER = loadSheddingRelays?.find(r => r.id !== data?.id && (r.load_transformers || []).includes(lt.id));
+                            const isClaimed = !!OWNER;
+                            return (
+                                <label key={lt.id} style={chipStyle(checked, isClaimed)}>
+                                    <input type="checkbox" disabled={isClaimed} checked={checked} onChange={e => toggleLT(lt.id, e.target.checked)} style={{ display: 'none' }} />
+                                    <span className="mono">T{lt.transformer_no}{isClaimed ? ` (${OWNER.relay_name || 'other'})` : ''}</span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                </div>
+                <div>
+                    <div style={{ ...inputLabelStyle, marginBottom: '5px' }}>Trip Auto Transformers</div>
+                    <div style={chipBox}>
+                        {filteredATs.length === 0 && <span style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>None for {targetV}kV</span>}
+                        {filteredATs.map(at => {
+                            const checked = (form.auto_transformers || []).includes(at.id);
+                            const OWNER = loadSheddingRelays?.find(r => r.id !== data?.id && (r.auto_transformers || []).includes(at.id));
+                            const isClaimed = !!OWNER;
+                            return (
+                                <label key={at.id} style={chipStyle(checked, isClaimed)}>
+                                    <input type="checkbox" disabled={isClaimed} checked={checked} onChange={e => toggleAT(at.id, e.target.checked)} style={{ display: 'none' }} />
+                                    <span className="mono">T{at.transformer_no}{isClaimed ? ` (${OWNER.relay_name || 'other'})` : ''}</span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                </div>
+                <div>
+                    <div style={{ ...inputLabelStyle, marginBottom: '5px' }}>Trip Incoming Branches</div>
+                    <div style={chipBox}>
+                        {filteredIBs.length === 0 && <span style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>None for {targetV}kV</span>}
+                        {filteredIBs.map(ib => {
+                            const checked = (form.incoming_branches || []).some(b => (typeof b === 'object' ? b.id : b) === ib.id);
+                            const OWNER = loadSheddingRelays?.find(r => r.id !== data?.id && (r.incoming_branches || []).some(b => (typeof b === 'object' ? b.id : b) === ib.id));
+                            const isClaimed = !!OWNER;
+                            return (
+                                <label key={ib.id} style={chipStyle(checked, isClaimed)}>
+                                    <input type="checkbox" disabled={isClaimed} checked={checked} onChange={e => toggleIB(ib.id, e.target.checked)} style={{ display: 'none' }} />
+                                    <span className="mono">{ib.to_substation} {ib.ckt_id}</span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+                <div style={{ ...inputLabelStyle, marginBottom: '5px' }}>Notes</div>
+                <textarea value={form.notes || ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any details..." rows={2}
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '0.74rem', resize: 'vertical', fontFamily: "'Poppins', sans-serif", color: '#475569', background: '#fff', boxSizing: 'border-box', outline: 'none' }} />
+            </div>
+
+            {/* Error */}
+            {error && (
+                <div style={{ padding: '8px 12px', borderRadius: '6px', background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                    <AlertTriangle size={14} color="#ef4444" style={{ flexShrink: 0, marginTop: '1px' }} />
+                    <span style={{ fontSize: '0.72rem', color: '#dc2626', lineHeight: 1.5 }}>{error}</span>
+                </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button type="button" onClick={onCancel}
+                    style={{ padding: '6px 16px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer', fontFamily: "'Poppins', sans-serif" }}>
+                    Cancel
+                </button>
+                <button type="button" onClick={handleSave} disabled={saving}
+                    style={{ padding: '6px 18px', borderRadius: '6px', border: 'none', background: '#047d60', color: '#fff', fontSize: '0.74rem', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: saving ? 0.7 : 1, fontFamily: "'Poppins', sans-serif" }}>
+                    {saving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />}
+                    {saving ? 'Saving…' : (isEditing ? 'Save Changes' : 'Add Relay')}
                 </button>
             </div>
         </div>
@@ -891,6 +1059,8 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
     const [inlineATForm, setInlineATForm] = useState({});
     const [isAddingBranch, setIsAddingBranch] = useState(false);
     const [inlineBranchForm, setInlineBranchForm] = useState({});
+    // null = closed, 'new' = adding, relay.id = editing that relay
+    const [editingLSRId, setEditingLSRId] = useState(null);
 
     const handleInlineSave = async (type, formData) => {
         if (!substation?.substation_id) return;
@@ -929,6 +1099,40 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
             console.error('Failed to save asset:', err);
         }
         setAssetLoading(false);
+    };
+
+    const handleLSRSave = async (formData) => {
+        if (!substation?.substation_id) return 'No substation selected.';
+        // Voltage conflict check
+        if (typeof formData.target_voltage === 'number') {
+            const conflict = loadSheddingRelays.find(r => {
+                if (formData.id && r.id === formData.id) return false;
+                return r.relay_name === `${formData.target_voltage}kV System`;
+            });
+            if (conflict) return `A relay for ${formData.target_voltage}kV already exists ('${conflict.relay_name}'). Edit the existing relay instead.`;
+        }
+        try {
+            const payload = {
+                ...formData,
+                substation: substation.substation_id,
+                load_transformers: (formData.load_transformers || []).map(t => typeof t === 'object' ? t.id : t),
+                auto_transformers: (formData.auto_transformers || []).map(t => typeof t === 'object' ? t.id : t),
+                incoming_branches: (formData.incoming_branches || []).map(b => typeof b === 'object' ? b.id : b),
+            };
+            if (formData.id) {
+                await api.patch(`/load-shedding-relays/${formData.id}/`, payload);
+            } else {
+                await api.post('/load-shedding-relays/', payload);
+            }
+            setEditingLSRId(null);
+            await fetchAssets();
+            if (onSubstationRefresh) await onSubstationRefresh(substation.substation_id);
+            return null;
+        } catch (err) {
+            return err.response?.data
+                ? Object.entries(err.response.data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' | ')
+                : 'Failed to save relay.';
+        }
     };
 
     // Form States for Modal
@@ -1318,16 +1522,17 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                         </button>
                     </div>
 
-                    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-                        {/* Sidebar - Navigation Shortcuts */}
-                        <div style={{
-                            width: '240px',
-                            background: '#f8fafc',
-                            borderRight: '1px solid #e2e8f0',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            padding: '1rem'
-                        }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+                            {/* Sidebar - Navigation Shortcuts */}
+                            <div style={{
+                                width: '240px',
+                                background: '#f8fafc',
+                                borderRight: '1px solid #e2e8f0',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                padding: '1rem'
+                            }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 {[
                                     { id: 'details', label: 'Details & Location', icon: MapPin },
@@ -1385,67 +1590,96 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
                         {/* Content Area - Single Page Form */}
                         <div style={{ flex: 1, padding: '2rem', overflowY: 'auto', background: '#fff' }} className="custom-scrollbar">
-                            <form onSubmit={(e) => {
+                            <form id="substation-form" onSubmit={(e) => {
                                 e.preventDefault();
                                 const { substation_id, sld, sld_file, transformers, incoming_bays, created_at, updated_at, state, region, ...editableData } = formData;
                                 onSave(editableData);
-                            }} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', height: '100%' }}>
+                            }} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
                                 {/* Section: Details & Location */}
                                 <div id="details">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1rem' }}>
-                                        <MapPin size={18} color="#047d60" />
-                                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#1e293b', fontFamily: "'Poppins', sans-serif" }}>Details & Location</h3>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
+                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <MapPin size={15} color="#047d60" />
+                                        </div>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Details & Location</h3>
+                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Substation identity and coordinates</div>
+                                        </div>
                                     </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1.5rem' }}>
-                                        <div style={{ gridColumn: 'span 4' }}>
-                                            <label style={inputLabelStyle}>Substation Name</label>
-                                            <input name="name" className="input-field" value={formData.name} onChange={handleChange} required placeholder="e.g. Pencawang Masuk Utama ..." />
+                                    <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '13px' }}>
+                                        {/* Row 1: Name + Mnemonic */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '12px' }}>
+                                            <div>
+                                                <label style={inputLabelStyle}>Substation Name</label>
+                                                <input name="name" className="input-field" value={formData.name} onChange={handleChange} required placeholder="e.g. Pencawang Masuk Utama ..." />
+                                            </div>
+                                            <div>
+                                                <label style={inputLabelStyle}>Mnemonic (ID)</label>
+                                                <input name="mnemonic" className="input-field mono" value={formData.mnemonic} onChange={handleChange} required placeholder="ABCD" />
+                                            </div>
                                         </div>
-                                        <div style={{ gridColumn: 'span 2' }}>
-                                            <label style={inputLabelStyle}>Mnemonic (ID)</label>
-                                            <input name="mnemonic" className="input-field mono" value={formData.mnemonic} onChange={handleChange} required placeholder="ABCD" />
+                                        {/* Row 2: Voltage + Grid + Ownership */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                                            <div>
+                                                <label style={inputLabelStyle}>Nominal Voltage</label>
+                                                <select name="voltage" className="input-field" value={formData.voltage || ''} onChange={handleChange} required>
+                                                    <option value="">-- Select --</option>
+                                                    {VOLTAGES.map(v => <option key={v} value={v}>{v} kV</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style={inputLabelStyle}>Grid Unit</label>
+                                                <select name="grid" className="input-field" value={formData.grid || ''} onChange={handleChange} required>
+                                                    <option value="">-- Select --</option>
+                                                    {GRIDS.map(g => <option key={g} value={g}>{g}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style={inputLabelStyle}>Ownership</label>
+                                                <select name="ownership" className="input-field" value={formData.ownership || ''} onChange={handleChange}>
+                                                    <option value="TNB">TNB</option>
+                                                    <option value="DC">Data Centre (DC)</option>
+                                                    <option value="LSS">Large Scale Solar (LSS)</option>
+                                                    <option value="IPP">Independent Power Producer (IPP)</option>
+                                                    <option value="LPC">Large Power Consumer (LPC)</option>
+                                                    <option value="Tie-Line">Tie-Line</option>
+                                                </select>
+                                            </div>
                                         </div>
-
-                                        <div style={{ gridColumn: 'span 2' }}>
-                                            <label style={inputLabelStyle}>Nominal Voltage</label>
-                                            <select name="voltage" className="input-field" value={formData.voltage || ''} onChange={handleChange} required>
-                                                <option value="">-- Select --</option>
-                                                {VOLTAGES.map(v => <option key={v} value={v}>{v} kV</option>)}
-                                            </select>
+                                        {/* Row 3: Latitude + Longitude + Commission Date */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 160px', gap: '12px' }}>
+                                            <div>
+                                                <label style={inputLabelStyle}>Latitude</label>
+                                                <input name="latitude" type="number" step="any" className="input-field mono" value={formData.latitude || ''} onChange={handleChange} placeholder="e.g. 3.1390" />
+                                            </div>
+                                            <div>
+                                                <label style={inputLabelStyle}>Longitude</label>
+                                                <input name="longitude" type="number" step="any" className="input-field mono" value={formData.longitude || ''} onChange={handleChange} placeholder="e.g. 101.6869" />
+                                            </div>
+                                            <div>
+                                                <label style={inputLabelStyle}>Commission Date</label>
+                                                <input name="commission_date" type="date" className="input-field mono" value={formData.commission_date || ''} onChange={handleChange} style={{ colorScheme: 'dark' }} />
+                                            </div>
                                         </div>
-                                        <div style={{ gridColumn: 'span 2' }}>
-                                            <label style={inputLabelStyle}>Grid Unit</label>
-                                            <select name="grid" className="input-field" value={formData.grid || ''} onChange={handleChange} required>
-                                                <option value="">-- Select --</option>
-                                                {GRIDS.map(g => <option key={g} value={g}>{g}</option>)}
-                                            </select>
-                                        </div>
-                                        <div style={{ gridColumn: 'span 2' }}>
-                                            <label style={inputLabelStyle}>Ownership</label>
-                                            <select name="ownership" className="input-field" value={formData.ownership || ''} onChange={handleChange}>
-                                                <option value="TNB">TNB</option>
-                                                <option value="DC">Data Centre (DC)</option>
-                                                <option value="LSS">Large Scale Solar (LSS)</option>
-                                                <option value="IPP">Independent Power Producer (IPP)</option>
-                                                <option value="LPC">Large Power Consumer (LPC)</option>
-                                                <option value="Tie-Line">Tie-Line</option>
-                                            </select>
-                                        </div>
-
-                                        <div style={{ gridColumn: 'span 3' }}>
-                                            <label style={inputLabelStyle}>Latitude</label>
-                                            <input name="latitude" type="number" step="any" className="input-field mono" value={formData.latitude || ''} onChange={handleChange} placeholder="e.g. 3.1390" />
-                                        </div>
-                                        <div style={{ gridColumn: 'span 3' }}>
-                                            <label style={inputLabelStyle}>Longitude</label>
-                                            <input name="longitude" type="number" step="any" className="input-field mono" value={formData.longitude || ''} onChange={handleChange} placeholder="e.g. 101.6869" />
-                                        </div>
-
-                                        <div style={{ gridColumn: 'span 2' }}>
-                                            <label style={inputLabelStyle}>Commission Date</label>
-                                            <input name="commission_date" type="date" className="input-field mono" value={formData.commission_date || ''} onChange={handleChange} style={{ colorScheme: 'dark' }} />
-                                        </div>
+                                        {/* Row 4: SLD File */}
+                                        {substation?.substation_id && (
+                                            <div>
+                                                <label style={inputLabelStyle}>SLD File</label>
+                                                <input type="file" id="sld-upload-input" hidden accept=".pdf,.dxf,.svg,image/*" onChange={(e) => e.target.files[0] && onSLDUpload?.(substation.substation_id, e.target.files[0])} />
+                                                <label htmlFor="sld-upload-input" style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: '7px',
+                                                    padding: '6px 14px', borderRadius: '6px',
+                                                    border: '1px dashed #cbd5e1', background: '#f8fafc',
+                                                    fontSize: '0.74rem', fontWeight: 600, color: '#64748b',
+                                                    cursor: 'pointer', transition: 'all 0.15s',
+                                                    fontFamily: "'Poppins', sans-serif",
+                                                }}>
+                                                    {substation.sld_file ? <FileText size={14} /> : <Upload size={14} />}
+                                                    {substation.sld_file ? 'Update SLD File' : 'Upload SLD File'}
+                                                </label>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -1698,8 +1932,8 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                 letterSpacing: '0.08em', fontFamily: "'Poppins', sans-serif"
                                             }}>
                                                 <div>To Substation</div>
-                                                <div style={{ textAlign: 'center' }}>Ckt ID</div>
-                                                <div style={{ textAlign: 'center' }}>Breaker #</div>
+                                                <div style={{ textAlign: 'center' }}>CIRCUIT NO</div>
+                                                <div style={{ textAlign: 'center' }}>BREAKER NO</div>
                                                 <div style={{ textAlign: 'center' }}>Action</div>
                                             </div>
                                             {incomingBranches.map((asset) => (
@@ -1717,7 +1951,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                         <GitBranch size={15} color="#cbd5e1" />
                                                     </div>
                                                     <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>No incoming branches</div>
-                                                    <div style={{ fontSize: '0.68rem', color: '#cbd5e1', marginTop: '2px' }}>Click "Add line" to register one</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#cbd5e1', marginTop: '2px' }}>Click "Add bay" to register one</div>
                                                 </div>
                                             )}
                                             {isAddingBranch && (
@@ -1735,7 +1969,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                     style={{ width: '100%', padding: '9px 16px', border: 'none', borderTop: '1px dashed #e2e8f0', background: '#fafafa', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.74rem', fontWeight: 600, fontFamily: "'Poppins', sans-serif", transition: 'all 0.15s' }}
                                                     onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#047d60'; }}
                                                     onMouseLeave={e => { e.currentTarget.style.background = '#fafafa'; e.currentTarget.style.color = '#94a3b8'; }}>
-                                                    <Plus size={13} /> Add line
+                                                    <Plus size={13} /> Add bay
                                                 </button>
                                             )}
                                         </div>
@@ -1757,7 +1991,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                         </div>
                                         <div>
                                             <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Load Shedding Relays</h3>
-                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Voltage-grouped relay assignments</div>
+                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Breaker trip wiring assignments</div>
                                         </div>
                                         <span style={{
                                             fontSize: '0.62rem', fontWeight: 700,
@@ -1766,7 +2000,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                             padding: '2px 8px', borderRadius: '20px',
                                             border: `1px solid ${loadSheddingRelays.length > 0 ? 'rgba(4,125,96,0.2)' : '#e2e8f0'}`
                                         }}>
-                                            {loadSheddingRelays.length} relay{loadSheddingRelays.length !== 1 ? 's' : ''}
+                                            {loadSheddingRelays.length} assignment{loadSheddingRelays.length !== 1 ? 's' : ''}
                                         </span>
                                         <button type="button" onClick={fetchAssets} disabled={assetLoading}
                                             style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #e2e8f0', color: '#94a3b8', cursor: 'pointer', padding: '5px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
@@ -1775,6 +2009,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                     </div>
                                     {canManageAssets ? (
                                         <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                            {/* Table header */}
                                             <div style={{
                                                 display: 'grid', gridTemplateColumns: LSR_COLS,
                                                 gap: '6px', padding: '8px 16px',
@@ -1784,23 +2019,40 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                 color: '#047d60', textTransform: 'uppercase',
                                                 letterSpacing: '0.08em', fontFamily: "'Poppins', sans-serif"
                                             }}>
-                                                <div>Relay Name</div>
-                                                <div style={{ textAlign: 'center' }}>Voltage</div>
-                                                <div style={{ textAlign: 'center' }}>LTs</div>
-                                                <div style={{ textAlign: 'center' }}>ATs</div>
+                                                <div>Voltage</div>
+                                                <div style={{ textAlign: 'center' }}>LOAD TX</div>
+                                                <div style={{ textAlign: 'center' }}>AUTO TX</div>
                                                 <div style={{ textAlign: 'center' }}>Branches</div>
                                                 <div style={{ textAlign: 'center' }}>Status</div>
                                                 <div style={{ textAlign: 'center' }}>Action</div>
                                             </div>
+
+                                            {/* Existing relay rows — click to expand inline form */}
                                             {loadSheddingRelays.map((asset) => (
-                                                <LSRRow
-                                                    key={asset.id}
-                                                    relay={asset}
-                                                    onEdit={() => { setEditingAsset({ type: 'lsr', data: asset }); setAssetForm(asset); }}
-                                                    onDelete={() => handleAssetDelete('lsr', asset.id)}
-                                                />
+                                                <React.Fragment key={asset.id}>
+                                                    <LSRRow
+                                                        relay={asset}
+                                                        isSelected={editingLSRId === asset.id}
+                                                        onEdit={() => setEditingLSRId(editingLSRId === asset.id ? null : asset.id)}
+                                                        onDelete={() => handleAssetDelete('lsr', asset.id)}
+                                                    />
+                                                    {editingLSRId === asset.id && (
+                                                        <LSRInlineForm
+                                                            data={asset}
+                                                            substation={substation}
+                                                            loadTransformers={loadTransformers}
+                                                            autoTransformers={autoTransformers}
+                                                            incomingBranches={incomingBranches}
+                                                            loadSheddingRelays={loadSheddingRelays}
+                                                            onSave={handleLSRSave}
+                                                            onCancel={() => setEditingLSRId(null)}
+                                                        />
+                                                    )}
+                                                </React.Fragment>
                                             ))}
-                                            {loadSheddingRelays.length === 0 && (
+
+                                            {/* Empty state */}
+                                            {loadSheddingRelays.length === 0 && editingLSRId !== 'new' && (
                                                 <div style={{ padding: '2.25rem 1rem', textAlign: 'center', background: '#fafafa' }}>
                                                     <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.6rem' }}>
                                                         <ShieldAlert size={15} color="#cbd5e1" />
@@ -1809,13 +2061,31 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                     <div style={{ fontSize: '0.68rem', color: '#cbd5e1', marginTop: '2px' }}>Click "Add relay" to configure one</div>
                                                 </div>
                                             )}
-                                            <button type="button"
-                                                onClick={() => { setEditingAsset({ type: 'lsr', data: null }); setAssetForm({}); }}
-                                                style={{ width: '100%', padding: '9px 16px', border: 'none', borderTop: '1px dashed #e2e8f0', background: '#fafafa', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.74rem', fontWeight: 600, fontFamily: "'Poppins', sans-serif", transition: 'all 0.15s' }}
-                                                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#047d60'; }}
-                                                onMouseLeave={e => { e.currentTarget.style.background = '#fafafa'; e.currentTarget.style.color = '#94a3b8'; }}>
-                                                <Plus size={13} /> Add relay
-                                            </button>
+
+                                            {/* New relay inline form */}
+                                            {editingLSRId === 'new' && (
+                                                <LSRInlineForm
+                                                    data={null}
+                                                    substation={substation}
+                                                    loadTransformers={loadTransformers}
+                                                    autoTransformers={autoTransformers}
+                                                    incomingBranches={incomingBranches}
+                                                    loadSheddingRelays={loadSheddingRelays}
+                                                    onSave={handleLSRSave}
+                                                    onCancel={() => setEditingLSRId(null)}
+                                                />
+                                            )}
+
+                                            {/* Add relay button — hidden while adding */}
+                                            {editingLSRId !== 'new' && (
+                                                <button type="button"
+                                                    onClick={() => setEditingLSRId('new')}
+                                                    style={{ width: '100%', padding: '9px 16px', border: 'none', borderTop: '1px dashed #e2e8f0', background: '#fafafa', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.74rem', fontWeight: 600, fontFamily: "'Poppins', sans-serif", transition: 'all 0.15s' }}
+                                                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#047d60'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = '#fafafa'; e.currentTarget.style.color = '#94a3b8'; }}>
+                                                    <Plus size={13} /> Add relay
+                                                </button>
+                                            )}
                                         </div>
                                     ) : (
                                         <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #e2e8f0' }}>
@@ -1824,35 +2094,22 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                     )}
                                 </div>
 
-                                {/* Save Button Section */}
-                                <div style={{ marginTop: 'auto', paddingTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem', borderTop: '1px solid #e2e8f0' }}>
-                                    {substation?.substation_id && (
-                                        <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-                                            <input type="file" id="sld-upload-input" hidden accept=".pdf,.dxf,.svg,image/*" onChange={(e) => e.target.files[0] && onSLDUpload?.(substation.substation_id, e.target.files[0])} />
-                                            <label htmlFor="sld-upload-input" style={{
-                                                padding: '0.75rem 1.25rem', border: '1px dashed #cbd5e1', borderRadius: '0.5rem',
-                                                display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer',
-                                                fontSize: '0.85rem', color: '#64748b', background: '#f8fafc',
-                                                transition: 'all 0.2s'
-                                            }}>
-                                                {substation.sld_file ? <FileText size={16} /> : <Upload size={16} />}
-                                                {substation.sld_file ? 'Update SLD File' : 'Upload SLD File'}
-                                            </label>
-                                        </div>
-                                    )}
-                                    <button type="button" onClick={onCancel} style={{
-                                        padding: '0.75rem 1.5rem', borderRadius: '0.5rem', fontSize: '0.9rem',
-                                        background: 'transparent', border: '1px solid #e2e8f0', color: '#64748b',
-                                        fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s'
-                                    }}>
-                                        Cancel
-                                    </button>
-                                    <button type="submit" disabled={loading} className="btn-primary" style={{ padding: '0.75rem 2rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px', opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
-                                        {loading ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
-                                        {loading ? 'Saving...' : (substation?.substation_id ? 'Save Metadata' : 'Create Substation')}
-                                    </button>
-                                </div>
                             </form>
+                        </div>
+                        {/* Footer — outside scroll area, always pinned to bottom */}
+                        </div>
+                        <div style={{ flexShrink: 0, padding: '0.75rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid #e2e8f0', background: '#fff' }}>
+                            <button type="button" onClick={onCancel} style={{
+                                padding: '0.5rem 1rem', borderRadius: '0.5rem', fontSize: '0.8rem',
+                                background: 'transparent', border: '1px solid #e2e8f0', color: '#64748b',
+                                fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s'
+                            }}>
+                                Cancel
+                            </button>
+                            <button type="submit" form="substation-form" disabled={loading} className="btn-primary" style={{ padding: '0.5rem 1.25rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px', opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+                                {loading ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+                                {loading ? 'Saving...' : (substation?.substation_id ? 'Save Metadata' : 'Create Substation')}
+                            </button>
                         </div>
                     </div>
                 </motion.div>

@@ -357,6 +357,7 @@ class LoadSheddingRelay(models.Model):
         blank=True,
     )
     relay_name = models.CharField(max_length=100, blank=True, help_text="Optional name to distinguish multiple relays at the same site")
+    target_voltage = models.IntegerField(null=True, blank=True, help_text="Target voltage level in kV for this relay's breaker trip assignments")
     is_active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

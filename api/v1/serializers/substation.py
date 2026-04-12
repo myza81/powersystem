@@ -261,7 +261,7 @@ class LoadSheddingRelaySerializer(serializers.ModelSerializer):
     class Meta:
         model = LoadSheddingRelay
         fields = [
-            'id', 'substation', 'substation_id', 'relay_name', 'load_transformers', 'incoming_branches',
+            'id', 'substation', 'substation_id', 'relay_name', 'target_voltage', 'load_transformers', 'incoming_branches',
             'auto_transformers', 'is_active', 'notes'
         ]
 
