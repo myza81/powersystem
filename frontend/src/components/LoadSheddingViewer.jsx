@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { normalisePocketBay, computeSchemeMetrics } from '../utils/loadSheddingUtils';
 import api from '../api';
 import CompactRegionalMetrics from './CompactRegionalMetrics';
+import { CardLoader } from './Loader';
 
 // ==========================================
 // HELPERS
@@ -419,11 +420,7 @@ const LoadSheddingViewer = () => {
     // RENDER
     // ==========================================
     if (loading) {
-        return (
-            <div style={{ display: 'flex', height: '16rem', alignItems: 'center', justifyContent: 'center' }}>
-                <RefreshCw className="animate-spin" style={{ color: 'var(--accent-cyan)' }} size={32} />
-            </div>
-        );
+        return <CardLoader show={true} message="Loading load shedding schemes..." />;
     }
 
     if (publishedVersions.length === 0) {

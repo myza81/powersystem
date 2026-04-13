@@ -8,6 +8,7 @@ import { FaBolt, FaLayerGroup, FaCircleNodes, FaCodeBranch, FaTableList } from '
 import { normalisePocketBay, computeSchemeMetrics } from '../utils/loadSheddingUtils';
 import SchemeAnalytics from './SchemeAnalytics';
 import api from '../api';
+import { CardLoader } from './Loader';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -552,8 +553,8 @@ const LoadSheddingSchemeReviewer = () => {
 
     if (loading) {
         return (
-            <div style={{ display: 'flex', height: '16rem', alignItems: 'center', justifyContent: 'center', fontFamily: "'Poppins', sans-serif" }}>
-                <RefreshCw className="animate-spin" size={28} style={{ color: '#94a3b8' }} />
+            <div style={{ height: 'calc(100vh - 60px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CardLoader show={true} message="Loading scheme reviewer..." />
             </div>
         );
     }

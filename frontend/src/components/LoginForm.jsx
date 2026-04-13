@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Zap, Eye, EyeOff, User, Ghost, AlertCircle, ChevronRight, Unplug, Activity, Building2, Shield } from 'lucide-react';
+import { InlineLoader } from './Loader';
 
 const LoginForm = ({ onLogin, onAnonymous, error, loading }) => {
     const [username, setUsername] = useState('');
@@ -279,7 +280,7 @@ const LoginForm = ({ onLogin, onAnonymous, error, loading }) => {
                         >
                             {loading ? (
                                 <>
-                                    <span className="login-spinner" />
+                                    <InlineLoader size={16} />
                                     Signing in…
                                 </>
                             ) : (

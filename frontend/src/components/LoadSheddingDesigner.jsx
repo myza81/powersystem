@@ -31,6 +31,7 @@ import { FiAlertCircle, FiEdit2 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { computeSchemeMetrics } from '../utils/loadSheddingUtils';
 import api from '../api';
+import { CardLoader } from './Loader';
 
 // Format Date string helper
 const formatDate = (ds) => {
@@ -100,6 +101,11 @@ const LoadSheddingDesigner = () => {
     const [pocketPreview, setPocketPreview] = useState(null);
     const [fetchingPocket, setFetchingPocket] = useState(false);
     const [showSummaryModal, setShowSummaryModal] = useState(false);
+
+    // --- Workspace Panel State ---
+    const [showLibrary, setShowLibrary] = useState(true);
+    const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
+    const [showProfilePopover, setShowProfilePopover] = useState(false);
 
     // --- Settings Tab State ---
     const [activeGlobalSettingsTab, setActiveGlobalSettingsTab] = useState('ufls'); // 'ufls' | 'uvls' | 'conflict'
@@ -1304,190 +1310,164 @@ const LoadSheddingDesigner = () => {
     const published = versions.filter(v => ['active', 'deactivated'].includes(v.status));
 
     if (loading && view === 'manager') {
-        return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--accent-cyan)' }}><RotateCcw className="animate-spin" size={32} /></div>;
+        return (
+            <div style={{ height: 'calc(100vh - 60px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CardLoader show={true} message="Loading designer..." />
+            </div>
+        );
     }
 
     // ==========================================
     // VIEW: MANAGER
     // ==========================================
-    // ==========================================
     // VIEW: MANAGER
     // ==========================================
     if (view === 'manager') {
         const hasDrafts = drafts.length > 0;
+        const activePublished = published.filter(v => v.status === 'active');
+        const inactivePublished = published.filter(v => v.status !== 'active');
+
+        const DraftStatusBadge = ({ v }) => {
+            const wasUnpublished = !!v.notes && v.notes.startsWith('Unpublished from');
+            if (wasUnpublished) return (
+                <span style={{ fontSize: '0.6rem', fontWeight: 600, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '2px 7px', borderRadius: '999px' }}>
+                    Unpublished
+                </span>
+            );
+            return (
+                <span style={{ fontSize: '0.6rem', fontWeight: 600, background: '#fefce8', border: '1px solid #fde68a', color: '#92400e', padding: '2px 7px', borderRadius: '999px' }}>
+                    Draft
+                </span>
+            );
+        };
+
+        const PublishedStatusBadge = ({ status }) => status === 'active'
+            ? <span style={{ fontSize: '0.6rem', fontWeight: 600, background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '2px 8px', borderRadius: '999px' }}>Active</span>
+            : <span style={{ fontSize: '0.6rem', fontWeight: 600, background: '#f8fafc', border: '1px solid #e2e8f0', color: '#64748b', padding: '2px 8px', borderRadius: '999px' }}>Inactive</span>;
 
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem', height: 'calc(100vh - 8rem)', overflowY: 'auto', padding: '2rem', fontFamily: "'Inter', sans-serif" }}>
+            <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Poppins', sans-serif", background: '#fff' }}>
 
-                {/* Header Area */}
-                <div style={{ textAlign: 'center', marginBottom: '1rem', marginTop: '1rem' }}>
-                    <h2 style={{
-                        fontSize: '2.5rem',
-                        fontWeight: 800,
-                        margin: 0,
-                        background: 'linear-gradient(135deg, #ffffff 0%, #00e5ff 100%)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        letterSpacing: '0.5px'
-                    }}>
-                        Load Shedding Scheme Architect
-                    </h2>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', marginTop: '0.5rem', maxWidth: '600px', margin: '0.5rem auto 0 auto' }}>
-                        Choose how you want to design your load shedding scheme.
-                    </p>
-                </div>
+                {/* ── Header ──────────────────────────────────────────── */}
+                <div style={{ flexShrink: 0, padding: '1.5rem 2rem 0', background: '#fff' }}>
 
-                {/* Main Hero Actions Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '2rem', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-
-                    {/* Action 1: Create New */}
-                    <div
-                        className="glass-card hover-glow"
-                        onClick={handleCreateNew}
-                        style={{
-                            padding: '2.5rem 2rem',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            textAlign: 'center',
-                            cursor: 'pointer',
-                            border: '1px solid rgba(0, 229, 255, 0.3)',
-                            background: 'linear-gradient(180deg, rgba(0, 229, 255, 0.05) 0%, rgba(0,0,0,0.4) 100%)',
-                            transition: 'all 0.3s ease'
-                        }}
-                    >
-                        <div style={{
-                            width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(0, 229, 255, 0.1)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem',
-                            color: 'var(--accent-cyan)', boxShadow: '0 0 20px rgba(0, 229, 255, 0.2)'
-                        }}>
-                            <Plus size={32} />
+                    {/* Title */}
+                    <div style={{ marginBottom: '1.25rem' }}>
+                        <div style={{ fontSize: '0.68rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(30,41,59,0.45)', marginBottom: '0.4rem' }}>
+                            Load Shedding Registry
                         </div>
-                        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 0.5rem 0', color: '#fff' }}>Start from Scratch</h3>
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-                            Begin with a blank canvas. Build a completely new UFLS, UVLS, or EMLS design from the ground up.
-                        </p>
+                        <h1 style={{ margin: 0, fontSize: '2.2rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                            Scheme Designer
+                        </h1>
                     </div>
 
-                    {/* Action 2: Active Drafts */}
-                    <div
-                        className="glass-card"
-                        style={{
-                            padding: '1.5rem',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            border: hasDrafts && drafts.length > 1
-                                ? '1px solid rgba(251, 191, 36, 0.4)'
-                                : '1px solid rgba(255, 171, 0, 0.3)',
-                            background: hasDrafts && drafts.length > 1
-                                ? 'linear-gradient(180deg, rgba(251, 191, 36, 0.07) 0%, rgba(0,0,0,0.4) 100%)'
-                                : 'linear-gradient(180deg, rgba(255, 171, 0, 0.05) 0%, rgba(0,0,0,0.4) 100%)'
-                        }}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: drafts.length > 1 ? '0.75rem' : '1.5rem' }}>
-                            <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(255, 171, 0, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFAB00' }}>
-                                <FaFolderTree size={20} />
+                    {/* Info / action bar */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem 1.25rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+
+                        {/* Stats */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.75rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                <span style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8' }}>Your Drafts</span>
+                                <span style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>{drafts.length}</span>
                             </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#fff' }}>Resume Active Drafts</h3>
-                                    {hasDrafts && (
-                                        <span style={{
-                                            fontSize: '0.65rem', fontWeight: 800,
-                                            background: drafts.length > 1 ? 'rgba(251, 191, 36, 0.2)' : 'rgba(255, 171, 0, 0.15)',
-                                            color: drafts.length > 1 ? '#fbbf24' : '#FFAB00',
-                                            border: `1px solid ${drafts.length > 1 ? 'rgba(251, 191, 36, 0.4)' : 'rgba(255, 171, 0, 0.3)'}`,
-                                            padding: '2px 7px', borderRadius: '999px',
-                                        }}>
-                                            {drafts.length}
-                                        </span>
-                                    )}
-                                </div>
-                                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>Continue working on an existing design.</p>
+                            <div style={{ width: '1px', height: '28px', background: '#e2e8f0' }} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                <span style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8' }}>Published</span>
+                                <span style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>{published.length}</span>
                             </div>
                         </div>
 
-                        {/* Multi-draft conflict banner */}
+                        {/* New Scheme button — pushed to far right */}
+                        <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                            <button
+                                onClick={handleCreateNew}
+                                style={{
+                                    height: '36px', padding: '0 16px',
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    fontSize: '0.8rem', fontFamily: "'Poppins', sans-serif", fontWeight: 600,
+                                    color: '#0f172a', background: '#fff',
+                                    border: '1px solid #e2e8f0', borderRadius: '8px',
+                                    cursor: 'pointer', transition: 'all 0.15s ease', whiteSpace: 'nowrap',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                            >
+                                <Plus size={15} /> New Scheme
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── Two-column body ──────────────────────────────────── */}
+                <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '1.25rem', padding: '0 2rem 2rem', overflow: 'hidden' }}>
+
+                    {/* Left: Your Drafts */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflow: 'hidden', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.25rem', background: '#fff' }}>
+
+                        {/* Section label */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                            <FaFolderTree size={13} style={{ color: '#64748b' }} />
+                            <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8' }}>Your Drafts</span>
+                            {hasDrafts && (
+                                <span style={{ fontSize: '0.6rem', fontWeight: 700, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', padding: '1px 7px', borderRadius: '999px' }}>
+                                    {drafts.length}
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Multi-draft warning */}
                         {drafts.length > 1 && (
-                            <div className="draft-conflict-banner" style={{ marginBottom: '1rem' }}>
-                                <TriangleAlert size={13} style={{ flexShrink: 0, color: '#fbbf24' }} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0.6rem 0.85rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', fontSize: '0.72rem', color: '#92400e', flexShrink: 0 }}>
+                                <TriangleAlert size={13} style={{ flexShrink: 0, color: '#d97706' }} />
                                 <span>Multiple drafts detected — select which one to continue.</span>
                             </div>
                         )}
 
                         {hasDrafts ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1, overflowY: 'auto', maxHeight: '320px', paddingRight: '0.5rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', overflowY: 'auto', flex: 1, alignContent: 'start' }}>
                                 {drafts.map(v => {
                                     const stageCount = v.stages?.length ?? '—';
-                                    const wasUnpublished = !!v.notes && v.notes.startsWith('Unpublished from');
-                                    const isMulti = drafts.length > 1;
                                     return (
-                                        <div key={v.id} style={{
-                                            padding: isMulti ? '1.1rem' : '1rem',
-                                            background: isMulti ? 'rgba(251, 191, 36, 0.04)' : 'rgba(0,0,0,0.3)',
-                                            borderRadius: '8px',
-                                            border: isMulti
-                                                ? '1px solid rgba(251, 191, 36, 0.18)'
-                                                : '1px solid rgba(255,255,255,0.05)',
-                                            display: 'flex', flexDirection: 'column', gap: '0.75rem',
-                                        }}>
-                                            {/* Draft Meta */}
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
-                                                <div style={{ minWidth: 0 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '3px' }}>
-                                                        <span style={{ fontSize: '0.7rem', color: '#FFAB00', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-                                                            {v.scheme_type} {v.review_year} v{v.version}
+                                        <div key={v.id} style={{ padding: '1rem', background: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '0.85rem', transition: 'border-color 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+                                            onMouseEnter={e => e.currentTarget.style.borderColor = '#cbd5e1'}
+                                            onMouseLeave={e => e.currentTarget.style.borderColor = '#e2e8f0'}
+                                        >
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '6px' }}>
+                                                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                        {v.scheme_type} {v.review_year} v{v.version}
+                                                    </span>
+                                                    <DraftStatusBadge v={v} />
+                                                </div>
+                                                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#0f172a', marginBottom: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {v.notes || 'Unnamed Document'}
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                                    <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>
+                                                        {stageCount} stage{stageCount !== 1 ? 's' : ''}
+                                                    </span>
+                                                    {v.updated_at && (
+                                                        <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>
+                                                            Edited {new Date(v.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                                         </span>
-                                                        {wasUnpublished && (
-                                                            <span style={{
-                                                                fontSize: '0.6rem', fontWeight: 700,
-                                                                background: 'rgba(239, 68, 68, 0.1)',
-                                                                border: '1px solid rgba(239, 68, 68, 0.25)',
-                                                                color: '#f87171', padding: '1px 6px', borderRadius: '4px',
-                                                            }}>
-                                                                Unpublished
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        {v.notes || 'Unnamed Document'}
-                                                    </div>
-                                                    {isMulti && (
-                                                        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '4px', flexWrap: 'wrap' }}>
-                                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
-                                                                {stageCount} stage{stageCount !== 1 ? 's' : ''}
-                                                            </span>
-                                                            {v.created_at && (
-                                                                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
-                                                                    Created {new Date(v.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                                </span>
-                                                            )}
-                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
-
-                                            {/* Actions */}
-                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <div style={{ display: 'flex', gap: '0.4rem' }}>
                                                 <button
-                                                    className="btn-secondary"
-                                                    style={{
-                                                        flex: 1, fontSize: '0.75rem', padding: '0.45rem',
-                                                        justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '5px',
-                                                        background: isMulti ? 'rgba(255, 171, 0, 0.1)' : 'rgba(255,255,255,0.05)',
-                                                        color: isMulti ? '#FFAB00' : '#fff',
-                                                        border: isMulti ? '1px solid rgba(255, 171, 0, 0.25)' : undefined,
-                                                        fontWeight: isMulti ? 600 : 400,
-                                                    }}
+                                                    style={{ flex: 1, height: '32px', fontSize: '0.75rem', fontFamily: "'Poppins', sans-serif", fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', transition: 'background 0.15s' }}
                                                     onClick={() => handleResumeDraft(v.id)}
+                                                    onMouseEnter={e => e.currentTarget.style.background = '#1e293b'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = '#0f172a'}
                                                 >
                                                     <FolderOpen size={12} /> Open
                                                 </button>
                                                 <button
-                                                    className="btn-secondary"
-                                                    style={{ padding: '0.45rem 0.65rem', background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center' }}
+                                                    style={{ height: '32px', padding: '0 10px', background: '#fff', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', display: 'flex', alignItems: 'center', cursor: 'pointer', transition: 'all 0.15s' }}
                                                     onClick={() => handleDeleteDraft(v.id)}
                                                     title="Delete this draft"
+                                                    onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; }}
                                                 >
                                                     <Trash2 size={12} />
                                                 </button>
@@ -1497,55 +1477,84 @@ const LoadSheddingDesigner = () => {
                                 })}
                             </div>
                         ) : (
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                                <div style={{ fontSize: '0.85rem' }}>No active drafts.</div>
-                                <div style={{ fontSize: '0.75rem', marginTop: '4px', opacity: 0.7 }}>Start from scratch or clone a published version.</div>
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem', textAlign: 'center' }}>
+                                <FaFolderTree size={32} style={{ color: '#e2e8f0', marginBottom: '0.85rem' }} />
+                                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#94a3b8' }}>No active drafts</div>
+                                <div style={{ fontSize: '0.72rem', color: '#cbd5e1', marginTop: '4px', lineHeight: 1.5 }}>Create a new scheme or clone a published version to get started.</div>
                             </div>
                         )}
                     </div>
 
+                    {/* Right: Clone from Published */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflow: 'hidden', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.25rem', background: '#fff' }}>
 
-                    {/* Action 3: Published Versions */}
-                    <div
-                        className="glass-card"
-                        style={{
-                            padding: '1.5rem',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, rgba(0,0,0,0.4) 100%)'
-                        }}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                            <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: 'rgba(255, 255, 255, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-blue)' }}>
-                                <FaShieldHalved size={20} />
-                            </div>
-                            <div>
-                                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: '#fff' }}>Clone Published Scheme</h3>
-                                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>Use an active system as your baseline.</p>
-                            </div>
+                        {/* Section label */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                            <FaShieldHalved size={13} style={{ color: '#64748b' }} />
+                            <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8' }}>Clone from Published</span>
                         </div>
 
                         {published.length > 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1, overflowY: 'auto', maxHeight: '300px', paddingRight: '0.5rem' }}>
-                                {published.map(v => (
-                                    <div key={v.id} style={{ padding: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '0.75rem', opacity: v.status === 'active' ? 1 : 0.6 }}>
-                                        <div>
-                                            <div style={{ fontSize: '0.7rem', color: v.status === 'active' ? 'var(--accent-cyan)' : 'var(--text-secondary)', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '2px' }}>
-                                                {v.status} • {v.scheme_type} {v.review_year} v{v.version}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0', overflowY: 'auto', flex: 1 }}>
+                                {activePublished.length > 0 && (
+                                    <>
+                                        <div style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#166534', marginBottom: '6px', flexShrink: 0 }}>Active</div>
+                                        {activePublished.map(v => (
+                                            <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '3px' }}>
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>{v.scheme_type} {v.review_year} v{v.version}</span>
+                                                        <PublishedStatusBadge status={v.status} />
+                                                    </div>
+                                                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.notes || 'System Baseline'}</div>
+                                                    <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>{v.stages?.length ?? '—'} stages · {formatDate(v.published_at)}</div>
+                                                </div>
+                                                <button
+                                                    style={{ height: '30px', padding: '0 12px', fontSize: '0.72rem', fontFamily: "'Poppins', sans-serif", fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px', background: '#fff', color: '#334155', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap', transition: 'all 0.15s' }}
+                                                    onClick={() => handleCloneAndEdit(v.id)}
+                                                    onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                                                >
+                                                    <Copy size={11} /> Clone
+                                                </button>
                                             </div>
-                                            <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>{v.notes || 'System Baseline'}</div>
-                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Published: {formatDate(v.published_at)}</div>
-                                        </div>
-                                        <button className="btn-secondary" style={{ width: '100%', fontSize: '0.75rem', padding: '0.4rem', justifyContent: 'center', background: 'rgba(255,255,255,0.05)', color: '#fff' }} onClick={() => handleCloneAndEdit(v.id)}>
-                                            <Copy size={12} style={{ marginRight: '4px' }} /> Clone to Draft
-                                        </button>
-                                    </div>
-                                ))}
+                                        ))}
+                                    </>
+                                )}
+                                {activePublished.length > 0 && inactivePublished.length > 0 && (
+                                    <div style={{ height: '1px', background: '#f1f5f9', margin: '10px 0', flexShrink: 0 }} />
+                                )}
+                                {inactivePublished.length > 0 && (
+                                    <>
+                                        <div style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', marginBottom: '6px', flexShrink: 0 }}>Inactive</div>
+                                        {inactivePublished.map(v => (
+                                            <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 0', borderBottom: '1px solid #f1f5f9', opacity: 0.8 }}>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '3px' }}>
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>{v.scheme_type} {v.review_year} v{v.version}</span>
+                                                        <PublishedStatusBadge status={v.status} />
+                                                    </div>
+                                                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.notes || 'System Baseline'}</div>
+                                                    <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '2px' }}>{v.stages?.length ?? '—'} stages · {formatDate(v.published_at)}</div>
+                                                </div>
+                                                <button
+                                                    style={{ height: '30px', padding: '0 12px', fontSize: '0.72rem', fontFamily: "'Poppins', sans-serif", fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px', background: '#fff', color: '#334155', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap', transition: 'all 0.15s' }}
+                                                    onClick={() => handleCloneAndEdit(v.id)}
+                                                    onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                                                >
+                                                    <Copy size={11} /> Clone
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
                             </div>
                         ) : (
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                                <div style={{ fontSize: '0.85rem' }}>No published schemes found.</div>
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem', textAlign: 'center' }}>
+                                <FaShieldHalved size={32} style={{ color: '#e2e8f0', marginBottom: '0.85rem' }} />
+                                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#94a3b8' }}>No published schemes</div>
+                                <div style={{ fontSize: '0.72rem', color: '#cbd5e1', marginTop: '4px' }}>Publish a scheme to enable cloning.</div>
                             </div>
                         )}
                     </div>
@@ -1559,1539 +1568,688 @@ const LoadSheddingDesigner = () => {
     // VIEW: DESIGNER WORKSPACE
     // ==========================================
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 8rem)', fontFamily: "'Inter', sans-serif" }}>
+        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Poppins', sans-serif", background: '#fff' }}>
 
-            {/* Top Bar Navigation */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.5rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                    <button className="btn-secondary" style={{ padding: '0.5rem', borderRadius: '50%' }} onClick={() => setView('manager')}>
-                        <ChevronRight style={{ transform: 'rotate(180deg)' }} size={16} />
+            {/* ── TOP BAR ──────────────────────────────────────────── */}
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 1.25rem', height: '50px', borderBottom: '1px solid #e2e8f0', background: '#fff', gap: '0.5rem' }}>
+                {/* Left: back + breadcrumb */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, minWidth: 0 }}>
+                    <button onClick={() => setView('manager')} style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', cursor: 'pointer', flexShrink: 0 }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                        <ChevronRight size={13} style={{ transform: 'rotate(180deg)', color: '#64748b' }} />
                     </button>
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(255, 171, 0, 0.1)', color: '#FFAB00', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 'bold' }}>Workspace</span>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{schemeType} {reviewYear}</span>
-                        </div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff', marginTop: '2px' }}>{versionLabel || 'Untitled Design'}</div>
-                    </div>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8', whiteSpace: 'nowrap', flexShrink: 0 }}>Scheme Designer</span>
+                    <ChevronRight size={11} style={{ color: '#cbd5e1', flexShrink: 0 }} />
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{schemeType} {reviewYear}</span>
+                    {versionLabel && <span style={{ fontSize: '0.7rem', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>· {versionLabel}</span>}
+                    {activeVersionMeta?.status === 'active'
+                        ? <span style={{ fontSize: '0.57rem', fontWeight: 700, background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '2px 7px', borderRadius: '999px', flexShrink: 0 }}>Published</span>
+                        : <span style={{ fontSize: '0.57rem', fontWeight: 700, background: '#fefce8', border: '1px solid #fde68a', color: '#92400e', padding: '2px 7px', borderRadius: '999px', flexShrink: 0 }}>Draft</span>
+                    }
                 </div>
-
-                <div style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '4px' }}>
-                    <button
-                        style={{ padding: '0.5rem 1rem', background: activeTab === 'stages' ? 'rgba(255,255,255,0.1)' : 'transparent', color: activeTab === 'stages' ? '#fff' : 'var(--text-secondary)', border: 'none', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                        onClick={() => setActiveTab('stages')}
-                    >
-                        <FaLayerGroup size={14} /> Stage Designer
+                {/* Right: toggles + actions */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
+                    {/* Panel toggles */}
+                    <button onClick={() => setIsMetricsDrawerOpen(v => !v)} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: isMetricsDrawerOpen ? '#0f172a' : '#94a3b8', background: isMetricsDrawerOpen ? '#f1f5f9' : '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }}>
+                        <FaGaugeHigh size={11} /> Metrics
                     </button>
-                    <button
-                        style={{ padding: '0.5rem 1rem', background: activeTab === 'settings' ? 'rgba(255,255,255,0.1)' : 'transparent', color: activeTab === 'settings' ? '#fff' : 'var(--text-secondary)', border: 'none', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                        onClick={() => setActiveTab('settings')}
-                    >
-                        <FaGear size={14} /> Scheme Settings
+                    <button onClick={() => setShowLibrary(v => !v)} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: showLibrary ? '#0f172a' : '#94a3b8', background: showLibrary ? '#f1f5f9' : '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }}>
+                        <FaBolt size={11} /> Library
+                    </button>
+                    <div style={{ width: '1px', height: '18px', background: '#e2e8f0', margin: '0 2px' }} />
+                    {/* Profile */}
+                    <div style={{ position: 'relative' }}>
+                        <button onClick={() => setShowProfilePopover(v => !v)} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: showProfilePopover ? '#0f172a' : '#64748b', background: showProfilePopover ? '#f1f5f9' : '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => { if (!showProfilePopover) e.currentTarget.style.background = '#fff'; }}>
+                            <Lock size={11} /> Profile
+                        </button>
+                        {showProfilePopover && (
+                            <>
+                                <div onClick={() => setShowProfilePopover(false)} style={{ position: 'fixed', inset: 0, zIndex: 98 }} />
+                                <div style={{ position: 'absolute', top: '34px', right: 0, zIndex: 99, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', padding: '1rem', width: '300px', fontFamily: "'Poppins',sans-serif" }}>
+                                    <div style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginBottom: '0.75rem' }}>Scheme Profile</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                        <div>
+                                            <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Scheme Type {(activeVersionId && !isNewlyCloned) && <Lock size={10} style={{ display: 'inline', color: '#94a3b8' }} />}</label>
+                                            <select value={schemeType} onChange={e => setSchemeType(e.target.value)} disabled={!!activeVersionId && !isNewlyCloned} style={{ width: '100%', padding: '0.45rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.72rem', color: '#0f172a', background: '#fff', outline: 'none', opacity: (activeVersionId && !isNewlyCloned) ? 0.6 : 1, cursor: (activeVersionId && !isNewlyCloned) ? 'not-allowed' : 'default' }}>
+                                                <option value="UFLS">UFLS (Under Frequency)</option>
+                                                <option value="UVLS">UVLS (Under Voltage)</option>
+                                                <option value="EMLS">EMLS (Manual)</option>
+                                            </select>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <div style={{ flex: 1 }}>
+                                                <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Review Year</label>
+                                                <input type="number" value={reviewYear} onChange={e => setReviewYear(Number(e.target.value))} disabled={!!activeVersionId && !isNewlyCloned} style={{ width: '100%', padding: '0.45rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.72rem', color: '#0f172a', outline: 'none', background: '#fff', opacity: (activeVersionId && !isNewlyCloned) ? 0.6 : 1, boxSizing: 'border-box' }} />
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Target (%)</label>
+                                                <div style={{ position: 'relative' }}>
+                                                    <input type="text" value={formatInputNumber(targetPercentage)} onChange={e => { const raw = e.target.value.replace(/,/g, ''); if (raw === '' || !isNaN(raw)) setTargetPercentage(raw); }} style={{ width: '100%', padding: '0.45rem 1.5rem 0.45rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.72rem', color: '#0f172a', outline: 'none', background: '#fff', boxSizing: 'border-box' }} />
+                                                    <span style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.72rem', color: '#94a3b8' }}>%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Document Name</label>
+                                            <input type="text" placeholder="e.g. 2026 National UFLS" value={versionLabel} onChange={e => setVersionLabel(e.target.value)} disabled={!!activeVersionId && !isNewlyCloned} style={{ width: '100%', padding: '0.45rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.72rem', color: '#0f172a', outline: 'none', background: '#fff', opacity: (activeVersionId && !isNewlyCloned) ? 0.6 : 1, boxSizing: 'border-box' }} />
+                                        </div>
+                                        {activeVersionId && <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontStyle: 'italic' }}>Profile is locked for existing drafts.</div>}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                    {/* Settings drawer */}
+                    <button onClick={() => setShowSettingsDrawer(v => !v)} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: showSettingsDrawer ? '#0f172a' : '#64748b', background: showSettingsDrawer ? '#f1f5f9' : '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => { if (!showSettingsDrawer) e.currentTarget.style.background = '#fff'; }}>
+                        <FaGear size={11} /> Settings
+                    </button>
+                    <div style={{ width: '1px', height: '18px', background: '#e2e8f0', margin: '0 2px' }} />
+                    {/* Summary */}
+                    <button onClick={() => setShowSummaryModal(true)} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#64748b', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                        <FaTableList size={11} /> Summary
+                    </button>
+                    {/* Publish / Unpublish */}
+                    {activeVersionMeta?.status === 'active' ? (
+                        <button onClick={handleUnpublishWorkspace} disabled={publishing} style={{ height: '28px', padding: '0 10px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', cursor: 'pointer', opacity: publishing ? 0.6 : 1 }}>
+                            <RotateCcw size={11} /> {publishing ? 'Unpublishing...' : 'Unpublish'}
+                        </button>
+                    ) : (
+                        <button onClick={handlePublishWorkspace} disabled={publishing} style={{ height: '28px', padding: '0 10px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#166534', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', cursor: 'pointer', opacity: publishing ? 0.6 : 1 }}>
+                            <FaShieldHalved size={11} /> {publishing ? 'Publishing...' : 'Publish'}
+                        </button>
+                    )}
+                    {/* Save */}
+                    <button onClick={handleSaveWorkspace} disabled={saving || publishing} style={{ height: '28px', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 700, color: '#fff', background: '#0f172a', border: 'none', borderRadius: '6px', cursor: 'pointer', opacity: (saving || publishing) ? 0.6 : 1 }} onMouseEnter={e => { if (!saving && !publishing) e.currentTarget.style.background = '#1e293b'; }} onMouseLeave={e => e.currentTarget.style.background = '#0f172a'}>
+                        {saving ? <RotateCcw size={11} className="animate-spin" /> : <Save size={11} />}
+                        {saving ? 'Saving...' : 'Save'}
                     </button>
                 </div>
             </div>
 
-            {/* TAB: STAGE DESIGNER */}
-            {activeTab === 'stages' && (
-                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(24, 1fr)', gap: '1.5rem', overflow: 'hidden' }}>
-                    {/* Left Sidebar: Scheme Settings & Stages */}
-                    <div style={{ gridColumn: 'span 5', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
-                        <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Profile</div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                        <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Scheme Type</label>
-                                        {(activeVersionId && !isNewlyCloned) && <Lock size={12} style={{ color: 'var(--accent-cyan)', opacity: 0.8 }} />}
+            {/* ── STAGE TAB BAR ────────────────────────────────────── */}
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', borderBottom: '1px solid #e2e8f0', padding: '0 1.25rem', background: '#fff', overflowX: 'auto', gap: '2px', minHeight: '42px' }}>
+                {stages.map((stage, idx) => {
+                    const stageMW = calculateTotalMW(stage, idx);
+                    const isActive = activeStageIdx === idx;
+                    const chips = (stage.setting_ids || []).map(sId => globalSettings.find(g => g.id === sId)).filter(Boolean);
+                    return (
+                        <button key={stage.id} onClick={() => setActiveStageIdx(idx)} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0 0.85rem', height: '41px', flexShrink: 0, background: 'none', border: 'none', borderBottom: `2px solid ${isActive ? '#0f172a' : 'transparent'}`, cursor: 'pointer', fontFamily: "'Poppins',sans-serif" }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: isActive ? 700 : 500, color: isActive ? '#0f172a' : '#64748b', whiteSpace: 'nowrap' }}>{stage.label}</span>
+                            <span style={{ fontSize: '0.63rem', fontFamily: 'monospace', fontWeight: 600, color: isActive ? '#334155' : '#94a3b8', whiteSpace: 'nowrap' }}>{formatMW(stageMW)} MW</span>
+                            {chips.length > 0 && <span style={{ fontSize: '0.53rem', fontWeight: 700, background: isActive ? '#f1f5f9' : 'transparent', border: `1px solid ${isActive ? '#cbd5e1' : '#e2e8f0'}`, color: isActive ? '#475569' : '#94a3b8', padding: '1px 5px', borderRadius: '4px', whiteSpace: 'nowrap' }}>{chips[0].label}{chips.length > 1 ? ` +${chips.length - 1}` : ''}</span>}
+                            {isActive && (
+                                <span style={{ display: 'flex', gap: '1px', marginLeft: '2px' }}>
+                                    <span onClick={e => { e.stopPropagation(); handleOpenEditStage(idx); }} style={{ width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '3px', cursor: 'pointer', color: '#94a3b8' }} onMouseEnter={e => { e.currentTarget.style.color = '#334155'; e.currentTarget.style.background = '#f1f5f9'; }} onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'none'; }}><Edit3 size={10} /></span>
+                                    <span onClick={e => { e.stopPropagation(); handleDeleteStage(idx); }} style={{ width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '3px', cursor: 'pointer', color: '#94a3b8' }} onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; }} onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'none'; }}><Trash2 size={10} /></span>
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
+                <button onClick={handleOpenAddStage} style={{ height: '41px', padding: '0 0.75rem', display: 'flex', alignItems: 'center', gap: '4px', background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.7rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, cursor: 'pointer', flexShrink: 0, borderBottom: '2px solid transparent' }} onMouseEnter={e => e.currentTarget.style.color = '#0f172a'} onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}>
+                    <Plus size={13} /> Add Stage
+                </button>
+            </div>
+
+            {/* ── BODY: 3-COLUMN ──────────────────────────────────── */}
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+
+            {/* ── LEFT: Scheme Metrics ──────────────────────── */}
+            {isMetricsDrawerOpen && (
+                <div style={{ width: '220px', flexShrink: 0, borderRight: '1px solid #e2e8f0', overflowY: 'auto', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+                    {(() => {
+                        const schemeTotalMW = calculateOverallAssignedMW();
+                        const targetMW = calculateTargetMW();
+                        const remaining = calculateRemainingTargetMW();
+                        const pct = targetMW > 0 ? Math.abs(remaining / targetMW) * 100 : 0;
+                        const isOnTarget = Math.abs(pct) <= 3;
+                        return (
+                            <>
+                                {/* Scheme total */}
+                                <div style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0' }}>
+                                    <div style={{ fontSize: '0.58rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.65rem' }}>Scheme Total</div>
+                                    <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#0f172a', lineHeight: 1, marginBottom: '3px' }}>
+                                        {formatMW(schemeTotalMW)} <span style={{ fontSize: '0.7rem', fontWeight: 500, color: '#64748b' }}>MW</span>
                                     </div>
-                                    <select
-                                        style={{
-                                            width: '100%',
-                                            padding: '0.525rem 1rem',
-                                            background: 'rgba(255,255,255,0.03)',
-                                            border: '1px solid rgba(255,255,255,0.08)',
-                                            borderRadius: '8px',
-                                            color: 'var(--text-primary)',
-                                            fontSize: '0.75rem',
-                                            outline: 'none',
-                                            opacity: (activeVersionId && !isNewlyCloned) ? 0.6 : 1,
-                                            cursor: (activeVersionId && !isNewlyCloned) ? 'not-allowed' : 'default',
-                                            transition: 'all 0.2s ease',
-                                        }}
-                                        value={schemeType}
-                                        onChange={(e) => setSchemeType(e.target.value)}
-                                        disabled={!!activeVersionId && !isNewlyCloned}
-                                    >
-                                        <option value="UFLS">UFLS (Under Frequency)</option>
-                                        <option value="UVLS">UVLS (Under Voltage)</option>
-                                        <option value="EMLS">EMLS (Manual Load Shedding)</option>
-                                    </select>
-                                </div>
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Review Year</label>
-                                            {(activeVersionId && !isNewlyCloned) && <Lock size={12} style={{ color: 'var(--accent-cyan)', opacity: 0.8 }} />}
-                                        </div>
-                                        <input
-                                            type="number"
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.525rem 1rem',
-                                                background: 'rgba(255,255,255,0.03)',
-                                                border: '1px solid rgba(255,255,255,0.08)',
-                                                borderRadius: '8px',
-                                                color: 'var(--text-primary)',
-                                                fontSize: '0.75rem',
-                                                outline: 'none',
-                                                opacity: (activeVersionId && !isNewlyCloned) ? 0.6 : 1,
-                                                cursor: (activeVersionId && !isNewlyCloned) ? 'not-allowed' : 'default',
-                                                transition: 'all 0.2s ease',
-                                            }}
-                                            value={reviewYear}
-                                            onChange={(e) => setReviewYear(Number(e.target.value))}
-                                            disabled={!!activeVersionId && !isNewlyCloned}
-                                        />
-                                    </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Target (%)</label>
-                                        </div>
-                                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                            <input
-                                                type="text"
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '0.525rem 2.5rem 0.525rem 1rem',
-                                                    background: 'rgba(255,255,255,0.03)',
-                                                    border: '1px solid rgba(255,255,255,0.08)',
-                                                    borderRadius: '8px',
-                                                    color: 'var(--text-primary)',
-                                                    fontSize: '0.75rem',
-                                                    outline: 'none',
-                                                    transition: 'all 0.2s ease',
-                                                }}
-                                                value={formatInputNumber(targetPercentage)}
-                                                onChange={(e) => {
-                                                    const raw = e.target.value.replace(/,/g, '');
-                                                    if (raw === '' || !isNaN(raw)) setTargetPercentage(raw);
-                                                }}
-                                            />
-                                            <span style={{ position: 'absolute', right: '12px', fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>%</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                        <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Document Name (Notes)</label>
-                                        {(activeVersionId && !isNewlyCloned) && <Lock size={12} style={{ color: 'var(--accent-cyan)', opacity: 0.8 }} />}
-                                    </div>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. 2026 National UFLS"
-                                        value={versionLabel}
-                                        onChange={(e) => setVersionLabel(e.target.value)}
-                                        disabled={!!activeVersionId && !isNewlyCloned}
-                                        style={{
-                                            width: '100%',
-                                            padding: '0.525rem 1rem',
-                                            background: 'rgba(255,255,255,0.03)',
-                                            border: '1px solid rgba(255,255,255,0.08)',
-                                            borderRadius: '8px',
-                                            color: 'var(--text-primary)',
-                                            fontSize: '0.75rem',
-                                            outline: 'none',
-                                            opacity: (activeVersionId && !isNewlyCloned) ? 0.6 : 1,
-                                            cursor: (activeVersionId && !isNewlyCloned) ? 'not-allowed' : 'default',
-                                            transition: 'all 0.2s ease',
-                                        }}
-                                    />
-                                    {activeVersionId && (
-                                        <div style={{ fontSize: '0.65rem', color: 'var(--accent-cyan)', marginTop: '6px', fontStyle: 'italic', opacity: 0.8 }}>
-                                            Profile is locked for existing drafts to maintain data integrity.
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="glass-card" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
-                            <div style={{ padding: '1rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px' }}>Defined Stages</div>
-                                <button onClick={handleOpenAddStage} style={{ padding: '4px', borderRadius: '4px', background: 'rgba(0, 255, 163, 0.1)', color: 'var(--accent-cyan)', border: 'none', cursor: 'pointer' }}>
-                                    <Plus size={16} />
-                                </button>
-                            </div>
-                            <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                {stages.map((stage, idx) => (
-                                    <div
-                                        key={stage.id}
-                                        style={{
-                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s',
-                                            background: activeStageIdx === idx ? 'rgba(0, 255, 163, 0.1)' : 'rgba(255,255,255,0.02)',
-                                            border: activeStageIdx === idx ? '1px solid rgba(0, 255, 163, 0.3)' : '1px solid transparent',
-                                            color: activeStageIdx === idx ? 'var(--accent-cyan)' : 'inherit'
-                                        }}
-                                        onClick={() => setActiveStageIdx(idx)}
-                                    >
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: 0, flex: 1 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div style={{ fontSize: '0.75rem', fontWeight: 600 }}>{stage.label}</div>
-                                                <div style={{ fontSize: '0.7rem', fontFamily: 'monospace', fontWeight: 800, color: activeStageIdx === idx ? 'var(--accent-cyan)' : 'rgba(0, 229, 255, 0.4)' }}>
-                                                    {formatMW(calculateTotalMW(stage, idx))} MW
-                                                </div>
-                                            </div>
-                                            {!!stage.setting_ids?.length && (
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                                                    {stage.setting_ids.map(sId => {
-                                                        const setting = globalSettings.find(s => s.id === sId);
-                                                        if (!setting) return null;
-                                                        return (
-                                                            <div
-                                                                key={sId}
-                                                                style={{
-                                                                    fontSize: '0.55rem',
-                                                                    color: activeStageIdx === idx ? '#062b22' : 'var(--accent-cyan)',
-                                                                    background: activeStageIdx === idx ? 'rgba(0, 255, 163, 0.95)' : 'rgba(0, 229, 255, 0.10)',
-                                                                    padding: '3px 8px',
-                                                                    borderRadius: '999px',
-                                                                    fontWeight: 700,
-                                                                    border: activeStageIdx === idx ? '1px solid rgba(0, 255, 163, 0.95)' : '1px solid rgba(0, 229, 255, 0.22)',
-                                                                    lineHeight: 1,
-                                                                    whiteSpace: 'nowrap',
-                                                                    boxShadow: activeStageIdx === idx ? '0 0 0 1px rgba(0,0,0,0.08) inset' : 'none'
-                                                                }}
-                                                            >
-                                                                {setting.label.replace(', ', ' | ')}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                            <button style={{ color: 'var(--text-secondary)', background: 'none', border: 'none', padding: '4px', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleOpenEditStage(idx); }}>
-                                                <Edit3 size={14} />
-                                            </button>
-                                            <button style={{ color: activeStageIdx === idx ? '#EF4444' : 'var(--text-secondary)', background: 'none', border: 'none', padding: '4px', cursor: 'pointer', opacity: activeStageIdx === idx ? 1 : 0.6 }} onClick={(e) => { e.stopPropagation(); handleDeleteStage(idx); }}>
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Middle: Content Builder */}
-                    <div className="glass-card" style={{ gridColumn: 'span 13', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', padding: 0 }}>
-                        <div style={{ padding: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
-                                <div style={{ padding: '0.5rem', background: 'rgba(0, 255, 163, 0.1)', borderRadius: '8px', color: 'var(--accent-cyan)' }}>
-                                    <FaLayerGroup size={18} />
-                                </div>
-                                <input
-                                    type="text"
-                                    className="platinum-input"
-                                    style={{ fontSize: '1.25rem', fontWeight: 'bold', background: 'transparent', border: 'none', padding: 0, width: '150px', minWidth: '100px', color: '#fff' }}
-                                    value={stages[activeStageIdx]?.label}
-                                    onChange={(e) => {
-                                        const newStages = [...stages];
-                                        newStages[activeStageIdx].label = e.target.value;
-                                        setStages(newStages);
-                                    }}
-                                />
-                                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                                    {stages[activeStageIdx]?.setting_ids?.map(sId => {
-                                        const setting = globalSettings.find(s => s.id === sId);
-                                        if (!setting) return null;
-                                        const isUVLS = setting.scheme_type === 'UVLS';
-                                        const unit = isUVLS ? 'pu' : 'Hz';
-                                        return (
-                                            <div key={sId} style={{
-                                                fontSize: '0.75rem', color: 'var(--accent-blue)', background: 'rgba(59, 130, 246, 0.15)',
-                                                padding: '4px 10px', borderRadius: '6px', fontWeight: 600, border: '1px solid rgba(59, 130, 246, 0.3)'
-                                            }}>
-                                                {setting.threshold}{unit} | {setting.time_delay}s
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                    <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Aggregate</span>
-                                    <span style={{ fontSize: '1.1rem', fontFamily: 'monospace', fontWeight: 800, color: 'var(--accent-cyan)' }}>
-                                        {formatMW(calculateTotalMW(stages[activeStageIdx], activeStageIdx))} MW
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', paddingBottom: '4rem' }}>
-                            {/* Transformer Assignment */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <h4 style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-                                        <FaBolt size={14} style={{ color: 'var(--accent-cyan)' }} /> Transformer Bays
-                                    </h4>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>
-                                            {formatMW(calculateTransformerMW(stages[activeStageIdx]))} MW
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                    {stages[activeStageIdx]?.transformer_bays?.map((bay, idx) => {
-                                        const subId = bay.relay_substation_id;
-                                        const detail = detailedSubstations[subId];
-                                        let infoDisplay = `${bay.transformers?.length || 0} TXs`;
-                                        let voltageLabel = "";
-                                        let hasCriticalAsset = false;
-
-                                        if (detail && detail.db_transformers && detail.transformers) {
-                                            const labels = [];
-                                            let detectedVoltage = null;
-                                            bay.transformers?.forEach(txObj => {
-                                                const tId = typeof txObj === 'object' ? txObj.id : txObj;
-                                                const dbTx = detail.db_transformers.find(t => String(t.id) === String(tId));
-                                                if (dbTx) {
-                                                    labels.push(`T${dbTx.transformer_no}`);
-                                                    if (!detectedVoltage && dbTx.lv_voltage) detectedVoltage = dbTx.lv_voltage;
-                                                }
-                                            });
-                                            if (labels.length > 0) {
-                                                const relayObj = relays.find(r => r.id === bay.relay);
-                                                if (relayObj && relayObj.relay_name) {
-                                                    voltageLabel = relayObj.relay_name.replace(' System', '');
-                                                } else if (detectedVoltage) {
-                                                    voltageLabel = `${detectedVoltage}kV`;
-                                                }
-                                                infoDisplay = `${voltageLabel ? voltageLabel + ' | ' : ''}${labels.join(', ')}`;
-                                            }
-                                            hasCriticalAsset = bay.transformers?.some(txObj => {
-                                                const tId = typeof txObj === 'object' ? txObj.id : txObj;
-                                                const tidVal = typeof tId === 'object' ? tId.id : tId;
-                                                return criticalAssets.some(ca => ca.load_transformers && ca.load_transformers.includes(Number(tidVal)));
-                                            }) || false;
-                                        }
-
-                                        return (
-                                            <div key={bay.id} style={{
-                                                display: 'flex', alignItems: 'center', gap: '0.3rem',
-                                                padding: '0.1rem 0.2rem 0.1rem 0.3rem', borderRadius: '12px',
-                                                background: 'rgba(0, 255, 163, 0.05)', border: '1px solid rgba(0, 255, 163, 0.2)'
-                                            }}>
-                                                <FaBolt size={8} style={{ color: 'var(--accent-cyan)' }} />
-                                                <div style={{ fontSize: '0.7rem', fontWeight: 600, fontFamily: 'monospace', color: '#fff' }}>{subId}</div>
-                                                <div style={{
-                                                    fontSize: '0.65rem',
-                                                    color: hasCriticalAsset ? '#F97316' : 'var(--accent-cyan)',
-                                                    fontWeight: 600,
-                                                    paddingLeft: '0.2rem',
-                                                    borderLeft: '1px solid rgba(0, 255, 163, 0.2)',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px'
-                                                }}>
-                                                    {infoDisplay}
-                                                    {hasCriticalAsset && (
-                                                        <FiAlertCircle size={10} style={{ color: '#F97316' }} title="Contains Critical Asset" />
-                                                    )}
-                                                </div>
-                                                <button
-                                                    onClick={() => {
-                                                        const newStages = [...stages];
-                                                        const newBays = [...newStages[activeStageIdx].transformer_bays];
-                                                        newBays.splice(idx, 1);
-                                                        newStages[activeStageIdx] = {
-                                                            ...newStages[activeStageIdx],
-                                                            transformer_bays: newBays
-                                                        };
-                                                        setStages(newStages);
-                                                    }}
-                                                    style={{
-                                                        background: 'none', border: 'none', color: 'rgba(239, 68, 68, 0.6)', cursor: 'pointer',
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        width: '18px', height: '18px', borderRadius: '50%',
-                                                        transition: 'all 0.2s', marginLeft: '0.2rem'
-                                                    }}
-                                                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = '#EF4444'; }}
-                                                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'rgba(239, 68, 68, 0.6)'; }}
-                                                >
-                                                    <X size={12} />
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                                    {(!stages[activeStageIdx]?.transformer_bays || stages[activeStageIdx].transformer_bays.length === 0) && (
-                                        <div style={{ width: '100%', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px', padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', cursor: 'default' }}>
-                                            <div style={{ fontSize: '0.85rem' }}>Click assets in the Library to add them</div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Network Pockets */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <h4 style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-                                        <FaCodeBranch size={14} style={{ color: 'var(--accent-cyan)' }} /> Network Pockets
-                                    </h4>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>
-                                            {(() => {
-                                                const pockets = stages[activeStageIdx]?.computed_pockets || [];
-                                                const lockedMW = pockets.reduce((sum, card) => sum + (card.total_p_mw || 0), 0);
-                                                const previewMW = pocketPreview?.total_p_mw || 0;
-                                                const totalMW = lockedMW + previewMW;
-                                                return `${formatMW(totalMW)} MW`;
-                                            })()}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                { (stages[activeStageIdx]?.computed_pockets || []).map((card, idx) => (
-                                    <div key={card.id} style={{
-                                        background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.07) 0%, rgba(0, 229, 255, 0.025) 100%)',
-                                        border: '1px solid rgba(0, 229, 255, 0.18)',
-                                        borderRadius: '10px',
-                                        padding: '0.7rem 0.8rem',
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: '0.55rem',
-                                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
-                                                <FaCodeBranch size={14} style={{ color: 'var(--accent-cyan)' }} />
-                                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
-                                                    Pocket {idx + 1}
+                                    {gridData && (
+                                        <>
+                                            <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginBottom: '6px' }}>Target: {formatMW(targetMW)} MW ({targetPercentage}%)</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
+                                                <span style={{ fontSize: '0.58rem', color: '#94a3b8' }}>Remaining:</span>
+                                                <span style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 700, color: isOnTarget ? '#166534' : remaining > 0 ? '#92400e' : '#dc2626' }}>
+                                                    {remaining > 0 ? '+' : ''}{formatMW(remaining)} MW
                                                 </span>
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                                <div style={{
-                                                    padding: '3px 8px',
-                                                    borderRadius: '999px',
-                                                    background: 'rgba(0, 229, 255, 0.10)',
-                                                    border: '1px solid rgba(0, 229, 255, 0.16)',
-                                                    fontSize: '0.68rem',
-                                                    fontWeight: 700,
-                                                    color: 'var(--accent-cyan)',
-                                                    whiteSpace: 'nowrap'
-                                                }}>
-                                                    {formatMW(card.total_p_mw ?? 0)} MW
+                                        </>
+                                    )}
+                                    {/* Stage rows */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                        {stages.map((stage, idx) => {
+                                            const mw = calculateTotalMW(stage, idx);
+                                            const tgt = stage.target_mw || 0;
+                                            const isActive = idx === activeStageIdx;
+                                            const p = tgt > 0 ? Math.min((mw / tgt) * 100, 100) : 0;
+                                            return (
+                                                <div key={stage.id} onClick={() => setActiveStageIdx(idx)} style={{ padding: '4px 6px', borderRadius: '5px', cursor: 'pointer', background: isActive ? '#f8fafc' : 'transparent', border: isActive ? '1px solid #e2e8f0' : '1px solid transparent' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: tgt > 0 ? '3px' : 0 }}>
+                                                        <span style={{ fontSize: '0.62rem', fontWeight: isActive ? 700 : 500, color: isActive ? '#0f172a' : '#64748b' }}>{stage.label}</span>
+                                                        <span style={{ fontSize: '0.62rem', fontFamily: 'monospace', fontWeight: 600, color: isActive ? '#0f172a' : '#94a3b8' }}>{formatMW(mw)}</span>
+                                                    </div>
+                                                    {tgt > 0 && (
+                                                        <div style={{ height: '2px', background: '#f1f5f9', borderRadius: '999px', overflow: 'hidden' }}>
+                                                            <div style={{ height: '100%', width: `${p}%`, background: p >= 100 ? '#166534' : '#0f172a', borderRadius: '999px' }} />
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <button
-                                                    onClick={() => {
-                                                        const newStages = [...stages];
-                                                        const active = { ...newStages[activeStageIdx] };
-                                                        const exitingBranches = card.branches || [];
-                                                        active.computed_pockets = (active.computed_pockets || []).filter(c => c.id !== card.id);
-                                                        // Move back to tray for editing
-                                                        active.pocket_branches = [...new Set([...(active.pocket_branches || []), ...exitingBranches])];
-                                                        newStages[activeStageIdx] = active;
-                                                        setStages(newStages);
-                                                    }}
-                                                    style={{
-                                                        width: '22px',
-                                                        height: '22px',
-                                                        borderRadius: '999px',
-                                                        border: '1px solid rgba(0, 229, 255, 0.18)',
-                                                        background: 'rgba(0, 229, 255, 0.08)',
-                                                        color: 'var(--accent-cyan)',
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        padding: 0,
-                                                        transition: 'all 0.2s ease'
-                                                    }}
-                                                    onMouseEnter={(e) => {
-                                                        e.currentTarget.style.background = 'rgba(0, 229, 255, 0.16)';
-                                                        e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.28)';
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        e.currentTarget.style.background = 'rgba(0, 229, 255, 0.08)';
-                                                        e.currentTarget.style.borderColor = 'rgba(0, 229, 255, 0.18)';
-                                                    }}
-                                                    aria-label={`Edit pocket ${idx + 1}`}
-                                                    type="button"
-                                                >
-                                                    <FiEdit2 size={12} />
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        const newStages = [...stages];
-                                                        const active = { ...newStages[activeStageIdx] };
-                                                        active.computed_pockets = (active.computed_pockets || []).filter(c => c.id !== card.id);
-                                                        newStages[activeStageIdx] = active;
-                                                        setStages(newStages);
-                                                    }}
-                                                    style={{
-                                                        width: '22px',
-                                                        height: '22px',
-                                                        borderRadius: '999px',
-                                                        border: '1px solid rgba(239, 68, 68, 0.18)',
-                                                        background: 'rgba(239, 68, 68, 0.08)',
-                                                        color: 'rgba(239, 68, 68, 0.9)',
-                                                        cursor: 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        padding: 0,
-                                                        transition: 'all 0.2s ease'
-                                                    }}
-                                                    onMouseEnter={(e) => {
-                                                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.16)';
-                                                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.28)';
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
-                                                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.18)';
-                                                    }}
-                                                    aria-label={`Delete pocket ${idx + 1}`}
-                                                    type="button"
-                                                >
-                                                    <X size={12} />
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                {/* Regional breakdown */}
+                                {gridData?.regional_breakdown && (
+                                    <div style={{ padding: '1rem' }}>
+                                        <div style={{ fontSize: '0.58rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.65rem' }}>Regional</div>
+                                        <CompactRegionalMetrics data={getOverallRegionalSpiralData()} labelKey="region" valueKey="assigned_mw" targetKey="target_mw" />
+                                    </div>
+                                )}
+                            </>
+                        );
+                    })()}
+                </div>
+            )}
+
+            {/* ── CENTER: Assignment Canvas ──────────────────── */}
+            <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+                {stages.length === 0 ? (
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: '#94a3b8', padding: '3rem' }}>
+                        <FaLayerGroup size={28} style={{ color: '#e2e8f0' }} />
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>No stages defined</div>
+                        <div style={{ fontSize: '0.72rem', color: '#cbd5e1' }}>Add a stage using the tab bar above.</div>
+                    </div>
+                ) : (
+                    <>
+                        {/* ── TRANSFORMER BAYS ── */}
+                        <div style={{ borderBottom: '1px solid #e2e8f0' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.55rem 1.25rem', background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <FaBolt size={11} style={{ color: '#64748b' }} />
+                                    <span style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b' }}>Transformer Bays</span>
+                                </div>
+                                <span style={{ fontSize: '0.67rem', fontFamily: 'monospace', fontWeight: 700, color: '#334155' }}>{formatMW(calculateTransformerMW(stages[activeStageIdx]))} MW</span>
+                            </div>
+                            {stages[activeStageIdx]?.transformer_bays?.length > 0 ? (
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <thead>
+                                        <tr>
+                                            <th style={{ padding: '0.4rem 1.25rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '22%' }}>Relay System</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '22%' }}>Substation</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>Transformers</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'right', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '70px' }}>MW</th>
+                                            <th style={{ padding: '0.4rem 1.25rem 0.4rem 0.4rem', borderBottom: '1px solid #f1f5f9', width: '32px' }}></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {stages[activeStageIdx].transformer_bays.map((bay, bayIdx) => {
+                                            const subId = bay.relay_substation_id;
+                                            const detail = detailedSubstations[subId];
+                                            const relayObj = relays.find(r => r.id === bay.relay);
+                                            const relayLabel = relayObj?.relay_name?.replace(' System', '') || '—';
+                                            const sub = substations.find(s => s.substation_id === subId);
+                                            let txLabels = [], bayMW = 0, hasCritical = false;
+                                            if (detail?.db_transformers) {
+                                                (bay.transformers || []).forEach(txObj => {
+                                                    const tId = typeof txObj === 'object' ? txObj.id : txObj;
+                                                    const dbTx = detail.db_transformers.find(t => String(t.id) === String(tId));
+                                                    if (dbTx) {
+                                                        txLabels.push(`T${dbTx.transformer_no}`);
+                                                        const tx = detail.transformers?.find(t => t.name === `TX T${dbTx.transformer_no}`) || detail.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
+                                                        if (tx?.load_mw != null) bayMW += parseFloat(tx.load_mw);
+                                                        const tidVal = typeof tId === 'object' ? tId.id : tId;
+                                                        if (criticalAssets.some(ca => ca.load_transformers?.includes(Number(tidVal)))) hasCritical = true;
+                                                    }
+                                                });
+                                            }
+                                            if (txLabels.length === 0) txLabels = [`${bay.transformers?.length || 0} TXs`];
+                                            return (
+                                                <tr key={bay.id} style={{ borderBottom: '1px solid #f8fafc' }} onMouseEnter={e => e.currentTarget.style.background = '#fafafa'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                                                    <td style={{ padding: '0.5rem 1.25rem', fontSize: '0.7rem', color: '#334155', fontWeight: 500 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                            {hasCritical && <FiAlertCircle size={10} style={{ color: '#f97316', flexShrink: 0 }} title="Critical asset" />}
+                                                            {relayLabel}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ padding: '0.5rem 0.75rem' }}>
+                                                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#0f172a' }}>{subId}</div>
+                                                        {sub?.name && <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>{sub.name}</div>}
+                                                    </td>
+                                                    <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.68rem', color: '#334155', fontFamily: 'monospace' }}>{txLabels.join(', ')}</td>
+                                                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 700, color: '#0f172a' }}>{formatMW(bayMW)}</td>
+                                                    <td style={{ padding: '0.5rem 1.25rem 0.5rem 0.4rem', textAlign: 'right' }}>
+                                                        <button onClick={() => { const ns = [...stages]; const nb = [...ns[activeStageIdx].transformer_bays]; nb.splice(bayIdx, 1); ns[activeStageIdx] = { ...ns[activeStageIdx], transformer_bays: nb }; setStages(ns); }} style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }} onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                                                            <X size={10} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div style={{ padding: '0.85rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <FaBolt size={13} style={{ color: '#e2e8f0', flexShrink: 0 }} />
+                                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Click transformers in the Asset Library to assign them to this stage.</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ── NETWORK POCKETS ── */}
+                        <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.55rem 1.25rem', background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <FaCodeBranch size={11} style={{ color: '#64748b' }} />
+                                    <span style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b' }}>Network Pockets</span>
+                                </div>
+                                <span style={{ fontSize: '0.67rem', fontFamily: 'monospace', fontWeight: 700, color: '#334155' }}>
+                                    {(() => { const p = stages[activeStageIdx]?.computed_pockets || []; return `${formatMW(p.reduce((s, c) => s + (c.total_p_mw || 0), 0) + (pocketPreview?.total_p_mw || 0))} MW`; })()}
+                                </span>
+                            </div>
+                            {(stages[activeStageIdx]?.computed_pockets || []).length > 0 && (
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                    <thead>
+                                        <tr>
+                                            <th style={{ padding: '0.4rem 1.25rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '40px' }}>#</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>Island Substations</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>Source Branches</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'right', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '70px' }}>MW</th>
+                                            <th style={{ padding: '0.4rem 1.25rem 0.4rem 0.4rem', borderBottom: '1px solid #f1f5f9', width: '48px' }}></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(stages[activeStageIdx].computed_pockets || []).map((pocket, pIdx) => {
+                                            const subs = (pocket.pocket_substation_details || pocket.pocket_substations || []).map(s => s.substation_id || s).join(', ');
+                                            const branches = pocket.branchGroups?.map(g => `${g.subId}: ${g.branches.join(', ')}`).join(' · ') || pocket.branches?.join(', ') || '—';
+                                            return (
+                                                <tr key={pocket.id} style={{ borderBottom: '1px solid #f8fafc' }} onMouseEnter={e => e.currentTarget.style.background = '#fafafa'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                                                    <td style={{ padding: '0.5rem 1.25rem', fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}>P{pIdx + 1}</td>
+                                                    <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.68rem', color: '#334155', maxWidth: '180px' }}><span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subs || '—'}</span></td>
+                                                    <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.65rem', color: '#64748b', maxWidth: '180px' }}><span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{branches}</span></td>
+                                                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 700, color: '#0f172a' }}>{formatMW(pocket.total_p_mw ?? 0)}</td>
+                                                    <td style={{ padding: '0.5rem 1.25rem 0.5rem 0.4rem', textAlign: 'right' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '3px' }}>
+                                                            <button onClick={() => { const ns = [...stages]; const a = { ...ns[activeStageIdx] }; a.computed_pockets = (a.computed_pockets || []).filter(c => c.id !== pocket.id); a.pocket_branches = [...new Set([...(a.pocket_branches || []), ...(pocket.branches || [])])]; ns[activeStageIdx] = a; setStages(ns); }} title="Edit" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', color: '#64748b' }} onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }} onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}><FiEdit2 size={10} /></button>
+                                                            <button onClick={() => { const ns = [...stages]; const a = { ...ns[activeStageIdx] }; a.computed_pockets = (a.computed_pockets || []).filter(c => c.id !== pocket.id); ns[activeStageIdx] = a; setStages(ns); }} title="Remove" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }} onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}><X size={10} /></button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+                            {(stages[activeStageIdx]?.computed_pockets || []).length === 0 && (stages[activeStageIdx]?.pocket_branches || []).length === 0 && !fetchingPocket && (
+                                <div style={{ padding: '0.85rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <FaCodeBranch size={13} style={{ color: '#e2e8f0', flexShrink: 0 }} />
+                                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Click incoming branches in the Asset Library to build a network pocket.</span>
+                                </div>
+                            )}
+                            {/* ── WORKING TRAY ── */}
+                            {(fetchingPocket || (stages[activeStageIdx]?.pocket_branches?.length > 0)) && (() => {
+                                const brs = stages[activeStageIdx]?.pocket_branches || [];
+                                const gKey = (subId, v) => `${subId}||${v || ''}`;
+                                const groups = {};
+                                brs.forEach(fullId => { const pts = fullId.split('_'); if (pts.length >= 3) { const ls = pts[0]; const vv = substations.find(s => s.substation_id === ls)?.voltage; const k = gKey(ls, vv); if (!groups[k]) groups[k] = { subId: ls, voltage: vv ? `${vv}kV` : '', branches: [] }; groups[k].branches.push(pts.slice(1).join('_')); } });
+                                return (
+                                    <div style={{ margin: '0.75rem 1.25rem', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', overflow: 'hidden' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.42rem 0.75rem', borderBottom: '1px solid #e2e8f0', background: '#fff' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <span style={{ fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b' }}>Working Tray</span>
+                                                {fetchingPocket && <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.58rem', color: '#94a3b8' }}><RefreshCw size={9} style={{ animation: 'spin 1s linear infinite' }} /> Computing...</div>}
+                                                {pocketPreview && !pocketPreview.error && !fetchingPocket && <span style={{ fontSize: '0.58rem', fontFamily: 'monospace', fontWeight: 600, color: '#166534', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '1px 5px', borderRadius: '4px' }}>{pocketPreview.pocket_substations?.length || 0} subs · {formatMW(pocketPreview.total_p_mw ?? 0)} MW</span>}
+                                            </div>
+                                            <button onClick={() => { const ns = [...stages]; ns[activeStageIdx] = { ...ns[activeStageIdx], pocket_branches: [] }; setStages(ns); setPocketPreview(null); }} style={{ fontSize: '0.6rem', color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 5px', borderRadius: '3px', fontFamily: "'Poppins',sans-serif" }} onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; }} onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'none'; }}>Clear</button>
+                                        </div>
+                                        {brs.length > 0 && (
+                                            <div style={{ padding: '0.5rem 0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                                                {Object.values(groups).sort((a, b) => a.subId.localeCompare(b.subId)).map(group => (
+                                                    <div key={gKey(group.subId, group.voltage)} style={{ display: 'flex', alignItems: 'center', gap: '0.2rem', padding: '0.1rem 0.3rem 0.1rem 0.4rem', borderRadius: '5px', background: '#fff', border: '1px solid #e2e8f0', fontSize: '0.63rem' }}>
+                                                        <FaCodeBranch size={8} style={{ color: '#64748b' }} />
+                                                        <span style={{ fontWeight: 600, color: '#0f172a' }}>{group.subId}</span>
+                                                        <span style={{ color: '#94a3b8' }}>·</span>
+                                                        <span style={{ color: '#64748b', fontFamily: 'monospace' }}>{group.branches.sort().join(', ')}</span>
+                                                        <button onClick={() => { const ns = [...stages]; const nb = [...(ns[activeStageIdx].pocket_branches || [])]; group.branches.forEach(s => { const i = nb.indexOf(`${group.subId}_${s}`); if (i > -1) nb.splice(i, 1); }); ns[activeStageIdx] = { ...ns[activeStageIdx], pocket_branches: nb }; setStages(ns); }} style={{ width: '12px', height: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', marginLeft: '2px', padding: 0 }} onMouseEnter={e => e.currentTarget.style.color = '#ef4444'} onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}><X size={9} /></button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {pocketPreview?.warning && <div style={{ margin: '0 0.75rem 0.5rem', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.63rem', color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', padding: '0.35rem 0.5rem', borderRadius: '5px' }}><TriangleAlert size={10} style={{ flexShrink: 0 }} />{pocketPreview.warning}</div>}
+                                        {pocketPreview?.error && <div style={{ margin: '0 0.75rem 0.5rem', fontSize: '0.63rem', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '0.35rem 0.5rem', borderRadius: '5px' }}>{pocketPreview.error}</div>}
+                                        {pocketPreview && !pocketPreview.error && (
+                                            <div style={{ padding: '0 0.75rem 0.6rem' }}>
+                                                <button onClick={() => { const brs2 = stages[activeStageIdx].pocket_branches || []; const gk = (s, v) => `${s}||${v||''}`; const grps = {}; brs2.forEach(fullId => { const pts = fullId.split('_'); if (pts.length >= 3) { const ls = pts[0]; const vv = substations.find(s => s.substation_id === ls)?.voltage; const k = gk(ls, vv); if (!grps[k]) grps[k] = { subId: ls, voltage: vv ? `${vv}kV` : '', branches: [] }; grps[k].branches.push(pts.slice(1).join('_')); } }); const np = { id: Date.now(), branches: [...brs2], branchGroups: Object.values(grps), pocket_substations: pocketPreview.pocket_substations || [], pocket_substation_details: pocketPreview.pocket_substation_details || [], total_p_mw: pocketPreview.total_p_mw || 0, substation_mw: (pocketPreview.pocket_substation_details || []).reduce((acc, s) => { acc[s.substation_id] = { total_p_mw: s.p_mw, total_q_mvar: s.q_mvar }; return acc; }, {}), total_q_mvar: pocketPreview.total_q_mvar || 0 }; const ns = [...stages]; const a = { ...ns[activeStageIdx] }; a.computed_pockets = [...(a.computed_pockets || []), np]; a.pocket_branches = []; ns[activeStageIdx] = a; setStages(ns); setPocketPreview(null); }} style={{ width: '100%', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#166534', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '5px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'} onMouseLeave={e => e.currentTarget.style.background = '#f0fdf4'}>
+                                                    <FaLock size={10} />
+                                                    {pocketPreview.pocket_substations?.length > 0 && !pocketPreview.warning ? `Lock Pocket · ${pocketPreview.pocket_substations.length} sub${pocketPreview.pocket_substations.length > 1 ? 's' : ''}` : 'Lock Anyway'}
                                                 </button>
                                             </div>
-                                        </div>
-
-                                        <div style={{
-                                            fontSize: '0.68rem',
-                                            color: 'rgba(255,255,255,0.82)',
-                                            lineHeight: 1.4,
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis'
-                                        }}>
-                                            <span style={{ color: '#d7fbff', fontWeight: 700 }}>
-                                                {card.branchGroups?.map(grp => grp.subId).join(', ') || `Pocket ${idx + 1}`}
-                                            </span>
-                                            <span style={{ color: 'rgba(255,255,255,0.28)', padding: '0 8px' }}>|</span>
-                                            <span style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>
-                                                {card.branchGroups?.map(grp => grp.branches.join(', ')).join('  •  ') || '-'}
-                                            </span>
-                                            <span style={{ color: 'rgba(255,255,255,0.28)', padding: '0 8px' }}>|</span>
-                                            <span style={{ color: 'rgba(255,255,255,0.7)' }}>
-                                                {(card.pocket_substation_details || card.pocket_substations || []).map(sub => sub.substation_id || sub).join(', ')}
-                                            </span>
-                                        </div>
+                                        )}
                                     </div>
-                                ))}
+                                );
+                            })()}
+                        </div>
+                    </>
+                )}
+            </div>
 
-                                {/* BRANCHES BAY */}
-                                <div style={{
-                                    background: 'rgba(0, 229, 255, 0.04)',
-                                    border: '1px solid rgba(0, 229, 255, 0.12)',
-                                    borderRadius: '10px',
-                                    padding: '0.75rem'
-                                }}>
-                                    <div style={{ fontSize: '0.6rem', color: 'rgba(0, 229, 255, 0.5)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '0.5rem' }}>
-                                        BRANCHES BAY
-                                    </div>
-                                    {fetchingPocket && (
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} />
-                                            Computing...
-                                        </div>
-                                    )}
-                                    {!fetchingPocket && (stages[activeStageIdx]?.pocket_branches?.length === 0 || !stages[activeStageIdx]?.pocket_branches) && (
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', opacity: 0.5, fontStyle: 'italic' }}>
-                                            No branches selected
-                                        </div>
-                                    )}
-                                    {!fetchingPocket && (stages[activeStageIdx]?.pocket_branches?.length > 0) && (() => {
-                                        const branches = stages[activeStageIdx].pocket_branches;
-                                        const groupKey = (subId, voltage) => `${subId}||${voltage || ''}`;
-                                        const groups = {};
-                                        branches.forEach(fullId => {
-                                            const parts = fullId.split('_');
-                                            if (parts.length >= 3) {
-                                                const localSub = parts[0];
-                                                const voltageValue = substations.find(s => s.substation_id === localSub)?.voltage;
-                                                const key = groupKey(localSub, voltageValue);
-                                                if (!groups[key]) groups[key] = { subId: localSub, voltage: voltageValue ? `${voltageValue}kV` : '', branches: [] };
-                                                groups[key].branches.push(parts.slice(1).join('_'));
-                                            }
-                                        });
+            {/* ── RIGHT: Asset Library ───────────────────────── */}
+            {showLibrary && (
+                <div style={{ width: '280px', flexShrink: 0, borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
+                    <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                        {['library', 'alerts'].map(tab => (
+                            <button key={tab} onClick={() => setAssetLibraryTab(tab)} style={{ flex: 1, padding: '0.5rem', fontSize: '0.63rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: assetLibraryTab === tab ? '#0f172a' : '#94a3b8', background: 'none', border: 'none', borderBottom: `2px solid ${assetLibraryTab === tab ? '#0f172a' : 'transparent'}`, cursor: 'pointer' }}>
+                                {tab === 'library' ? 'Asset Library' : 'Alert Message'}
+                            </button>
+                        ))}
+                    </div>
+                    {assetLibraryTab === 'library' ? (
+                        <>
+                            <div style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                                <div style={{ position: 'relative' }}>
+                                    <Search style={{ position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} size={12} />
+                                    <input type="text" placeholder="Search substation / relay..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ width: '100%', padding: '0.4rem 1.6rem 0.4rem 1.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', color: '#0f172a', fontSize: '0.68rem', outline: 'none', fontFamily: "'Poppins',sans-serif", boxSizing: 'border-box' }} onFocus={e => { e.target.style.borderColor = '#94a3b8'; e.target.style.background = '#fff'; }} onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }} />
+                                    {searchTerm && <button onClick={() => setSearchTerm('')} style={{ position: 'absolute', right: '0.4rem', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', borderRadius: '999px', border: 'none', background: '#e2e8f0', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0 }}><X size={9} /></button>}
+                                </div>
+                            </div>
+                            <div style={{ flex: 1, overflowY: 'auto', padding: '0.2rem 0' }}>
+                                {(() => {
+                                    const tree = {};
+                                    const term = searchTerm.toLowerCase();
+                                    relays.forEach(relay => {
+                                        const sub = substations.find(s => s.substation_id === (relay.substation_id || relay.substation));
+                                        if (!sub) return;
+                                        const region = sub.region || 'Unknown Region';
+                                        const grid = sub.grid || 'Unknown Grid';
+                                        const subId = sub.substation_id;
+                                        if (term && !subId.toLowerCase().includes(term) && !(relay.relay_name || '').toLowerCase().includes(term)) return;
+                                        if (!tree[region]) tree[region] = {};
+                                        if (!tree[region][grid]) tree[region][grid] = {};
+                                        if (!tree[region][grid][subId]) tree[region][grid][subId] = { substation: sub, relays: [] };
+                                        tree[region][grid][subId].relays.push(relay);
+                                    });
+                                    const toggleNode = (nodeId) => setExpandedNodes(prev => { const n = new Set(prev); n.has(nodeId) ? n.delete(nodeId) : n.add(nodeId); return n; });
+                                    const handleExpandRelay = async (relayId, subId) => {
+                                        toggleNode(`relay-${relayId}`);
+                                        if (detailedSubstations[subId]) return;
+                                        try {
+                                            const [res, txRes] = await Promise.all([api.get(`/substations/${subId}/`), api.get(`/load-transformers/?substation=${subId}`)]);
+                                            const data = res.data; data.db_transformers = txRes.data;
+                                            setDetailedSubstations(prev => ({ ...prev, [subId]: data }));
+                                        } catch { setDetailedSubstations(prev => ({ ...prev, [subId]: { transformers: [], db_transformers: [] } })); }
+                                    };
+                                    const renderNodeHeader = (id, label, level, icon, refreshAction = null) => {
+                                        const isExpanded = expandedNodes.has(id);
                                         return (
-                                            <>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                                    {Object.values(groups).sort((a, b) => a.subId.localeCompare(b.subId)).map(group => {
-                                                        return (
-                                                            <div key={groupKey(group.subId, group.voltage)} style={{
-                                                                display: 'flex', alignItems: 'center', gap: '0.3rem',
-                                                                padding: '0.1rem 0.2rem 0.1rem 0.3rem', borderRadius: '12px',
-                                                                background: 'rgba(0, 229, 255, 0.05)', border: '1px solid rgba(0, 229, 255, 0.2)'
-                                                            }}>
-                                                                <FaCodeBranch size={8} style={{ color: 'var(--accent-cyan)' }} />
-                                                                <div style={{ fontSize: '0.7rem', fontWeight: 600, fontFamily: 'monospace', color: '#fff' }}>{group.subId}</div>
-                                                                <div style={{
-                                                                    fontSize: '0.65rem',
-                                                                    color: 'var(--accent-cyan)',
-                                                                    fontWeight: 600,
-                                                                    paddingLeft: '0.2rem',
-                                                                    borderLeft: '1px solid rgba(0, 229, 255, 0.2)',
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    gap: '4px'
-                                                                }}>
-                                                                    {`${group.voltage} | ${group.branches.sort().join(', ')}`}
-                                                                </div>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        const newStages = [...stages];
-                                                                        const newBranches = [...(newStages[activeStageIdx].pocket_branches || [])];
-                                                                        group.branches.forEach(suffix => {
-                                                                            const fullId = `${group.subId}_${suffix}`;
-                                                                            const idx = newBranches.indexOf(fullId);
-                                                                            if (idx > -1) newBranches.splice(idx, 1);
-                                                                        });
-                                                                        newStages[activeStageIdx] = { ...newStages[activeStageIdx], pocket_branches: newBranches };
-                                                                        setStages(newStages);
-                                                                    }}
-                                                                    style={{
-                                                                        background: 'none', border: 'none', color: 'rgba(239, 68, 68, 0.6)', cursor: 'pointer',
-                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                        width: '18px', height: '18px', borderRadius: '50%',
-                                                                        transition: 'all 0.2s', marginLeft: '0.2rem'
-                                                                    }}
-                                                                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = '#EF4444'; }}
-                                                                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'rgba(239, 68, 68, 0.6)'; }}
-                                                                >
-                                                                    <X size={12} />
-                                                                </button>
-                                                            </div>
-                                                        );
-                                                    })}
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.35rem 0.5rem', paddingLeft: `${0.5 + level * 0.8}rem`, borderRadius: '4px' }} className="hover-glow">
+                                                <div onClick={() => toggleNode(id)} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flex: 1, cursor: 'pointer' }}>
+                                                    {isExpanded ? <ChevronDown size={11} color="#94a3b8" /> : <ChevronRight size={11} color="#94a3b8" />}
+                                                    {icon && <span style={{ color: '#64748b', display: 'flex' }}>{icon}</span>}
+                                                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: isExpanded ? '#0f172a' : '#64748b' }}>{label}</span>
                                                 </div>
-
-                                                {!fetchingPocket && pocketPreview?.warning && (
-                                                    <div style={{ fontSize: '0.75rem', color: '#FFAB00', marginTop: '0.75rem' }}>
-                                                        {pocketPreview.warning}
+                                                {refreshAction && <button onClick={e => { e.stopPropagation(); refreshAction(); }} style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', color: '#cbd5e1', display: 'flex' }} onMouseEnter={e => e.currentTarget.style.color = '#64748b'} onMouseLeave={e => e.currentTarget.style.color = '#cbd5e1'}><RefreshCw size={10} /></button>}
+                                            </div>
+                                        );
+                                    };
+                                    const renderRelayNode = (relay, sub, paddingLevel) => {
+                                        const rId = `relay-${relay.id}`;
+                                        const isExpanded = expandedNodes.has(rId);
+                                        let transformerAssignedStage = null;
+                                        for (const stage of stages) { if (stage.transformer_bays?.some(bay => String(bay.relay) === String(relay.id))) { transformerAssignedStage = stage.label || `Stage ${stage.stage_number}`; break; } }
+                                        let totalMw = 0;
+                                        const detail = detailedSubstations[sub.substation_id];
+                                        (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).forEach(txVal => { const transformerId = typeof txVal === 'object' ? txVal.id : txVal; if (detail?.transformers && detail?.db_transformers) { const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId)); if (dbTx) { const tx = detail.transformers.find(t => t.name === `TX T${dbTx.transformer_no}`) || detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`); if (tx?.load_mw != null) totalMw += parseFloat(tx.load_mw); } } });
+                                        const hasCriticalAsset = (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).some(txVal => { const transformerId = typeof txVal === 'object' ? txVal.id : txVal; return criticalAssets.some(ca => ca.load_transformers?.includes(Number(transformerId))); });
+                                        const relayBranches = relay.incoming_branches || [];
+                                        const stageHasBranch = (stage, fullId) => stageContainsBranch(stage, fullId);
+                                        const getBranchAssignmentStage = () => { for (const stage of stages) { const allAssigned = relayBranches.length > 0 && relayBranches.every(b => { const bayId = typeof b === 'object' ? b.bay_id : b; const fullId = String(bayId || '').includes('_') ? String(bayId) : `${sub.substation_id}_${bayId}`; return stageHasBranch(stage, fullId); }); if (allAssigned) return stage.label || `Stage ${stage.stage_number}`; } return null; };
+                                        const toggleAllBranches = () => { setStages(prevStages => { const branchIds = relayBranches.map(b => String(typeof b === 'object' ? b.bay_id : b) || ''); const eligibleBranchIds = branchIds.filter(id => { const assignment = getBranchAssignmentInfo(id.includes('_') ? id : `${sub.substation_id}_${id}`, prevStages); return !assignment || assignment.stageIdx === activeStageIdx; }).map(id => (id.includes('_') ? id : `${sub.substation_id}_${id}`)); if (eligibleBranchIds.length === 0) return prevStages; return prevStages.map((stage, idx) => { if (idx !== activeStageIdx) return stage; const existing = stage.pocket_branches || []; const allAssigned = eligibleBranchIds.every(id => existing.includes(id)); const pocketContainsAll = (stage.computed_pockets || []).some(pocket => eligibleBranchIds.every(id => (pocket.branches || []).includes(id))); if (pocketContainsAll) return { ...stage, computed_pockets: (stage.computed_pockets || []).filter(pocket => !eligibleBranchIds.every(id => (pocket.branches || []).includes(id))) }; return { ...stage, pocket_branches: allAssigned ? existing.filter(id => !eligibleBranchIds.includes(id)) : [...new Set([...existing, ...eligibleBranchIds])] }; }); }); };
+                                        const hasTransformers = (relay.load_transformers || []).length > 0;
+                                        return (
+                                            <div key={relay.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                                                {hasTransformers && (
+                                                    <div onClick={() => handleExpandRelay(relay.id, sub.substation_id)} style={{ padding: '0.32rem 0.5rem', paddingLeft: `${0.5 + paddingLevel * 0.8}rem`, cursor: 'pointer', borderRadius: '4px' }} className="hover-glow">
+                                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.35rem' }}>
+                                                            <div style={{ height: '15px', display: 'flex', alignItems: 'center' }}>{isExpanded ? <ChevronDown size={11} color="#0f172a" /> : <ChevronRight size={11} color="#0f172a" />}</div>
+                                                            <div onClick={e => { e.stopPropagation(); if (!transformerAssignedStage) addTransformerToStage(relay); }} style={{ height: '15px', display: 'flex', alignItems: 'center' }}>
+                                                                {transformerAssignedStage ? <CheckSquare size={11} color="#94a3b8" /> : <Square size={11} color="#0f172a" />}
+                                                            </div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: transformerAssignedStage ? '#94a3b8' : '#0f172a' }}>
+                                                                        {hasCriticalAsset && <FiAlertCircle size={9} style={{ color: '#f97316', marginRight: '3px', verticalAlign: 'middle' }} />}
+                                                                        {relay.relay_name?.replace(' System', '') || 'Relay'}
+                                                                    </span>
+                                                                    <span style={{ fontFamily: 'monospace', fontSize: '0.62rem', color: '#64748b', marginLeft: '4px' }}>{formatMW(totalMw)} MW</span>
+                                                                </div>
+                                                                {transformerAssignedStage && <div style={{ fontSize: '0.57rem', color: '#f59e0b', fontStyle: 'italic', marginTop: '1px' }}>Assigned: {transformerAssignedStage}</div>}
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 )}
-
-                                                {/* Preview / Lock Pocket section */}
-                                                {pocketPreview && !pocketPreview.error && (
-                                                    <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(0, 229, 255, 0.1)' }}>
-                                                        {pocketPreview.pocket_substations?.length > 0 && (
-                                                            <div style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', marginBottom: '0.5rem', fontWeight: 600 }}>
-                                                                Preview: {pocketPreview.pocket_substations.length} substations ({formatMW(pocketPreview.total_p_mw ?? 0)} MW)
+                                                {(hasTransformers ? isExpanded : true) && (
+                                                    <div style={{ paddingBottom: '3px' }}>
+                                                        {(Array.isArray(relay.load_transformers) ? relay.load_transformers : []).map(txVal => {
+                                                            const transformerId = typeof txVal === 'object' ? txVal.id : txVal;
+                                                            let txLabel = `T-Bay ${transformerId}`, txMw = 0;
+                                                            if (detail?.db_transformers) { const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId)); if (dbTx) { txLabel = `T${dbTx.transformer_no}`; const tx = detail.transformers?.find(t => t.name === `TX T${dbTx.transformer_no}`) || detail.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`); if (tx?.load_mw != null) txMw = parseFloat(tx.load_mw); } }
+                                                            const isTxAssigned = (stages[activeStageIdx]?.transformer_bays || []).some(tb => String(tb.relay) === String(relay.id) && tb.transformers.some(t => { const tId = typeof t === 'object' ? t.id : t; return String(tId) === String(transformerId); }));
+                                                            return (
+                                                                <div key={transformerId} onClick={e => { e.stopPropagation(); toggleTransformerInStage(relay, transformerId); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.17rem 0.5rem', paddingLeft: `${1.35 + paddingLevel * 0.8}rem`, fontSize: '0.65rem', color: isTxAssigned ? '#166534' : '#64748b', cursor: 'pointer' }} className="hover-glow">
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                                        <FaBolt size={8} style={{ opacity: isTxAssigned ? 1 : 0.4 }} />
+                                                                        <span style={{ fontWeight: isTxAssigned ? 700 : 400 }}>{txLabel}</span>
+                                                                    </div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                                        <span style={{ fontFamily: 'monospace', fontSize: '0.62rem' }}>{formatMW(txMw)} MW</span>
+                                                                        {isTxAssigned && <CheckSquare size={9} color="#166534" />}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {relayBranches.length > 0 && (
+                                                            <div style={{ paddingTop: '3px', borderTop: '1px solid #f1f5f9', marginTop: '2px' }}>
+                                                                {(() => {
+                                                                    const assignedStage = getBranchAssignmentStage();
+                                                                    let assignedCount = 0, assignableCount = 0, lockedElsewhereCount = 0;
+                                                                    relayBranches.forEach(b => { const bayId = typeof b === 'object' ? b.bay_id : b; const bayIdStr = String(bayId || ''); const fullId = bayIdStr.includes('_') ? bayIdStr : `${sub.substation_id}_${bayIdStr}`; const assignment = getBranchAssignmentInfo(fullId); const isAssignable = !assignment || assignment.stageIdx === activeStageIdx; if (isAssignable) { assignableCount += 1; if (stageHasBranch(stages[activeStageIdx] || {}, fullId)) assignedCount += 1; } else lockedElsewhereCount += 1; });
+                                                                    const allAssigned = assignableCount > 0 && assignedCount === assignableCount;
+                                                                    return (
+                                                                        <div style={{ marginBottom: '2px' }}>
+                                                                            <div style={{ padding: '0.17rem 0.5rem', paddingLeft: `${(hasTransformers ? 1.35 : 0.5) + paddingLevel * 0.8}rem`, cursor: 'pointer', borderRadius: '4px', background: allAssigned ? '#f0fdf4' : 'transparent' }} className="hover-glow">
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                    {!hasTransformers && <div onClick={e => { e.stopPropagation(); toggleNode(rId); }} style={{ height: '15px', display: 'flex', alignItems: 'center' }}>{isExpanded ? <ChevronDown size={11} color="#94a3b8" /> : <ChevronRight size={11} color="#94a3b8" />}</div>}
+                                                                                    <div onClick={e => { e.stopPropagation(); toggleAllBranches(); }} style={{ height: '15px', display: 'flex', alignItems: 'center' }}>{allAssigned ? <CheckSquare size={10} color="#166534" /> : <Square size={10} color="#0f172a" />}</div>
+                                                                                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                                            <span style={{ fontSize: '0.62rem', fontWeight: 600, color: allAssigned ? '#166534' : '#64748b' }} onClick={() => { if (!hasTransformers) toggleNode(rId); }}>BRANCHES</span>
+                                                                                            <span style={{ fontSize: '0.58rem', color: '#94a3b8' }}>[{assignedCount}/{relayBranches.length}]</span>
+                                                                                        </div>
+                                                                                        {assignedStage && <div style={{ fontSize: '0.55rem', color: '#f59e0b', fontStyle: 'italic' }}>Assigned: {assignedStage}</div>}
+                                                                                        {lockedElsewhereCount > 0 && <div style={{ fontSize: '0.55rem', color: '#f97316' }}>{lockedElsewhereCount} in other stages</div>}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                            {(hasTransformers || isExpanded) && relayBranches.map(branch => {
+                                                                                const bayId = typeof branch === 'object' ? branch.bay_id : branch;
+                                                                                const bayIdStr = String(bayId || '');
+                                                                                const localPrefix = `${sub.substation_id}_`;
+                                                                                const displayId = bayIdStr.startsWith(localPrefix) ? bayIdStr.replace(localPrefix, '') : bayIdStr;
+                                                                                const fullId = bayIdStr.includes('_') ? bayIdStr : `${sub.substation_id}_${bayIdStr}`;
+                                                                                const branchAssignment = getBranchAssignmentInfo(fullId) || null;
+                                                                                const isAssignedHere = branchAssignment?.stageIdx === activeStageIdx;
+                                                                                const isLockedElsewhere = Boolean(branchAssignment && branchAssignment.stageIdx !== activeStageIdx);
+                                                                                const assignedStageLabel = branchAssignment ? (branchAssignment.stage?.label || `Stage ${branchAssignment.stage?.stage_number || (branchAssignment.stageIdx + 1)}`) : null;
+                                                                                const rowColor = isLockedElsewhere ? '#94a3b8' : (isAssignedHere ? '#166534' : '#64748b');
+                                                                                return (
+                                                                                    <div key={typeof branch === 'object' ? branch.id : branch} onClick={() => { if (isLockedElsewhere) return; toggleBranchInStage(bayId, sub.substation_id); }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.17rem 0.5rem', paddingLeft: `${(hasTransformers ? 2.3 : 1.35) + paddingLevel * 0.8}rem`, fontSize: '0.62rem', color: rowColor, cursor: isLockedElsewhere ? 'not-allowed' : 'pointer', opacity: isLockedElsewhere ? 0.65 : 1 }} className="hover-glow">
+                                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                                                            {isLockedElsewhere ? <Lock size={9} color="#94a3b8" /> : (isAssignedHere ? <CheckSquare size={9} color="#166634" /> : <Square size={9} color="#0f172a" />)}
+                                                                                            <FaCodeBranch size={8} style={{ opacity: isAssignedHere ? 1 : 0.4 }} />
+                                                                                            <span style={{ fontWeight: isAssignedHere ? 700 : 400 }}>{displayId}</span>
+                                                                                        </div>
+                                                                                        {isLockedElsewhere && assignedStageLabel && <span style={{ fontSize: '0.55rem', color: '#f59e0b', fontWeight: 600 }}>{assignedStageLabel}</span>}
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    );
+                                                                })()}
                                                             </div>
                                                         )}
-                                                        <button
-                                                            onClick={() => {
-                                                                const branches = stages[activeStageIdx].pocket_branches || [];
-                                                                const groupKey = (subId, voltage) => `${subId}||${voltage || ''}`;
-                                                                const groups = {};
-                                                                branches.forEach(fullId => {
-                                                                    const parts = fullId.split('_');
-                                                                    if (parts.length >= 3) {
-                                                                        const localSub = parts[0];
-                                                                        const voltageValue = substations.find(s => s.substation_id === localSub)?.voltage;
-                                                                        const key = groupKey(localSub, voltageValue);
-                                                                        if (!groups[key]) groups[key] = { subId: localSub, voltage: voltageValue ? `${voltageValue}kV` : '', branches: [] };
-                                                                        groups[key].branches.push(parts.slice(1).join('_'));
-                                                                    }
-                                                                });
-                                                                const newPocket = {
-                                                                    id: Date.now(),
-                                                                    branches: [...branches],
-                                                                    branchGroups: Object.values(groups),
-                                                                    pocket_substations: pocketPreview.pocket_substations || [],
-                                                                    pocket_substation_details: pocketPreview.pocket_substation_details || [],
-                                                                    total_p_mw: pocketPreview.total_p_mw || 0,
-                                                                    substation_mw: (pocketPreview.pocket_substation_details || []).reduce((acc, sub) => {
-                                                                        acc[sub.substation_id] = { total_p_mw: sub.p_mw, total_q_mvar: sub.q_mvar };
-                                                                        return acc;
-                                                                    }, {}),
-                                                                    total_q_mvar: pocketPreview.total_q_mvar || 0
-                                                                };
-                                                                const newStages = [...stages];
-                                                                const active = { ...newStages[activeStageIdx] };
-                                                                active.computed_pockets = [...(active.computed_pockets || []), newPocket];
-                                                                active.pocket_branches = [];
-                                                                newStages[activeStageIdx] = active;
-                                                                setStages(newStages);
-                                                                setPocketPreview(null);
-                                                            }}
-                                                            style={{
-                                                                background: 'rgba(0, 255, 163, 0.15)', border: '1px solid rgba(0, 255, 163, 0.3)',
-                                                                color: 'var(--accent-green)', cursor: 'pointer',
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem',
-                                                                padding: '6px 12px', borderRadius: '6px',
-                                                                fontSize: '0.75rem', fontWeight: 600, transition: 'all 0.2s', width: '100%'
-                                                            }}
-                                                            onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(0, 255, 163, 0.25)'; }}
-                                                            onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(0, 255, 163, 0.15)'; }}
-                                                        >
-                                                            <FaLock size={12} /> { pocketPreview.pocket_substations?.length > 0 && !pocketPreview.warning ? `Create Pocket (${pocketPreview.pocket_substations.length} sub${pocketPreview.pocket_substations.length > 1 ? 's' : ''})` : 'Lock Anyway' }
-                                                        </button>
                                                     </div>
                                                 )}
+                                            </div>
+                                        );
+                                    };
+                                    return Object.keys(tree).sort().map(region => {
+                                        const rId = `region-${region}`;
+                                        return (
+                                            <div key={region}>
+                                                {renderNodeHeader(rId, region, 0)}
+                                                {expandedNodes.has(rId) && Object.keys(tree[region]).sort().map(grid => {
+                                                    const gId = `grid-${region}-${grid}`;
+                                                    return (
+                                                        <div key={grid} style={{ borderLeft: '1px solid #f1f5f9', marginLeft: '9px' }}>
+                                                            {renderNodeHeader(gId, grid, 1)}
+                                                            {expandedNodes.has(gId) && Object.keys(tree[region][grid]).sort().map(subId => {
+                                                                const sId = `sub-${region}-${grid}-${subId}`;
+                                                                const nodeData = tree[region][grid][subId];
+                                                                const substation = nodeData.substation;
+                                                                return (
+                                                                    <div key={subId} style={{ borderLeft: '1px solid #f1f5f9', marginLeft: '9px' }}>
+                                                                        {renderNodeHeader(sId, `${substation.name || subId} (${subId})`, 2, null, async () => { try { const [res, txRes] = await Promise.all([api.get(`/substations/${subId}/`), api.get(`/load-transformers/?substation=${subId}`)]); const data = res.data; data.db_transformers = txRes.data; setDetailedSubstations(prev => ({ ...prev, [subId]: data })); } catch(e) { console.error('Refresh failed', e); } })}
+                                                                        {expandedNodes.has(sId) && <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', marginTop: '1px' }}>{nodeData.relays.map(relay => renderRelayNode(relay, substation, 3))}</div>}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                                {relays.length === 0 && !loading && <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.72rem' }}>No load shedding relays found.</div>}
+                            </div>
+                        </>
+                    ) : (
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', color: '#94a3b8', fontSize: '0.72rem', textAlign: 'center' }}>
+                            <div><Shield size={20} style={{ color: '#e2e8f0', marginBottom: '0.5rem', display: 'block', margin: '0 auto 0.5rem' }} /><div>Alert Message Content area</div></div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            </div> {/* end 3-column body */}
+
+            {/* ── SETTINGS DRAWER ─────────────────────────────── */}
+            {showSettingsDrawer && (
+                <>
+                    <div onClick={() => setShowSettingsDrawer(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.12)', zIndex: 100 }} />
+                    <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: '700px', maxWidth: '90vw', background: '#fff', borderLeft: '1px solid #e2e8f0', boxShadow: '-4px 0 24px rgba(0,0,0,0.08)', zIndex: 101, display: 'flex', flexDirection: 'column', fontFamily: "'Poppins',sans-serif" }}>
+                        <div style={{ padding: '0.85rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                            <div>
+                                <div style={{ fontSize: '0.55rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: '2px' }}>Configuration</div>
+                                <h2 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: '#0f172a' }}>Scheme Settings</h2>
+                            </div>
+                            <button onClick={() => setShowSettingsDrawer(false)} style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748b' }}><X size={13} /></button>
+                        </div>
+                        <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', padding: '0 1.5rem', flexShrink: 0 }}>
+                            {[['ufls', 'UFLS Settings'], ['uvls', 'UVLS Settings'], ['conflict', 'Critical Conflicts']].map(([key, label]) => (
+                                <button key={key} onClick={() => setActiveGlobalSettingsTab(key)} style={{ padding: '0.55rem 0.85rem', fontSize: '0.7rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: activeGlobalSettingsTab === key ? '#0f172a' : '#94a3b8', background: 'none', border: 'none', borderBottom: `2px solid ${activeGlobalSettingsTab === key ? '#0f172a' : 'transparent'}`, cursor: 'pointer', whiteSpace: 'nowrap' }}>{label}</button>
+                            ))}
+                        </div>
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem' }}>
+                            {activeGlobalSettingsTab !== 'conflict' ? (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: '1.25rem' }}>
+                                    {(() => {
+                                        const selectedSchemeType = activeGlobalSettingsTab === 'uvls' ? 'UVLS' : 'UFLS';
+                                        const thresholdUnit = selectedSchemeType === 'UVLS' ? 'p.u.' : 'Hz';
+                                        const settingsForTab = getSortedSettings(globalSettings.filter(s => s.scheme_type === selectedSchemeType));
+                                        return (
+                                            <>
+                                                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+                                                        <thead>
+                                                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                                                <th style={{ padding: '0.65rem 1rem', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Label</th>
+                                                                <th style={{ padding: '0.65rem 1rem', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Threshold</th>
+                                                                <th style={{ padding: '0.65rem 1rem', textAlign: 'left', fontWeight: 600, color: '#64748b', fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time Delay</th>
+                                                                {isStaff && <th style={{ padding: '0.65rem 1rem', textAlign: 'right' }}></th>}
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {settingsForTab.map(s => (
+                                                                <tr key={s.id} style={{ borderBottom: '1px solid #f8fafc' }} onMouseEnter={e => e.currentTarget.style.background = '#fafafa'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                                                                    <td style={{ padding: '0.55rem 1rem', fontWeight: 500, color: '#334155' }}>{s.label}</td>
+                                                                    <td style={{ padding: '0.55rem 1rem', fontFamily: 'monospace', color: '#0f172a' }}>{s.threshold} {thresholdUnit}</td>
+                                                                    <td style={{ padding: '0.55rem 1rem', fontFamily: 'monospace', color: '#0f172a' }}>{s.time_delay} s</td>
+                                                                    {isStaff && <td style={{ padding: '0.55rem 1rem', textAlign: 'right' }}><button onClick={() => handleDeleteSetting(s.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}><Trash2 size={14} /></button></td>}
+                                                                </tr>
+                                                            ))}
+                                                            {settingsForTab.length === 0 && <tr><td colSpan="4" style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.72rem' }}>No settings defined.</td></tr>}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '1rem', alignSelf: 'start', position: 'sticky', top: 0 }}>
+                                                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#0f172a', marginBottom: '0.85rem' }}>Add {selectedSchemeType} Setting</div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                                        <div>
+                                                            <label style={{ fontSize: '0.62rem', color: '#64748b', display: 'block', marginBottom: '3px' }}>Threshold ({thresholdUnit})</label>
+                                                            <input type="number" step="0.01" value={newSettingThreshold} onChange={e => setNewSettingThreshold(e.target.value)} placeholder={selectedSchemeType === 'UVLS' ? 'e.g. 0.85' : 'e.g. 49.2'} style={{ width: '100%', padding: '0.42rem 0.65rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.7rem', color: '#0f172a', outline: 'none', background: '#fff', boxSizing: 'border-box' }} />
+                                                        </div>
+                                                        <div>
+                                                            <label style={{ fontSize: '0.62rem', color: '#64748b', display: 'block', marginBottom: '3px' }}>Time Delay (s)</label>
+                                                            <input type="number" step="0.1" value={newSettingTimeDelay} onChange={e => setNewSettingTimeDelay(e.target.value)} placeholder="e.g. 0.2" style={{ width: '100%', padding: '0.42rem 0.65rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.7rem', color: '#0f172a', outline: 'none', background: '#fff', boxSizing: 'border-box' }} />
+                                                        </div>
+                                                        <button onClick={handleAddNewSetting} style={{ height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.7rem', fontFamily: "'Poppins',sans-serif", fontWeight: 700, color: '#fff', background: '#0f172a', border: 'none', borderRadius: '6px', cursor: 'pointer', marginTop: '3px' }} onMouseEnter={e => e.currentTarget.style.background = '#1e293b'} onMouseLeave={e => e.currentTarget.style.background = '#0f172a'}><Plus size={12} /> Create Setting</button>
+                                                    </div>
+                                                    {!isStaff && <div style={{ marginTop: '0.85rem', padding: '0.55rem 0.65rem', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', fontSize: '0.62rem', color: '#92400e' }}><strong>Note:</strong> Admins can delete settings.</div>}
+                                                </div>
                                             </>
                                         );
                                     })()}
                                 </div>
-
-                                {/* Error state */}
-                                {pocketPreview?.error && (
-                                    <div style={{ fontSize: '0.75rem', color: '#EF4444', padding: '0.75rem', background: 'rgba(239,68,68,0.1)', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>
-                                        {pocketPreview.error}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Sticky Footer */}
-                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '1rem 1.5rem', background: 'rgba(10, 12, 16, 0.9)', backdropFilter: 'blur(12px)', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: activeVersionMeta?.status === 'active' ? '#10B981' : '#FFAB00' }}></div>
-                                {activeVersionMeta?.status === 'active' ? 'Published Version Active' : 'Draft Mode Active'}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <button
-                                    className="btn-secondary"
-                                    onClick={() => setShowSummaryModal(true)}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
-                                >
-                                    <FaTableList size={16} /> Summary
-                                </button>
-                                {activeVersionMeta?.status === 'active' ? (
-                                    <button
-                                        className="btn-secondary"
-                                        onClick={handleUnpublishWorkspace}
-                                        disabled={publishing}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.25rem', fontSize: '0.85rem', background: 'rgba(255, 171, 0, 0.08)', color: '#FFAB00', border: '1px solid rgba(255, 171, 0, 0.2)', opacity: publishing ? 0.7 : 1 }}
-                                    >
-                                        <RotateCcw size={16} /> {publishing ? 'Unpublishing...' : 'Unpublish'}
-                                    </button>
-                                ) : (
-                                    <button
-                                        className="btn-secondary"
-                                        onClick={handlePublishWorkspace}
-                                        disabled={publishing}
-                                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.25rem', fontSize: '0.85rem', background: 'rgba(16, 185, 129, 0.08)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.2)', opacity: publishing ? 0.7 : 1 }}
-                                    >
-                                        <FaShieldHalved size={15} /> {publishing ? 'Publishing...' : 'Publish'}
-                                    </button>
-                                )}
-                                <button
-                                    className="btn-primary"
-                                    onClick={handleSaveWorkspace}
-                                    disabled={saving || publishing}
-                                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1.5rem', fontSize: '0.85rem', boxShadow: '0 0 20px rgba(0, 229, 255, 0.3)', opacity: (saving || publishing) ? 0.7 : 1 }}
-                                >
-                                    {saving ? <RotateCcw size={16} className="animate-spin" /> : <Save size={16} />}
-                                    {saving ? 'Saving...' : 'Save Workspace'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right: Asset Library */}
-                    <div className="glass-card" style={{ gridColumn: 'span 6', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
-                        <div style={{ display: 'flex', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div
-                                onClick={() => setAssetLibraryTab('library')}
-                                style={{
-                                    flex: 1, textAlign: 'center', padding: '0.75rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-                                    color: assetLibraryTab === 'library' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                                    borderBottom: assetLibraryTab === 'library' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                Asset Library
-                            </div>
-                            <div
-                                onClick={() => setAssetLibraryTab('alerts')}
-                                style={{
-                                    flex: 1, textAlign: 'center', padding: '0.75rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-                                    color: assetLibraryTab === 'alerts' ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                                    borderBottom: assetLibraryTab === 'alerts' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                                    transition: 'all 0.2s'
-                                }}
-                            >
-                                Alert Message
-                            </div>
-                        </div>
-
-                        {assetLibraryTab === 'library' ? (
-                            <>
-                                <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                                    <div style={{ position: 'relative' }}>
-                                        <Search style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }} size={16} />
-                                        <input
-                                            type="text"
-                                            placeholder="Search Relay / Substation..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            style={{
-                                                width: '100%',
-                                                padding: '0.525rem 2.5rem 0.525rem 2.5rem',
-                                                background: 'rgba(255,255,255,0.03)',
-                                                border: '1px solid rgba(255,255,255,0.08)',
-                                                borderRadius: '8px',
-                                                color: 'var(--text-primary)',
-                                                fontSize: '0.75rem',
-                                                outline: 'none',
-                                                transition: 'all 0.2s ease',
-                                            }}
-                                            onFocus={(e) => {
-                                                e.target.style.background = 'rgba(255,255,255,0.06)';
-                                                e.target.style.borderColor = 'rgba(0, 255, 163, 0.4)';
-                                                e.target.style.boxShadow = '0 0 0 3px rgba(0, 255, 163, 0.08)';
-                                            }}
-                                            onBlur={(e) => {
-                                                e.target.style.background = 'rgba(255,255,255,0.03)';
-                                                e.target.style.borderColor = 'rgba(255,255,255,0.08)';
-                                                e.target.style.boxShadow = 'none';
-                                            }}
-                                        />
-                                        {searchTerm && (
-                                            <button
-                                                onClick={() => setSearchTerm('')}
-                                                type="button"
-                                                style={{
-                                                    position: 'absolute',
-                                                    right: '0.625rem',
-                                                    top: '50%',
-                                                    transform: 'translateY(-50%)',
-                                                    width: '24px',
-                                                    height: '24px',
-                                                    borderRadius: '999px',
-                                                    border: 'none',
-                                                    background: 'rgba(255,255,255,0.06)',
-                                                    color: 'var(--text-secondary)',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s ease',
-                                                    padding: 0,
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
-                                                    e.currentTarget.style.color = '#EF4444';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
-                                                    e.currentTarget.style.color = 'var(--text-secondary)';
-                                                }}
-                                                aria-label="Clear search"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                                <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                    {(() => {
-                                        // 1. Group relays by Region -> Grid -> Substation
-                                        const tree = {};
-                                        const term = searchTerm.toLowerCase();
-
-                                        relays.forEach(relay => {
-                                            const sub = substations.find(s => s.substation_id === (relay.substation_id || relay.substation));
-                                            if (!sub) return;
-
-                                            const region = sub.region || 'Unknown Region';
-                                            const grid = sub.grid || 'Unknown Grid';
-                                            const subId = sub.substation_id;
-
-                                            if (term && !subId.toLowerCase().includes(term) && !(relay.relay_name || "").toLowerCase().includes(term)) {
-                                                return;
-                                            }
-
-                                            if (!tree[region]) tree[region] = {};
-                                            if (!tree[region][grid]) tree[region][grid] = {};
-                                            if (!tree[region][grid][subId]) tree[region][grid][subId] = { substation: sub, relays: [] };
-
-                                            tree[region][grid][subId].relays.push(relay);
-                                        });
-
-                                        const toggleNode = (nodeId) => {
-                                            setExpandedNodes(prev => {
-                                                const newSet = new Set(prev);
-                                                if (newSet.has(nodeId)) {
-                                                    newSet.delete(nodeId);
-                                                } else {
-                                                    newSet.add(nodeId);
-                                                }
-                                                return newSet;
-                                            });
-                                        };
-
-                                        const handleExpandRelay = async (relayId, subId) => {
-                                            const rId = `relay-${relayId}`;
-                                            toggleNode(rId);
-
-                                            if (detailedSubstations[subId]) return;
-
-                                            try {
-                                                const [res, txRes] = await Promise.all([
-                                                    api.get(`/substations/${subId}/`),
-                                                    api.get(`/load-transformers/?substation=${subId}`)
-                                                ]);
-
-                                                const data = res.data;
-                                                data.db_transformers = txRes.data;
-
-                                                setDetailedSubstations(prev => ({
-                                                    ...prev,
-                                                    [subId]: data
-                                                }));
-                                            } catch (err) {
-                                                console.error("Failed to fetch substation details for expansion", err);
-                                                setDetailedSubstations(prev => ({
-                                                    ...prev,
-                                                    [subId]: { transformers: [], db_transformers: [] }
-                                                }));
-                                            }
-                                        };
-
-                                        const renderNodeHeader = (id, label, level, icon, refreshAction = null) => {
-                                            const isExpanded = expandedNodes.has(id);
-                                            return (
-                                                <div
-                                                    style={{
-                                                        display: 'flex', alignItems: 'center', gap: '0.5rem',
-                                                        padding: '0.5rem', paddingLeft: `${0.5 + level * 1}rem`,
-                                                        borderRadius: '4px',
-                                                        background: 'transparent',
-                                                        transition: 'background 0.2s',
-                                                        justifyContent: 'space-between'
-                                                    }}
-                                                    className="hover-glow"
-                                                >
-                                                    <div 
-                                                        onClick={() => toggleNode(id)}
-                                                        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, cursor: 'pointer' }}
-                                                    >
-                                                        {isExpanded ? <ChevronDown size={14} color="var(--text-secondary)" /> : <ChevronRight size={14} color="var(--text-secondary)" />}
-                                                        {icon && <span style={{ color: 'var(--text-secondary)', display: 'flex' }}>{icon}</span>}
-                                                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: isExpanded ? '#fff' : 'var(--text-secondary)' }}>{label}</span>
-                                                    </div>
-                                                    {refreshAction && (
-                                                        <button 
-                                                            onClick={(e) => { e.stopPropagation(); refreshAction(); }}
-                                                            style={{ background: 'none', border: 'none', padding: '4px', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', transition: 'all 0.2s' }}
-                                                            onMouseEnter={e => e.currentTarget.style.color = 'var(--accent-cyan)'}
-                                                            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
-                                                            title="Refresh data"
-                                                        >
-                                                            <RefreshCw size={12} />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            );
-                                        };
-
-                                        const renderRelayNode = (relay, sub, paddingLevel) => {
-                                            const rId = `relay-${relay.id}`;
-                                            const isExpanded = expandedNodes.has(rId);
-
-                                            // Only check transformer assignment for relay header checkbox
-                                            let transformerAssignedStage = null;
-                                            for (const stage of stages) {
-                                                if (stage.transformer_bays && stage.transformer_bays.some(bay => String(bay.relay) === String(relay.id))) {
-                                                    transformerAssignedStage = stage.label || `Stage ${stage.stage_number}`;
-                                                    break;
-                                                }
-                                            }
-
-                                            let totalMw = 0;
-                                            const detail = detailedSubstations[sub.substation_id];
-
-                                            (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).forEach(txVal => {
-                                                const transformerId = typeof txVal === 'object' ? txVal.id : txVal;
-                                                if (detail && detail.transformers && detail.db_transformers) {
-                                                    const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                                                    if (dbTx) {
-                                                        const expectedName = `TX T${dbTx.transformer_no}`;
-                                                        const tx = detail.transformers.find(t => t.name === expectedName) || 
-                                                                   detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
-                                                        if (tx && tx.load_mw != null) {
-                                                            totalMw += parseFloat(tx.load_mw);
-                                                        }
-                                                    }
-                                                }
-                                            });
-
-                                            const hasIncomingBranches = (relay.incoming_branches || []).length > 0;
-
-                                            // Check if this relay contains any critical assets
-                                            const hasCriticalAsset = (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).some(txVal => {
-                                                const transformerId = typeof txVal === 'object' ? txVal.id : txVal;
-                                                return criticalAssets.some(ca => ca.load_transformers && ca.load_transformers.includes(Number(transformerId)));
-                                            });
-
-                                            // Group incoming branches by voltage
-                                            const relayBranches = relay.incoming_branches || [];
-
-                                            const stageHasBranch = (stage, fullId) => stageContainsBranch(stage, fullId);
-
-                                            // Check branch assignment per voltage
-                                            const getBranchAssignmentStage = () => {
-                                                for (const stage of stages) {
-                                                    const allAssigned = relayBranches.length > 0 && relayBranches.every(b => {
-                                                        const bayId = typeof b === 'object' ? b.bay_id : b;
-                                                        const fullId = bayId.includes('_') ? bayId : `${sub.substation_id}_${bayId}`;
-                                                        return stageHasBranch(stage, fullId);
-                                                    });
-                                                    if (allAssigned) {
-                                                        return stage.label || `Stage ${stage.stage_number}`;
-                                                    }
-                                                }
-                                                return null;
-                                            };
-
-                                            const toggleAllBranches = () => {
-                                                setStages(prevStages => {
-                                                    const branchIds = relayBranches.map(b => {
-                                                        const bayId = typeof b === 'object' ? b.bay_id : b;
-                                                        return String(bayId || '');
-                                                    });
-
-                                                    const eligibleBranchIds = branchIds.filter(id => {
-                                                        const assignment = getBranchAssignmentInfo(id.includes('_') ? id : `${sub.substation_id}_${id}`, prevStages);
-                                                        return !assignment || assignment.stageIdx === activeStageIdx;
-                                                    }).map(id => (id.includes('_') ? id : `${sub.substation_id}_${id}`));
-
-                                                    if (eligibleBranchIds.length === 0) {
-                                                        return prevStages;
-                                                    }
-
-                                                    return prevStages.map((stage, idx) => {
-                                                        if (idx !== activeStageIdx) return stage;
-                                                        const existing = stage.pocket_branches || [];
-                                                        const allAssigned = eligibleBranchIds.every(id => existing.includes(id));
-                                                        const pocketContainsAll = (stage.computed_pockets || []).some(pocket =>
-                                                            eligibleBranchIds.every(id => (pocket.branches || []).includes(id))
-                                                        );
-
-                                                        if (pocketContainsAll) {
-                                                            return {
-                                                                ...stage,
-                                                                computed_pockets: (stage.computed_pockets || []).filter(pocket =>
-                                                                    !eligibleBranchIds.every(id => (pocket.branches || []).includes(id))
-                                                                ),
-                                                            };
-                                                        }
-
-                                                        return {
-                                                            ...stage,
-                                                            pocket_branches: allAssigned
-                                                                ? existing.filter(id => !eligibleBranchIds.includes(id))
-                                                                : [...new Set([...existing, ...eligibleBranchIds])],
-                                                        };
-                                                    });
-                                                });
-                                            };
-
-                                            const hasTransformers = (relay.load_transformers || []).length > 0;
-
-                                            return (
-                                                <div key={relay.id} style={{ display: 'flex', flexDirection: 'column' }}>
-                                                    {hasTransformers && (
-                                                        <div
-                                                            onClick={() => handleExpandRelay(relay.id, sub.substation_id)}
-                                                            style={{
-                                                                padding: '0.4rem 0.5rem', paddingLeft: `${0.5 + paddingLevel * 1}rem`,
-                                                                cursor: 'pointer', borderRadius: '4px', transition: 'background 0.2s'
-                                                            }}
-                                                            className="hover-glow"
-                                                        >
-                                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                                                                <div style={{ height: '18px', display: 'flex', alignItems: 'center' }}>
-                                                                    {isExpanded ? <ChevronDown size={14} color="var(--accent-cyan)" /> : <ChevronRight size={14} color="var(--accent-cyan)" />}
-                                                                </div>
-                                                                <div
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        if (!transformerAssignedStage) addTransformerToStage(relay);
-                                                                    }}
-                                                                    style={{ height: '18px', display: 'flex', alignItems: 'center' }}
-                                                                >
-                                                                    {transformerAssignedStage ? <CheckSquare size={14} color="var(--text-secondary)" /> : <Square size={14} color="var(--accent-cyan)" />}
-                                                                </div>
-                                                                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: transformerAssignedStage ? 'var(--text-secondary)' : 'var(--accent-cyan)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                                            {relay.relay_name?.replace(' System', '') || 'Relay'}
-                                                                        </span>
-                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                            {hasCriticalAsset && (
-                                                                                <FiAlertCircle size={12} style={{ color: '#F97316' }} title="Contains Critical Asset" />
-                                                                            )}
-                                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: 'var(--accent-cyan)', whiteSpace: 'nowrap' }}>
-                                                                                {formatMW(totalMw)} MW
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                    {transformerAssignedStage && (
-                                                                        <div style={{
-                                                                            fontSize: '0.6rem',
-                                                                            color: '#FFAB00',
-                                                                            fontStyle: 'italic',
-                                                                            marginTop: '2px',
-                                                                            display: 'inline-flex',
-                                                                            alignItems: 'flex-start'
-                                                                        }}>
-                                                                            <span style={{ lineHeight: '1.2' }}>Assigned: {transformerAssignedStage}</span>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    {(hasTransformers ? isExpanded : true) && (
-                                                        <div style={{ paddingBottom: '8px' }}>
-                                                            {(Array.isArray(relay.load_transformers) ? relay.load_transformers : []).map(txVal => {
-                                                                const transformerId = typeof txVal === "object" ? txVal.id : txVal;
-                                                                let txLabel = typeof txVal === "object" && txVal.bay_id ? txVal.bay_id : `T-Bay ${transformerId}`;
-                                                                let txMw = 0;
-
-                                                                if (detail && detail.db_transformers) {
-                                                                    const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                                                                    if (dbTx) {
-                                                                        txLabel = `T${dbTx.transformer_no}`;
-                                                                        const expectedName = `TX T${dbTx.transformer_no}`;
-                                                                        const tx = detail.transformers?.find(t => t.name === expectedName) || 
-                                                                                   detail.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
-                                                                        if (tx && tx.load_mw != null) txMw = parseFloat(tx.load_mw);
-                                                                    }
-                                                                }
-
-                                                                const isTxAssigned = (stages[activeStageIdx]?.transformer_bays || []).some(tb => 
-                                                                    String(tb.relay) === String(relay.id) && 
-                                                                    tb.transformers.some(t => {
-                                                                        const tId = typeof t === 'object' ? t.id : t;
-                                                                        return String(tId) === String(transformerId);
-                                                                    })
-                                                                );
-
-                                                                return (
-                                                                    <div 
-                                                                        key={transformerId} 
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            toggleTransformerInStage(relay, transformerId);
-                                                                        }}
-                                                                        style={{ 
-                                                                            display: 'flex', justifyContent: 'space-between', padding: '0.2rem 0.5rem', 
-                                                                            paddingLeft: `${1.5 + paddingLevel * 1}rem`, fontSize: '0.7rem', 
-                                                                            color: isTxAssigned ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                                                                            cursor: 'pointer'
-                                                                        }}
-                                                                        className="hover-glow"
-                                                                    >
-                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                            <FaBolt size={10} style={{ opacity: isTxAssigned ? 1 : 0.5 }} />
-                                                                            <span style={{ fontWeight: isTxAssigned ? 700 : 400 }}>{txLabel}</span>
-                                                                        </div>
-                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                            <span style={{ fontFamily: 'monospace' }}>{formatMW(txMw)} MW</span>
-                                                                            {isTxAssigned && <CheckSquare size={12} color="var(--accent-cyan)" />}
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })}
-
-                                                            {/* Incoming Branches */}
-                                                            {relayBranches.length > 0 && (
-                                                                <div style={{ paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: '4px' }}>
-                                                                    {(() => {
-                                                                        const assignedStage = getBranchAssignmentStage();
-                                                                        let assignedCount = 0;
-                                                                        let assignableCount = 0;
-                                                                        let lockedElsewhereCount = 0;
-
-                                                                        relayBranches.forEach(b => {
-                                                                            const bayId = typeof b === 'object' ? b.bay_id : b;
-                                                                            const bayIdStr = String(bayId || '');
-                                                                            const fullId = bayIdStr.includes('_') ? bayIdStr : `${sub.substation_id}_${bayIdStr}`;
-                                                                            const assignment = getBranchAssignmentInfo(fullId);
-                                                                            const isAssignable = !assignment || assignment.stageIdx === activeStageIdx;
-
-                                                                            if (isAssignable) {
-                                                                                assignableCount += 1;
-                                                                                if (stageHasBranch(stages[activeStageIdx] || {}, fullId)) {
-                                                                                    assignedCount += 1;
-                                                                                }
-                                                                            } else {
-                                                                                lockedElsewhereCount += 1;
-                                                                            }
-                                                                        });
-
-                                                                        const allAssigned = assignableCount > 0 && assignedCount === assignableCount;
-
-                                                                        return (
-                                                                            <div style={{ marginBottom: '4px' }}>
-                                                                                {/* Incoming Branches Header */}
-                                                                                <div
-                                                                                    style={{
-                                                                                    padding: '0.2rem 0.5rem',
-                                                                                    paddingLeft: `${(hasTransformers ? 1.5 : 0.5) + paddingLevel * 1}rem`,
-                                                                                    cursor: 'pointer',
-                                                                                    borderRadius: '4px',
-                                                                                    background: allAssigned ? 'rgba(0, 229, 255, 0.08)' : 'transparent',
-                                                                                }}
-                                                                                className="hover-glow">
-                                                                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                                                                                        {!hasTransformers && (
-                                                                                            <div
-                                                                                                onClick={(e) => {
-                                                                                                    e.stopPropagation();
-                                                                                                    toggleNode(rId);
-                                                                                                }}
-                                                                                                style={{ height: '18px', display: 'flex', alignItems: 'center' }}
-                                                                                            >
-                                                                                                {isExpanded ? <ChevronDown size={14} color="var(--accent-cyan)" /> : <ChevronRight size={14} color="var(--accent-cyan)" />}
-                                                                                            </div>
-                                                                                        )}
-                                                                                        <div
-                                                                                            onClick={(e) => {
-                                                                                                e.stopPropagation();
-                                                                                                toggleAllBranches();
-                                                                                            }}
-                                                                                            style={{ height: '18px', display: 'flex', alignItems: 'center' }}
-                                                                                        >
-                                                                                            {allAssigned ? <CheckSquare size={12} color="var(--accent-cyan)" /> : <Square size={12} color="var(--accent-cyan)" />}
-                                                                                        </div>
-                                                                                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                                                                <span
-                                                                                                    style={{
-                                                                                                        fontSize: '0.7rem',
-                                                                                                        fontWeight: 600,
-                                                                                                        color: allAssigned ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.4)'
-                                                                                                    }}
-                                                                                                    onClick={() => {
-                                                                                                        if (!hasTransformers) toggleNode(rId);
-                                                                                                    }}
-                                                                                                >
-                                                                                                    INCOMING BRANCHES
-                                                                                                </span>
-                                                                                                <span style={{
-                                                                                                    fontSize: '0.65rem',
-                                                                                                    color: 'rgba(255,255,255,0.25)'
-                                                                                                }}>
-                                                                                                    [{assignedCount}/{relayBranches.length}]
-                                                                                                </span>
-                                                                                            </div>
-                                                                                            {assignedStage && (
-                                                                                                <div style={{
-                                                                                                    fontSize: '0.6rem',
-                                                                                                    color: '#FFAB00',
-                                                                                                    fontStyle: 'italic',
-                                                                                                    marginTop: '2px',
-                                                                                                    display: 'inline-flex',
-                                                                                                    alignItems: 'flex-start'
-                                                                                                }}>
-                                                                                                    <span style={{ lineHeight: '1.2' }}>Assigned: {assignedStage}</span>
-                                                                                                </div>
-                                                                                            )}
-                                                                                            {lockedElsewhereCount > 0 && (
-                                                                                                <div style={{
-                                                                                                    fontSize: '0.6rem',
-                                                                                                    color: '#F97316',
-                                                                                                    marginTop: '2px'
-                                                                                                }}>
-                                                                                                    {lockedElsewhereCount} assigned to other stages
-                                                                                                </div>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                {/* Individual Branches - Simple click like transformers */}
-                                                                                {(hasTransformers || isExpanded) && relayBranches.map(branch => {
-                                                                                    const bayId = typeof branch === 'object' ? branch.bay_id : branch;
-                                                                                    const bayIdStr = String(bayId || '');
-                                                                                    const localPrefix = `${sub.substation_id}_`;
-                                                                                    const displayId = bayIdStr.startsWith(localPrefix) ? bayIdStr.replace(localPrefix, '') : bayIdStr;
-                                                                                    const fullId = bayIdStr.includes('_') ? bayIdStr : `${sub.substation_id}_${bayIdStr}`;
-                                                                                    const branchAssignment = getBranchAssignmentInfo(fullId) || null;
-                                                                                    const isAssignedHere = branchAssignment?.stageIdx === activeStageIdx;
-                                                                                    const isLockedElsewhere = Boolean(branchAssignment && branchAssignment.stageIdx !== activeStageIdx);
-                                                                                    const assignedStageLabel = branchAssignment
-                                                                                        ? (branchAssignment.stage?.label || `Stage ${branchAssignment.stage?.stage_number || (branchAssignment.stageIdx + 1)}`)
-                                                                                        : null;
-                                                                                    const rowColor = isLockedElsewhere
-                                                                                        ? 'rgba(255,255,255,0.35)'
-                                                                                        : (isAssignedHere ? 'var(--accent-cyan)' : 'var(--text-secondary)');
-
-                                                                                    return (
-                                                                                        <div
-                                                                                            key={typeof branch === 'object' ? branch.id : branch}
-                                                                                            onClick={() => {
-                                                                                                if (isLockedElsewhere) return;
-                                                                                                toggleBranchInStage(bayId, sub.substation_id);
-                                                                                            }}
-                                                                                            style={{
-                                                                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.2rem 0.5rem',
-                                                                                                paddingLeft: `${(hasTransformers ? 2.5 : 1.5) + paddingLevel * 1}rem`, fontSize: '0.7rem',
-                                                                                                color: rowColor,
-                                                                                                cursor: isLockedElsewhere ? 'not-allowed' : 'pointer',
-                                                                                                opacity: isLockedElsewhere ? 0.65 : 1,
-                                                                                            }}
-                                                                                            className="hover-glow"
-                                                                                        >
-                                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                                                                {isLockedElsewhere ? (
-                                                                                                    <Lock size={12} color="rgba(255,255,255,0.5)" />
-                                                                                                ) : (
-                                                                                                    isAssignedHere ? <CheckSquare size={12} color="var(--accent-cyan)" /> : <Square size={12} color="var(--accent-cyan)" />
-                                                                                                )}
-                                                                                                <FaCodeBranch size={10} style={{ opacity: isAssignedHere ? 1 : 0.5 }} />
-                                                                                                <span style={{ fontWeight: isAssignedHere ? 700 : 400 }}>{displayId}</span>
-                                                                                            </div>
-                                                                                            {isLockedElsewhere && assignedStageLabel && (
-                                                                                                <span style={{ fontSize: '0.6rem', color: '#FFAB00', fontWeight: 600 }}>
-                                                                                                    Assigned to {assignedStageLabel}
-                                                                                                </span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    );
-                                                                                })}
-                                                                            </div>
-                                                                        );
-                                                                    })()}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        };
-
-                                        return Object.keys(tree).sort().map(region => {
-                                            const rId = `region-${region}`;
-                                            const grids = tree[region];
-                                            return (
-                                                <div key={region}>
-                                                    {renderNodeHeader(rId, region, 0)}
-                                                    {expandedNodes.has(rId) && Object.keys(grids).sort().map(grid => {
-                                                        const gId = `grid-${region}-${grid}`;
-                                                        const subs = grids[grid];
-                                                        return (
-                                                            <div key={grid} style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', marginLeft: '12px' }}>
-                                                                {renderNodeHeader(gId, grid, 1)}
-                                                                {expandedNodes.has(gId) && Object.keys(subs).sort().map(subId => {
-                                                                    const sId = `sub-${region}-${grid}-${subId}`;
-                                                                    const nodeData = subs[subId];
-                                                                    const substation = nodeData.substation;
-                                                                    return (
-                                                                        <div key={subId} style={{ borderLeft: '1px solid rgba(255,255,255,0.05)', marginLeft: '12px' }}>
-                                                                            {renderNodeHeader(sId, `${substation.name} (${subId})`, 2, null, async () => {
-                                                                                // Force refresh specific substation
-                                                                                try {
-                                                                                    const [res, txRes] = await Promise.all([
-                                                                                        api.get(`/substations/${subId}/`),
-                                                                                        api.get(`/load-transformers/?substation=${subId}`)
-                                                                                    ]);
-                                                                                    const data = res.data;
-                                                                                    data.db_transformers = txRes.data;
-                                                                                    setDetailedSubstations(prev => ({ ...prev, [subId]: data }));
-                                                                                } catch (e) {
-                                                                                    console.error("Refresh failed", e);
-                                                                                }
-                                                                            })}
-                                                                            {expandedNodes.has(sId) && (
-                                                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
-                                                                                    {nodeData.relays.map(relay => renderRelayNode(relay, substation, 3))}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            );
-                                        });
-                                    })()}
-
-                                    {relays.length === 0 && !loading && (
-                                        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                                            No load shedding relays found in the database.
-                                        </div>
-                                    )}
-                                </div>
-                            </>
-                        ) : (
-                            <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <div style={{ border: '1px dashed rgba(255,255,255,0.1)', padding: '2rem', borderRadius: '8px', width: '100%' }}>
-                                    <Shield size={24} style={{ color: 'var(--accent-cyan)', marginBottom: '1rem', opacity: 0.8, alignSelf: 'center', margin: '0 auto 1rem auto' }} />
-                                    <div>Alert Message Content area</div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* TAB: SCHEME SETTINGS */}
-            {
-                activeTab === 'settings' && (
-                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                        <div className="glass-card" style={{ padding: '2rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
-                                <div>
-                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Configuration Settings</h3>
-                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Manage global scheme configurations such as UFLS settings, UVLS settings, logic rules, and other shared setup controls.</p>
-                                </div>
-                            </div>
-
-                            {/* SETTINGS TABS */}
-                            <div style={{ display: 'flex', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '1.5rem' }}>
-                                <div onClick={() => setActiveGlobalSettingsTab('ufls')} style={{ padding: '0.75rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', color: activeGlobalSettingsTab === 'ufls' ? 'var(--accent-cyan)' : 'var(--text-secondary)', borderBottom: activeGlobalSettingsTab === 'ufls' ? '2px solid var(--accent-cyan)' : '2px solid transparent', transition: 'all 0.2s' }}>
-                                    UFLS Settings
-                                </div>
-                                <div onClick={() => setActiveGlobalSettingsTab('uvls')} style={{ padding: '0.75rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', color: activeGlobalSettingsTab === 'uvls' ? 'var(--accent-cyan)' : 'var(--text-secondary)', borderBottom: activeGlobalSettingsTab === 'uvls' ? '2px solid var(--accent-cyan)' : '2px solid transparent', transition: 'all 0.2s' }}>
-                                    UVLS Settings
-                                </div>
-                                <div onClick={() => setActiveGlobalSettingsTab('conflict')} style={{ padding: '0.75rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', color: activeGlobalSettingsTab === 'conflict' ? 'var(--accent-cyan)' : 'var(--text-secondary)', borderBottom: activeGlobalSettingsTab === 'conflict' ? '2px solid var(--accent-cyan)' : '2px solid transparent', transition: 'all 0.2s' }}>
-                                    Critical Substation Conflict
-                                </div>
-                            </div>
-
-                            {activeGlobalSettingsTab !== 'conflict' ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '2rem' }}>
-                                {(() => {
-                                    const selectedSchemeType = activeGlobalSettingsTab === 'uvls' ? 'UVLS' : 'UFLS';
-                                    const thresholdUnit = selectedSchemeType === 'UVLS' ? 'p.u.' : 'Hz';
-                                    const settingsForTab = getSortedSettings(globalSettings.filter(s => s.scheme_type === selectedSchemeType));
-                                    return (
-                                        <>
-                                {/* Left: Datatable */}
-                                <div style={{ gridColumn: 'span 8' }}>
-                                    <div style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', overflow: 'hidden' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                                            <thead>
-                                                <tr style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                                    <th style={{ padding: '1rem', fontWeight: 600 }}>Label</th>
-                                                    <th style={{ padding: '1rem', fontWeight: 600 }}>Threshold</th>
-                                                    <th style={{ padding: '1rem', fontWeight: 600 }}>Time Delay</th>
-                                                    {isStaff && <th style={{ padding: '1rem', fontWeight: 600, textAlign: 'right' }}>Actions</th>}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {settingsForTab.map(s => (
-                                                    <tr key={s.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', transition: 'background 0.2s' }}>
-                                                        <td style={{ padding: '1rem', fontWeight: 500 }}>{s.label}</td>
-                                                        <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{s.threshold} {thresholdUnit}</td>
-                                                        <td style={{ padding: '1rem', fontFamily: 'monospace' }}>{s.time_delay} s</td>
-                                                        {isStaff && (
-                                                            <td style={{ padding: '1rem', textAlign: 'right' }}>
-                                                                <button onClick={() => handleDeleteSetting(s.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px', borderRadius: '4px' }}>
-                                                                    <Trash2 size={16} />
-                                                                </button>
-                                                            </td>
-                                                        )}
-                                                    </tr>
-                                                ))}
-                                                {settingsForTab.length === 0 && (
-                                                    <tr>
-                                                        <td colSpan="4" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>No settings defined.</td>
-                                                    </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                {/* Right: Add Form */}
-                                <div style={{ gridColumn: 'span 4' }}>
-                                    <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '1.5rem', position: 'sticky', top: 0 }}>
-                                        <h4 style={{ fontSize: '1rem', fontWeight: 600, margin: '0 0 1rem 0' }}>Add New {selectedSchemeType} Setting</h4>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                            <div>
-                                                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold ({thresholdUnit})</label>
-                                                <input type="number" step="0.01" className="platinum-input" style={{ width: '100%' }} value={newSettingThreshold} onChange={e => setNewSettingThreshold(e.target.value)} placeholder={selectedSchemeType === 'UVLS' ? 'e.g. 0.85' : 'e.g. 49.2'} />
-                                            </div>
-                                            <div>
-                                                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Time Delay (Seconds)</label>
-                                                <input type="number" step="0.1" className="platinum-input" style={{ width: '100%' }} value={newSettingTimeDelay} onChange={e => setNewSettingTimeDelay(e.target.value)} placeholder="e.g. 0.2" />
-                                            </div>
-                                            <button className="btn-primary" onClick={handleAddNewSetting} style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
-                                                <Plus size={16} /> Create Setting
-                                            </button>
-                                        </div>
-                                        {!isStaff && (
-                                            <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(255, 171, 0, 0.05)', borderLeft: '3px solid #FFAB00', borderRadius: '4px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                                                <strong>Note:</strong> As a standard user, you can add new settings but only administrators can delete them.
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                        </>
-                                    );
-                                })()}
-                            </div>
                             ) : (
-                            <div style={{ padding: '1rem 0' }}>
-                                {(() => {
-                                    const conflictGroups = [];
-                                    const criticalBySub = {};
-                                    criticalAssets.forEach(ca => {
-                                        const subId = ca.substation_id || ca.substation;
-                                        if (!subId) return;
-                                        if (!criticalBySub[subId]) criticalBySub[subId] = [];
-                                        criticalBySub[subId].push(ca);
-                                    });
-                                    Object.entries(criticalBySub).forEach(([subId, assets]) => {
-                                        const stagesWithAsset = [];
-                                        stages.forEach((stage) => {
-                                            const hasAsset = stage.transformer_bays?.some(bay => bay.relay_substation_id === subId);
-                                            if (hasAsset) stagesWithAsset.push(stage.label || `Stage ${stage.stage_number}`);
-                                        });
-                                        if (stagesWithAsset.length > 1) {
-                                            conflictGroups.push({ subId, assets, stages: stagesWithAsset });
-                                        }
-                                    });
-                                    if (conflictGroups.length === 0) {
-                                        return (
-                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem', color: 'var(--text-secondary)', gap: '1rem' }}>
-                                                <div style={{ width: '56px', height: '56px', borderRadius: '12px', background: 'rgba(0,255,163,0.1)', border: '1px solid rgba(0,255,163,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Shield size={24} style={{ color: 'var(--accent-cyan)' }} />
-                                                </div>
-                                                <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#fff' }}>No Conflicts Detected</h4>
-                                                <p style={{ margin: 0, fontSize: '0.85rem', textAlign: 'center', maxWidth: '320px', lineHeight: 1.5 }}>
-                                                    Critical substations are not assigned to multiple stages simultaneously.
-                                                </p>
+                                <div>
+                                    {(() => {
+                                        const conflictGroups = [];
+                                        const criticalBySub = {};
+                                        criticalAssets.forEach(ca => { const subId = ca.substation_id || ca.substation; if (!subId) return; if (!criticalBySub[subId]) criticalBySub[subId] = []; criticalBySub[subId].push(ca); });
+                                        Object.entries(criticalBySub).forEach(([subId, assets]) => { const stagesWithAsset = []; stages.forEach(stage => { if (stage.transformer_bays?.some(bay => bay.relay_substation_id === subId)) stagesWithAsset.push(stage.label || `Stage ${stage.stage_number}`); }); if (stagesWithAsset.length > 1) conflictGroups.push({ subId, assets, stages: stagesWithAsset }); });
+                                        if (conflictGroups.length === 0) return (
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem', gap: '0.75rem', textAlign: 'center' }}>
+                                                <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Shield size={18} style={{ color: '#166534' }} /></div>
+                                                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>No Conflicts Detected</div>
+                                                <div style={{ fontSize: '0.72rem', color: '#94a3b8', maxWidth: '280px', lineHeight: 1.5 }}>Critical substations are not assigned to multiple stages simultaneously.</div>
                                             </div>
                                         );
-                                    }
-                                    return (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                            {conflictGroups.map((group, idx) => (
-                                                <div key={idx} style={{ padding: '1rem', borderRadius: '8px', background: 'rgba(249,115,22,0.08)', border: '1px solid rgba(249,115,22,0.25)' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                                                        <FiAlertCircle size={16} style={{ color: '#F97316' }} />
-                                                        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fff' }}>{group.subId}</span>
+                                        return (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                                {conflictGroups.map((group, idx) => (
+                                                    <div key={idx} style={{ padding: '0.75rem 0.85rem', borderRadius: '8px', background: '#fff7ed', border: '1px solid #fed7aa' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '3px' }}>
+                                                            <FiAlertCircle size={13} style={{ color: '#f97316' }} />
+                                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0f172a' }}>{group.subId}</span>
+                                                        </div>
+                                                        <div style={{ fontSize: '0.68rem', color: '#64748b', marginLeft: '1.5rem' }}>Assigned to: <strong style={{ color: '#0f172a' }}>{group.stages.join(', ')}</strong></div>
                                                     </div>
-                                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginLeft: '1.75rem' }}>
-                                                        Assigned to multiple stages: <strong style={{ color: '#fff' }}>{group.stages.join(', ')}</strong>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    );
-                                })()}
-                            </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
                             )}
                         </div>
                     </div>
-                )
-            }
+                </>
+            )}
 
             {/* CREATE STAGE MODAL */}
             <AnimatePresence>
@@ -3295,245 +2453,6 @@ const LoadSheddingDesigner = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
-
-            {/* --- METRICS DRAWER (Bottom Panel) --- */}
-            <div
-                style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    background: 'rgba(10, 15, 25, 0.95)',
-                    borderTop: '1px solid rgba(0, 229, 255, 0.2)',
-                    backdropFilter: 'blur(20px)',
-                    boxShadow: '0 -10px 40px rgba(0,0,0,0.5)',
-                    transform: isMetricsDrawerOpen ? 'translateY(0)' : 'translateY(calc(100% - 40px))',
-                    transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                    zIndex: 50,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    maxHeight: '40vh'
-                }}
-            >
-                {/* Drag Handle / Toggle */}
-                <div
-                    onClick={() => setIsMetricsDrawerOpen(!isMetricsDrawerOpen)}
-                    style={{
-                        height: '40px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        background: 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, transparent 100%)',
-                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                        color: 'var(--text-secondary)'
-                    }}
-                >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, padding: '0 1.5rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <FaGaugeHigh size={14} style={{ color: 'var(--accent-cyan)' }} />
-                            <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1px' }}>
-                                Scheme Metrics Dashboard
-                            </span>
-                        </div>
-                        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                            <div style={{ width: '40px', height: '4px', background: 'rgba(255,255,255,0.2)', borderRadius: '2px' }} />
-                        </div>
-                        <div style={{ color: 'var(--accent-cyan)' }}>
-                            {isMetricsDrawerOpen ? <ChevronDown size={14} /> : <div style={{ transform: 'rotate(-90deg)', display: 'flex' }}><ChevronDown size={14} /></div>}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Drawer Content */}
-                <div style={{ padding: '1rem 1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    
-                    {/* Top Bar: General Metrics */}
-                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '2rem', alignItems: 'stretch' }}>
-                        
-                        {/* 1. Overall Bullet & Stats (Combined) */}
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <h4 style={{ margin: 0, fontSize: '0.85rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <FaBullseye size={14} style={{ color: 'var(--accent-cyan)' }} />
-                                General Scheme Metrics
-                            </h4>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'center' }}>
-                                {/* Embedded Stats Grid (moved above Bullet Chart) */}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: '8px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Target System %</span>
-                                        <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 700, color: '#fff' }}>{targetPercentage}%</span>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>System Total Load</span>
-                                        <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 700, color: '#fff' }}>{gridData ? formatMW(gridData.total_pload_mw) : '0.0'} MW</span>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Remaining Target</span>
-                                            <span style={{ fontSize: '0.5rem', color: 'rgba(255,255,255,0.4)', marginTop: '2px' }}>Assigned - Target</span>
-                                        </div>
-                                        <span style={{ 
-                                            fontSize: '0.9rem', 
-                                            fontFamily: 'monospace', 
-                                            fontWeight: 700, 
-                                            color: (() => {
-                                                const diff = calculateRemainingTargetMW();
-                                                const target = calculateTargetMW();
-                                                if (target === 0) return '#fff';
-                                                const percentDiff = (diff / target) * 100;
-                                                return Math.abs(percentDiff) <= 3 ? '#10B981' : '#EF4444'; // Green if within 3%, else Red
-                                            })()
-                                        }}>
-                                            {calculateRemainingTargetMW() > 0 ? '+' : ''}{formatMW(calculateRemainingTargetMW())} MW
-                                        </span>
-                                    </div>
-
-                                    {(() => {
-                                        const metrics = getAssignedSubstationMetrics(stages, true);
-                                        return (
-                                            <>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem', paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Substations Assigned</span>
-                                                    <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 700, color: '#fff' }}>
-                                                        {metrics.totalSubs} <span style={{fontSize:'0.6rem', color: 'rgba(255,255,255,0.5)', marginLeft:'4px', opacity: 0.7}}>({formatMW(metrics.totalMW)} MW)</span>
-                                                    </span>
-                                                </div>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span style={{ fontSize: '0.65rem', color: '#F97316', textTransform: 'uppercase' }}>Of which are Critical</span>
-                                                    <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 700, color: '#F97316' }}>
-                                                        {metrics.criticalSubs} <span style={{fontSize:'0.65rem', color: '#F97316', marginLeft:'6px', fontWeight: 500, opacity: 0.9}}>({formatMW(metrics.criticalMW)} MW)</span>
-                                                    </span>
-                                                </div>
-                                            </>
-                                        );
-                                    })()}
-                                </div>
-
-                                <BulletChart 
-                                    label="Overall Target vs Current Assigned"
-                                    actual={Number(calculateOverallAssignedMW()) || 0} 
-                                    target={Number(calculateTargetMW()) || 0} 
-                                    unit="MW" 
-                                    color="var(--accent-cyan)" 
-                                />
-                            </div>
-                        </div>
-
-                        {/* 2. Target vs Assigned Regional Progress */}
-                        {gridData?.regional_breakdown && (
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(255,255,255,0.05)', paddingLeft: '1.5rem' }}>
-                                <h5 style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Regional Target vs Assigned</h5>
-                                <div style={{ flex: 1, paddingRight: '0.5rem', paddingTop: '1.25rem' }}>
-                                    <CompactRegionalMetrics 
-                                        data={getOverallRegionalSpiralData()}
-                                        labelKey="region"
-                                        valueKey="assigned_mw"
-                                        targetKey="target_mw"
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 3. Potential MW vs Assigned */}
-                        {gridData?.regional_breakdown && (
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderLeft: '1px solid rgba(255,255,255,0.05)', paddingLeft: '1.5rem' }}>
-                                <h5 style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Potential vs Assigned</h5>
-                                <div style={{ flex: 1, paddingRight: '0.5rem', paddingTop: '1.25rem' }}>
-                                    <CompactRegionalMetrics 
-                                        data={getOverallRegionalPotentialData()}
-                                        labelKey="region"
-                                        valueKey="assigned_mw"
-                                        targetKey="potential_mw"
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Stage Metrics List */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        <h4 style={{ margin: 0, fontSize: '0.85rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <FaLayerGroup size={14} style={{ color: 'var(--accent-cyan)' }} />
-                            Individual Stage Metrics
-                        </h4>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            {stages.map((stage, idx) => {
-                                const stageAssignedVal = calculateTotalMW(stage);
-                                
-                                return (
-                                    <div key={stage.id} style={{ padding: '1rem 1.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: activeStageIdx === idx ? '1px solid var(--accent-cyan)' : '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: '3rem', alignItems: 'center' }}>
-                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%' }}>
-                                                <h5 style={{ margin: 0, fontSize: '0.8rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <span style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.65rem' }}>#{stage.stage_number}</span>
-                                                    {stage.label}
-                                                </h5>
-                                                <button 
-                                                    onClick={() => {
-                                                        setEditingStageIdx(idx);
-                                                        setNewStageLabel(stage.label);
-                                                        setNewStageNumber(stage.stage_number);
-                                                        setNewStageTargetMW(stage.target_mw || 0);
-                                                        setNewStageSettings(stage.setting_ids || []);
-                                                        setShowCreateStageModal(true);
-                                                    }}
-                                                    style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px' }}
-                                                    title="Edit Stage"
-                                                >
-                                                    <FiEdit2 size={12} />
-                                                </button>
-                                                
-                                                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Aggregate MW</span>
-                                                    <span style={{ fontSize: '0.9rem', fontFamily: 'monospace', fontWeight: 800, color: 'var(--accent-cyan)' }}>{formatMW(stageAssignedVal)}</span>
-                                                </div>
-                                            </div>
-                                            
-                                            {(() => {
-                                                const sm = getAssignedSubstationMetrics([stage], true);
-                                                return (
-                                                    <div style={{ display: 'flex', gap: '1rem', background: 'rgba(0,0,0,0.2)', padding: '0.5rem', borderRadius: '6px', border: sm.criticalSubs > 0 ? '1px solid rgba(249, 115, 22, 0.3)' : '1px solid rgba(255,255,255,0.05)' }}>
-                                                        <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Subs Assigned</span>
-                                                            <span style={{ fontSize: '0.8rem', fontFamily: 'monospace', fontWeight: 700, color: '#fff' }}>{sm.totalSubs} <span style={{fontSize:'0.55rem', color: 'rgba(255,255,255,0.4)', marginLeft:'2px', opacity: 0.6}}>({formatMW(sm.totalMW)}MW)</span></span>
-                                                        </div>
-                                                        <div style={{ width: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
-                                                        <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                            <span style={{ fontSize: '0.6rem', color: '#F97316', textTransform: 'uppercase' }}>Critical Subs</span>
-                                                            <span style={{ fontSize: '0.8rem', fontFamily: 'monospace', fontWeight: 700, color: '#F97316' }}>{sm.criticalSubs} <span style={{fontSize:'0.6rem', color: '#F97316', marginLeft:'2px', fontWeight: 500, opacity: 0.9}}>({formatMW(sm.criticalMW)}MW)</span></span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })()}
-
-                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                                <BulletChart 
-                                                    label="Target vs Assigned" 
-                                                    actual={Number(stageAssignedVal) || 0} 
-                                                    target={Number(stage.target_mw) || 0} 
-                                                    unit="MW" 
-                                                    color={activeStageIdx === idx ? 'var(--accent-cyan)' : '#3B82F6'} 
-                                                />
-                                            </div>
-                                        </div>
-                                        <div style={{ width: '40%', display: 'flex', flexDirection: 'column' }}>
-                                            <h5 style={{ margin: 0, fontSize: '0.65rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Regional Distribution</h5>
-                                            <CompactRegionalMetrics 
-                                                data={getStageRegionalSpiralData(stage)}
-                                                labelKey="region"
-                                                valueKey="assigned_mw"
-                                                targetKey="target_mw"
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                </div>
-            </div>
 
         </div >
     );

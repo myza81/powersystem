@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 import SubstationForm from './components/SubstationForm';
 import SldViewer from './components/SldViewer';
+import { GlobalLoader } from './components/Loader';
 
 import ConfigurationEditor from './components/ConfigurationEditor';
 import LoadDashboard from './components/LoadDashboard';
@@ -367,22 +368,7 @@ const App = () => {
 
     // ── Auth gate: show loading, login page, or the app ──────────────────────
     if (!authResolved) {
-        return (
-            <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: '100vw', height: '100vh', background: 'var(--bg-deep)',
-                flexDirection: 'column', gap: '1rem',
-            }}>
-                <div style={{
-                    width: 44, height: 44,
-                    borderRadius: '50%',
-                    border: '3px solid rgba(0,229,255,0.15)',
-                    borderTop: '3px solid var(--accent-cyan)',
-                    animation: 'spin 0.8s linear infinite',
-                }} />
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Connecting…</span>
-            </div>
-        );
+        return <GlobalLoader show={true} message="Authenticating..." />;
     }
 
     if (!currentUser || showLogin) {
@@ -398,41 +384,42 @@ const App = () => {
 
     return (
         <>
-        <MainLayout currentView={view} onViewChange={setView} currentUser={currentUser} onLogout={handleLogout} onShowLogin={handleShowLogin}>
-            <div className="dashboard-container">
-                {status && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        style={{
-                            position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999,
-                            background: status.type === 'success' ? 'var(--accent-cyan)' : '#f56565',
-                            color: '#000', padding: '1rem 2rem', borderRadius: '0.5rem',
-                            display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 600, boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
-                        }}
-                    >
-                        {status.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-                        {status.msg}
-                        <X size={16} style={{ marginLeft: '1rem', cursor: 'pointer' }} onClick={() => setStatus(null)} />
-                    </motion.div>
-                )}
+            <GlobalLoader show={loading} message="Processing..." />
+            <MainLayout currentView={view} onViewChange={setView} currentUser={currentUser} onLogout={handleLogout} onShowLogin={handleShowLogin}>
+                <div className="dashboard-container">
+                    {status && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            style={{
+                                position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999,
+                                background: status.type === 'success' ? 'var(--accent-cyan)' : '#f56565',
+                                color: '#000', padding: '1rem 2rem', borderRadius: '0.5rem',
+                                display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 600, boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
+                            }}
+                        >
+                            {status.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                            {status.msg}
+                            <X size={16} style={{ marginLeft: '1rem', cursor: 'pointer' }} onClick={() => setStatus(null)} />
+                        </motion.div>
+                    )}
 
-                {view !== 'critical-substations' && view !== 'load-shedding-designer' && view !== 'dashboard' && view !== 'list' && view !== 'snapshots' && view !== 'load-shedding-viewer' && (
-                    <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
-                                {view === 'dashboard' && 'Load Analytics'}
-                                {view === 'create' && 'Register New Entry'}
-                                {view === 'edit' && 'Edit Substation'}
-                                {view === 'config' && 'Configuration Editor'}
-                                {view === 'dev-tools' && 'Developer Tools'}
-                                {view === 'load-shedding-viewer' && 'Load Shedding Viewer'}
-                            </h2>
-                        </div>
-                    </header>
-                )}
+                    {view !== 'critical-substations' && view !== 'load-shedding-designer' && view !== 'dashboard' && view !== 'list' && view !== 'snapshots' && view !== 'load-shedding-viewer' && (
+                        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
+                                    {view === 'dashboard' && 'Load Analytics'}
+                                    {view === 'create' && 'Register New Entry'}
+                                    {view === 'edit' && 'Edit Substation'}
+                                    {view === 'config' && 'Configuration Editor'}
+                                    {view === 'dev-tools' && 'Developer Tools'}
+                                    {view === 'load-shedding-viewer' && 'Load Shedding Viewer'}
+                                </h2>
+                            </div>
+                        </header>
+                    )}
 
-                {view === 'list' && (
+                    {view === 'list' && (
                     <div style={{
                         display: 'flex',
                         flexDirection: 'column',

@@ -10,6 +10,7 @@ import axios from 'axios';
 import api from '../api';
 
 import ImportSummaryView from './ImportSummaryView';
+import { CardLoader, InlineLoader } from './Loader';
 
 // --- Components ---
 
@@ -323,8 +324,7 @@ const SnapshotManager = () => {
                                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                                     }}
                                 >
-                                    {uploading && <Loader2 className="animate-spin" size={16} />}
-                                    {uploading ? 'SYNCHRONIZING...' : 'START_SYSTEM_IMPORT'}
+                                    {uploading ? <InlineLoader size={16} message="Syncing..." /> : 'START_SYSTEM_IMPORT'}
                                 </button>
                             </form>
                         </motion.div>
@@ -365,10 +365,7 @@ const SnapshotManager = () => {
                     
                 <div style={{ maxHeight: 'calc(100vh - 480px)', overflowY: 'auto' }}>
                 {loading ? (
-                    <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-                        <Loader2 className="animate-spin" size={32} style={{ marginBottom: '1rem', opacity: 0.5 }} />
-                        <div style={{ fontSize: '0.85rem' }}>Loading registry...</div>
-                    </div>
+                    <CardLoader show={true} message="Loading snapshots..." />
                 ) : snapshots.length === 0 ? (
                     <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                         <Database size={48} style={{ marginBottom: '1rem', opacity: 0.2 }} />

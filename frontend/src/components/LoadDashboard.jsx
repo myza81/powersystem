@@ -6,6 +6,7 @@ import SldViewer from './SldViewer';
 import SubstationMap from './SubstationMap';
 import SubstationSelectionPanel from './SubstationSelectionPanel';
 import useNetworkLinks from '../hooks/useNetworkLinks';
+import { CardLoader } from './Loader';
 
 import api from '../api';
 import SpiralChart from './SpiralChart';
@@ -76,17 +77,7 @@ const LoadDashboard = ({ substations = [] }) => {
         [mapPoints, selectedSubstationIds]);
 
     if (loading) {
-        return (
-            <div style={{
-                minHeight: '100vh',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: '#020617'
-            }}>
-                <Loader2 size={48} className="animate-spin" style={{ color: '#22d3ee' }} />
-            </div>
-        );
+        return <CardLoader show={true} message="Loading dashboard data..." />;
     }
 
     return (

@@ -4,6 +4,7 @@ import { Loader2, AlertTriangle, X, FileText, ZoomIn, ZoomOut } from 'lucide-rea
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 import api from '../api';
+import { CardLoader } from './Loader';
 
 const SldViewer = ({ substation, onClose }) => {
     const [content, setContent] = useState(null);
@@ -97,10 +98,7 @@ const SldViewer = ({ substation, onClose }) => {
             {/* Content Area */}
             <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 {loading && (
-                    <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
-                        <Loader2 size={32} className="animate-spin" style={{ marginBottom: '1rem' }} />
-                        <p>Loading SLD...</p>
-                    </div>
+                    <CardLoader show={true} message="Loading SLD..." />
                 )}
 
                 {error && (
