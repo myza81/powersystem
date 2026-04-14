@@ -106,6 +106,9 @@ const LoadSheddingDesigner = () => {
     const [showLibrary, setShowLibrary] = useState(true);
     const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
     const [showProfilePopover, setShowProfilePopover] = useState(false);
+    const [editingBayId, setEditingBayId] = useState(null);
+    const [editingPocketId, setEditingPocketId] = useState(null);
+    const [hoveredPocketId, setHoveredPocketId] = useState(null);
 
     // --- Settings Tab State ---
     const [activeGlobalSettingsTab, setActiveGlobalSettingsTab] = useState('ufls'); // 'ufls' | 'uvls' | 'conflict'
@@ -1658,7 +1661,7 @@ const LoadSheddingDesigner = () => {
                         </button>
                     )}
                     {/* Save */}
-                    <button onClick={handleSaveWorkspace} disabled={saving || publishing} style={{ height: '28px', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 700, color: '#fff', background: '#0f172a', border: 'none', borderRadius: '6px', cursor: 'pointer', opacity: (saving || publishing) ? 0.6 : 1 }} onMouseEnter={e => { if (!saving && !publishing) e.currentTarget.style.background = '#1e293b'; }} onMouseLeave={e => e.currentTarget.style.background = '#0f172a'}>
+                    <button onClick={handleSaveWorkspace} disabled={saving || publishing} style={{ height: '28px', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 700, color: '#fff', background: '#059669', border: 'none', borderRadius: '6px', cursor: 'pointer', opacity: (saving || publishing) ? 0.6 : 1 }} onMouseEnter={e => { if (!saving && !publishing) e.currentTarget.style.background = '#047857'; }} onMouseLeave={e => e.currentTarget.style.background = '#059669'}>
                         {saving ? <RotateCcw size={11} className="animate-spin" /> : <Save size={11} />}
                         {saving ? 'Saving...' : 'Save'}
                     </button>
@@ -1672,9 +1675,9 @@ const LoadSheddingDesigner = () => {
                     const isActive = activeStageIdx === idx;
                     const chips = (stage.setting_ids || []).map(sId => globalSettings.find(g => g.id === sId)).filter(Boolean);
                     return (
-                        <button key={stage.id} onClick={() => setActiveStageIdx(idx)} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0 0.85rem', height: '41px', flexShrink: 0, background: 'none', border: 'none', borderBottom: `2px solid ${isActive ? '#0f172a' : 'transparent'}`, cursor: 'pointer', fontFamily: "'Poppins',sans-serif" }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: isActive ? 700 : 500, color: isActive ? '#0f172a' : '#64748b', whiteSpace: 'nowrap' }}>{stage.label}</span>
-                            <span style={{ fontSize: '0.63rem', fontFamily: 'monospace', fontWeight: 600, color: isActive ? '#334155' : '#94a3b8', whiteSpace: 'nowrap' }}>{formatMW(stageMW)} MW</span>
+                        <button key={stage.id} onClick={() => setActiveStageIdx(idx)} style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0 0.85rem', height: '41px', flexShrink: 0, background: 'none', border: 'none', borderBottom: `2px solid ${isActive ? '#2563eb' : 'transparent'}`, cursor: 'pointer', fontFamily: "'Poppins',sans-serif" }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: isActive ? 700 : 500, color: isActive ? '#2563eb' : '#64748b', whiteSpace: 'nowrap' }}>{stage.label}</span>
+                            <span style={{ fontSize: '0.63rem', fontFamily: 'monospace', fontWeight: 600, color: isActive ? '#1d4ed8' : '#94a3b8', whiteSpace: 'nowrap' }}>{formatMW(stageMW)} MW</span>
                             {chips.length > 0 && <span style={{ fontSize: '0.53rem', fontWeight: 700, background: isActive ? '#f1f5f9' : 'transparent', border: `1px solid ${isActive ? '#cbd5e1' : '#e2e8f0'}`, color: isActive ? '#475569' : '#94a3b8', padding: '1px 5px', borderRadius: '4px', whiteSpace: 'nowrap' }}>{chips[0].label}{chips.length > 1 ? ` +${chips.length - 1}` : ''}</span>}
                             {isActive && (
                                 <span style={{ display: 'flex', gap: '1px', marginLeft: '2px' }}>
@@ -1736,7 +1739,7 @@ const LoadSheddingDesigner = () => {
                                                     </div>
                                                     {tgt > 0 && (
                                                         <div style={{ height: '2px', background: '#f1f5f9', borderRadius: '999px', overflow: 'hidden' }}>
-                                                            <div style={{ height: '100%', width: `${p}%`, background: p >= 100 ? '#166534' : '#0f172a', borderRadius: '999px' }} />
+                                                            <div style={{ height: '100%', width: `${p}%`, background: p >= 100 ? '#059669' : '#7c3aed', borderRadius: '999px' }} />
                                                         </div>
                                                     )}
                                                 </div>
@@ -1780,11 +1783,11 @@ const LoadSheddingDesigner = () => {
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <thead>
                                         <tr>
-                                            <th style={{ padding: '0.4rem 1.25rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '22%' }}>Relay System</th>
-                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '22%' }}>Substation</th>
+                                            <th style={{ padding: '0.4rem 1.25rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '26%' }}>Substation</th>
                                             <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>Transformers</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '26%' }}>Voltage</th>
                                             <th style={{ padding: '0.4rem 0.75rem', textAlign: 'right', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '70px' }}>MW</th>
-                                            <th style={{ padding: '0.4rem 1.25rem 0.4rem 0.4rem', borderBottom: '1px solid #f1f5f9', width: '32px' }}></th>
+                                            <th style={{ padding: '0.4rem 1.25rem 0.4rem 0.4rem', borderBottom: '1px solid #f1f5f9', width: '48px' }}></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1810,25 +1813,51 @@ const LoadSheddingDesigner = () => {
                                             }
                                             if (txLabels.length === 0) txLabels = [`${bay.transformers?.length || 0} TXs`];
                                             return (
-                                                <tr key={bay.id} style={{ borderBottom: '1px solid #f8fafc' }} onMouseEnter={e => e.currentTarget.style.background = '#fafafa'} onMouseLeave={e => e.currentTarget.style.background = ''}>
-                                                    <td style={{ padding: '0.5rem 1.25rem', fontSize: '0.7rem', color: '#334155', fontWeight: 500 }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <React.Fragment key={bay.id}>
+                                                <tr style={{ borderBottom: '1px solid #f8fafc' }} onMouseEnter={e => e.currentTarget.style.background = '#fafafa'} onMouseLeave={e => e.currentTarget.style.background = ''}>
+                                                    <td style={{ padding: '0.5rem 0.75rem 0.5rem 1.25rem' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                            <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#0f172a' }}>{subId}</span>
                                                             {hasCritical && <FiAlertCircle size={10} style={{ color: '#f97316', flexShrink: 0 }} title="Critical asset" />}
-                                                            {relayLabel}
                                                         </div>
-                                                    </td>
-                                                    <td style={{ padding: '0.5rem 0.75rem' }}>
-                                                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#0f172a' }}>{subId}</div>
                                                         {sub?.name && <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>{sub.name}</div>}
                                                     </td>
                                                     <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.68rem', color: '#334155', fontFamily: 'monospace' }}>{txLabels.join(', ')}</td>
+                                                    <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.7rem', color: '#334155', fontWeight: 500 }}>{relayLabel}</td>
                                                     <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 700, color: '#0f172a' }}>{formatMW(bayMW)}</td>
                                                     <td style={{ padding: '0.5rem 1.25rem 0.5rem 0.4rem', textAlign: 'right' }}>
-                                                        <button onClick={() => { const ns = [...stages]; const nb = [...ns[activeStageIdx].transformer_bays]; nb.splice(bayIdx, 1); ns[activeStageIdx] = { ...ns[activeStageIdx], transformer_bays: nb }; setStages(ns); }} style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }} onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
-                                                            <X size={10} />
-                                                        </button>
+                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '3px' }}>
+                                                            <button onClick={() => setEditingBayId(editingBayId === bay.id ? null : bay.id)} title="Edit transformers" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: editingBayId === bay.id ? '#f1f5f9' : '#fff', border: `1px solid ${editingBayId === bay.id ? '#cbd5e1' : '#e2e8f0'}`, borderRadius: '4px', cursor: 'pointer', color: editingBayId === bay.id ? '#0f172a' : '#64748b' }} onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }} onMouseLeave={e => { if (editingBayId !== bay.id) { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; } }}><FiEdit2 size={10} /></button>
+                                                            <button onClick={() => { const ns = [...stages]; const nb = [...ns[activeStageIdx].transformer_bays]; nb.splice(bayIdx, 1); ns[activeStageIdx] = { ...ns[activeStageIdx], transformer_bays: nb }; setStages(ns); }} title="Remove" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }} onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}><X size={10} /></button>
+                                                        </div>
                                                     </td>
                                                 </tr>
+                                                {editingBayId === bay.id && (
+                                                    <tr>
+                                                        <td colSpan={5} style={{ padding: '0', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                                            <div style={{ padding: '0.5rem 1.25rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                                                <span style={{ fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginRight: '4px', flexShrink: 0 }}>Transformers</span>
+                                                                {(relayObj?.load_transformers || []).map(txVal => {
+                                                                    const transformerId = typeof txVal === 'object' ? txVal.id : txVal;
+                                                                    const dbTx = detail?.db_transformers?.find(t => String(t.id) === String(transformerId));
+                                                                    const txLabel = dbTx ? `T${dbTx.transformer_no}` : `#${transformerId}`;
+                                                                    const tx = dbTx ? (detail.transformers?.find(t => t.name === `TX T${dbTx.transformer_no}`) || detail.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`)) : null;
+                                                                    const txMw = tx?.load_mw != null ? parseFloat(tx.load_mw) : null;
+                                                                    const isAssigned = bay.transformers.some(t => String(typeof t === 'object' ? t.id : t) === String(transformerId));
+                                                                    return (
+                                                                        <button key={transformerId} onClick={() => toggleTransformerInStage(relayObj, transformerId)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '5px', border: `1px solid ${isAssigned ? '#bbf7d0' : '#e2e8f0'}`, background: isAssigned ? '#f0fdf4' : '#fff', cursor: 'pointer', fontSize: '0.65rem', fontFamily: "'Poppins',sans-serif", fontWeight: isAssigned ? 700 : 500, color: isAssigned ? '#166534' : '#64748b' }}>
+                                                                            {isAssigned ? <CheckSquare size={9} color="#166534" /> : <Square size={9} color="#94a3b8" />}
+                                                                            {txLabel}
+                                                                            {txMw != null && <span style={{ fontFamily: 'monospace', fontSize: '0.6rem', color: isAssigned ? '#166534' : '#94a3b8' }}>{formatMW(txMw)}</span>}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                                <button onClick={() => setEditingBayId(null)} style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: '5px', border: '1px solid #e2e8f0', background: '#fff', fontSize: '0.63rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#64748b', cursor: 'pointer' }}>Done</button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                </React.Fragment>
                                             );
                                         })}
                                     </tbody>
@@ -1857,29 +1886,108 @@ const LoadSheddingDesigner = () => {
                                     <thead>
                                         <tr>
                                             <th style={{ padding: '0.4rem 1.25rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '40px' }}>#</th>
-                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>Island Substations</th>
-                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>Source Branches</th>
-                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'right', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '70px' }}>MW</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '22%' }}>Source Sub</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '80px' }}>Voltage</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>Branch Bays</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '22%' }}>Island Subs</th>
+                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'right', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '64px' }}>MW</th>
                                             <th style={{ padding: '0.4rem 1.25rem 0.4rem 0.4rem', borderBottom: '1px solid #f1f5f9', width: '48px' }}></th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {(stages[activeStageIdx].computed_pockets || []).map((pocket, pIdx) => {
-                                            const subs = (pocket.pocket_substation_details || pocket.pocket_substations || []).map(s => s.substation_id || s).join(', ');
-                                            const branches = pocket.branchGroups?.map(g => `${g.subId}: ${g.branches.join(', ')}`).join(' · ') || pocket.branches?.join(', ') || '—';
+                                            const subItems = (pocket.pocket_substation_details || pocket.pocket_substations || []).map(s => s.substation_id || s);
+                                            const groups = (pocket.branchGroups && pocket.branchGroups.length > 0)
+                                                ? pocket.branchGroups
+                                                : [{ subId: '—', voltage: '', branches: pocket.branches || [] }];
+                                            const isEditingPocket = editingPocketId === pocket.id;
+                                            const isHovered = hoveredPocketId === pocket.id;
                                             return (
-                                                <tr key={pocket.id} style={{ borderBottom: '1px solid #f8fafc' }} onMouseEnter={e => e.currentTarget.style.background = '#fafafa'} onMouseLeave={e => e.currentTarget.style.background = ''}>
-                                                    <td style={{ padding: '0.5rem 1.25rem', fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}>P{pIdx + 1}</td>
-                                                    <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.68rem', color: '#334155', maxWidth: '180px' }}><span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{subs || '—'}</span></td>
-                                                    <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.65rem', color: '#64748b', maxWidth: '180px' }}><span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{branches}</span></td>
-                                                    <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 700, color: '#0f172a' }}>{formatMW(pocket.total_p_mw ?? 0)}</td>
-                                                    <td style={{ padding: '0.5rem 1.25rem 0.5rem 0.4rem', textAlign: 'right' }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '3px' }}>
-                                                            <button onClick={() => { const ns = [...stages]; const a = { ...ns[activeStageIdx] }; a.computed_pockets = (a.computed_pockets || []).filter(c => c.id !== pocket.id); a.pocket_branches = [...new Set([...(a.pocket_branches || []), ...(pocket.branches || [])])]; ns[activeStageIdx] = a; setStages(ns); }} title="Edit" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', color: '#64748b' }} onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }} onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}><FiEdit2 size={10} /></button>
-                                                            <button onClick={() => { const ns = [...stages]; const a = { ...ns[activeStageIdx] }; a.computed_pockets = (a.computed_pockets || []).filter(c => c.id !== pocket.id); ns[activeStageIdx] = a; setStages(ns); }} title="Remove" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }} onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}><X size={10} /></button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
+                                                <React.Fragment key={pocket.id}>
+                                                {groups.map((group, gIdx) => {
+                                                    const isFirst = gIdx === 0;
+                                                    const isLast = gIdx === groups.length - 1;
+                                                    return (
+                                                        <tr key={`${pocket.id}-g${gIdx}`}
+                                                            style={{ background: isHovered ? '#fafafa' : '', borderBottom: isLast && !isEditingPocket ? '1px solid #e2e8f0' : '1px solid #f8fafc' }}
+                                                            onMouseEnter={() => setHoveredPocketId(pocket.id)}
+                                                            onMouseLeave={() => setHoveredPocketId(null)}
+                                                        >
+                                                            {/* # */}
+                                                            <td style={{ padding: '0.5rem 1.25rem', fontWeight: 700, color: '#334155', fontSize: '0.7rem', verticalAlign: 'top' }}>
+                                                                {isFirst ? `P${pIdx + 1}` : ''}
+                                                            </td>
+                                                            {/* Source Sub */}
+                                                            <td style={{ padding: isFirst ? '0.5rem 0.75rem' : '0.3rem 0.75rem', fontSize: '0.7rem', fontWeight: 600, color: '#0f172a', verticalAlign: 'top' }}>
+                                                                {group.subId}
+                                                                {(() => { const sv = substations.find(s => s.substation_id === group.subId); return sv?.name ? <div style={{ fontSize: '0.58rem', color: '#94a3b8', fontWeight: 400 }}>{sv.name}</div> : null; })()}
+                                                            </td>
+                                                            {/* Voltage */}
+                                                            <td style={{ padding: isFirst ? '0.5rem 0.75rem' : '0.3rem 0.75rem', fontSize: '0.7rem', color: '#334155', fontWeight: 500, verticalAlign: 'top' }}>
+                                                                {group.voltage || '—'}
+                                                            </td>
+                                                            {/* Branch Bays */}
+                                                            <td style={{ padding: isFirst ? '0.5rem 0.75rem' : '0.3rem 0.75rem', fontSize: '0.68rem', color: '#334155', fontFamily: 'monospace', verticalAlign: 'top' }}>
+                                                                {group.branches.join(', ') || '—'}
+                                                            </td>
+                                                            {/* Island Subs — first row only */}
+                                                            <td style={{ padding: '0.5rem 0.75rem', fontSize: '0.68rem', color: '#334155', verticalAlign: 'top' }}>
+                                                                {isFirst && (subItems.length === 0 ? '—' : (
+                                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 6px' }}>
+                                                                        {subItems.map(subId => {
+                                                                            const isCritical = criticalAssets.some(ca => String(ca.substation_id) === String(subId));
+                                                                            return (
+                                                                                <span key={subId} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                                                                                    <span>{subId}</span>
+                                                                                    {isCritical && <FiAlertCircle size={9} style={{ color: '#f97316', flexShrink: 0 }} title="Critical substation" />}
+                                                                                </span>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                ))}
+                                                            </td>
+                                                            {/* MW — first row only */}
+                                                            <td style={{ padding: '0.5rem 0.75rem', textAlign: 'right', fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 700, color: '#0f172a', verticalAlign: 'top' }}>
+                                                                {isFirst ? formatMW(pocket.total_p_mw ?? 0) : ''}
+                                                            </td>
+                                                            {/* Actions — first row only */}
+                                                            <td style={{ padding: '0.5rem 1.25rem 0.5rem 0.4rem', textAlign: 'right', verticalAlign: 'top' }}>
+                                                                {isFirst && (
+                                                                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '3px' }}>
+                                                                        <button onClick={() => setEditingPocketId(isEditingPocket ? null : pocket.id)} title="Edit" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isEditingPocket ? '#f1f5f9' : '#fff', border: `1px solid ${isEditingPocket ? '#cbd5e1' : '#e2e8f0'}`, borderRadius: '4px', cursor: 'pointer', color: isEditingPocket ? '#0f172a' : '#64748b' }} onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }} onMouseLeave={e => { if (!isEditingPocket) { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; } }}><FiEdit2 size={10} /></button>
+                                                                        <button onClick={() => { const ns = [...stages]; const a = { ...ns[activeStageIdx] }; a.computed_pockets = (a.computed_pockets || []).filter(c => c.id !== pocket.id); ns[activeStageIdx] = a; setStages(ns); }} title="Remove" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }} onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}><X size={10} /></button>
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                                {isEditingPocket && (
+                                                    <tr onMouseEnter={() => setHoveredPocketId(pocket.id)} onMouseLeave={() => setHoveredPocketId(null)}>
+                                                        <td colSpan={7} style={{ padding: '0', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                                            <div style={{ padding: '0.5rem 1.25rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                                                <span style={{ fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginRight: '4px', flexShrink: 0 }}>Branches</span>
+                                                                {(pocket.branches || []).map(branchId => {
+                                                                    const pts = branchId.split('_');
+                                                                    const subId = pts[0];
+                                                                    const branchLabel = pts.slice(1).join('_');
+                                                                    return (
+                                                                        <div key={branchId} style={{ display: 'flex', alignItems: 'center', gap: '3px', padding: '2px 6px 2px 8px', borderRadius: '5px', border: '1px solid #e2e8f0', background: '#fff', fontSize: '0.63rem', color: '#334155' }}>
+                                                                            <FaCodeBranch size={8} style={{ color: '#64748b' }} />
+                                                                            <span style={{ fontWeight: 600 }}>{subId}</span>
+                                                                            <span style={{ color: '#94a3b8' }}>·</span>
+                                                                            <span style={{ fontFamily: 'monospace' }}>{branchLabel}</span>
+                                                                            <button onClick={() => { const ns = [...stages]; const a = { ...ns[activeStageIdx] }; const updatedPocket = { ...pocket, branches: pocket.branches.filter(b => b !== branchId), branchGroups: pocket.branchGroups?.map(g => ({ ...g, branches: g.branches.filter(b => `${g.subId}_${b}` !== branchId) })).filter(g => g.branches.length > 0) }; a.computed_pockets = a.computed_pockets.map(c => c.id === pocket.id ? updatedPocket : c); ns[activeStageIdx] = a; setStages(ns); }} style={{ width: '12px', height: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 0, marginLeft: '2px' }} onMouseEnter={e => e.currentTarget.style.color = '#ef4444'} onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}><X size={9} /></button>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                                <button onClick={() => { const ns = [...stages]; const a = { ...ns[activeStageIdx] }; a.computed_pockets = (a.computed_pockets || []).filter(c => c.id !== pocket.id); a.pocket_branches = [...new Set([...(a.pocket_branches || []), ...(pocket.branches || [])])]; ns[activeStageIdx] = a; setStages(ns); setEditingPocketId(null); }} style={{ padding: '3px 10px', borderRadius: '5px', border: '1px solid #fde68a', background: '#fffbeb', fontSize: '0.63rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#92400e', cursor: 'pointer' }}>Dissolve to Tray</button>
+                                                                <button onClick={() => setEditingPocketId(null)} style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: '5px', border: '1px solid #e2e8f0', background: '#fff', fontSize: '0.63rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#64748b', cursor: 'pointer' }}>Done</button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                </React.Fragment>
                                             );
                                         })}
                                     </tbody>
@@ -2340,114 +2448,142 @@ const LoadSheddingDesigner = () => {
                         style={{
                             position: 'fixed',
                             top: 0, left: 0, right: 0, bottom: 0,
-                            background: 'rgba(0,0,0,0.6)',
-                            backdropFilter: 'blur(8px)',
+                            background: 'rgba(15,23,42,0.35)',
+                            backdropFilter: 'blur(4px)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             zIndex: 9999
                         }}
+                        onClick={e => { if (e.target === e.currentTarget) setShowCreateStageModal(false); }}
                     >
                         <motion.div
-                            initial={{ y: 20, opacity: 0, scale: 0.95 }}
+                            initial={{ y: 16, opacity: 0, scale: 0.97 }}
                             animate={{ y: 0, opacity: 1, scale: 1 }}
-                            exit={{ y: 20, opacity: 0, scale: 0.95 }}
-                            className="glass-card"
-                            style={{ width: '500px', maxWidth: '90vw', padding: '2rem' }}
+                            exit={{ y: 16, opacity: 0, scale: 0.97 }}
+                            transition={{ duration: 0.18 }}
+                            style={{
+                                width: '460px', maxWidth: '90vw',
+                                background: '#fff',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '12px',
+                                boxShadow: '0 8px 32px rgba(15,23,42,0.12)',
+                                overflow: 'hidden',
+                                fontFamily: "'Poppins', sans-serif"
+                            }}
                         >
-                            <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem' }}>{editingStageIdx !== null ? "Edit Stage Details" : "Create New Stage"}</h3>
-                            <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                                {editingStageIdx !== null ? "Modify the parameters for this load shedding step." : "Define the parameters for the next load shedding step."}
-                            </p>
+                            {/* Header */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.25rem 0.85rem', borderBottom: '1px solid #f1f5f9' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: '#f1f5f9', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Layers size={13} style={{ color: '#334155' }} />
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>{editingStageIdx !== null ? 'Edit Stage' : 'New Stage'}</div>
+                                        <div style={{ fontSize: '0.62rem', color: '#94a3b8', lineHeight: 1.2 }}>{editingStageIdx !== null ? 'Modify stage parameters' : 'Define the next load shedding step'}</div>
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowCreateStageModal(false)} style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', color: '#94a3b8' }} onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#334155'; }} onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#94a3b8'; }}>
+                                    <X size={12} />
+                                </button>
+                            </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                <div style={{ display: 'flex', gap: '1rem' }}>
-                                    <div style={{ flex: 1 }}>
-                                        <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Stage Number</label>
+                            {/* Body */}
+                            <div style={{ padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {/* Row: Stage No + Label + Target MW */}
+                                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                    <div style={{ flex: '0 0 72px' }}>
+                                        <label style={{ fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#94a3b8', display: 'block', marginBottom: '5px' }}>No.</label>
                                         <input
                                             type="number"
-                                            className="platinum-input"
-                                            style={{ width: '100%' }}
+                                            style={{ width: '100%', padding: '0.42rem 0.6rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.78rem', color: '#0f172a', fontFamily: "'Poppins', sans-serif", outline: 'none', boxSizing: 'border-box' }}
                                             value={newStageNumber}
                                             onChange={e => setNewStageNumber(Number(e.target.value))}
+                                            onFocus={e => { e.target.style.borderColor = '#0f172a'; e.target.style.background = '#fff'; }}
+                                            onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
                                         />
                                     </div>
-                                    <div style={{ flex: 2 }}>
-                                        <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Stage Label</label>
+                                    <div style={{ flex: 1 }}>
+                                        <label style={{ fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#94a3b8', display: 'block', marginBottom: '5px' }}>Label</label>
                                         <input
                                             type="text"
-                                            className="platinum-input"
-                                            style={{ width: '100%' }}
                                             placeholder="e.g. Stage 5"
+                                            style={{ width: '100%', padding: '0.42rem 0.6rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.78rem', color: '#0f172a', fontFamily: "'Poppins', sans-serif", outline: 'none', boxSizing: 'border-box' }}
                                             value={newStageLabel}
                                             onChange={e => setNewStageLabel(e.target.value)}
+                                            onFocus={e => { e.target.style.borderColor = '#0f172a'; e.target.style.background = '#fff'; }}
+                                            onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
                                         />
                                     </div>
-                                    <div style={{ flex: 1.5 }}>
-                                        <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Target (MW)</label>
+                                    <div style={{ flex: '0 0 110px' }}>
+                                        <label style={{ fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#94a3b8', display: 'block', marginBottom: '5px' }}>Target</label>
                                         <div style={{ position: 'relative' }}>
                                             <input
-                                                type="text"
-                                                className="platinum-input"
-                                                style={{ width: '100%', paddingRight: '2rem' }}
-                                                value={formatInputNumber(newStageTargetMW)}
+                                                type="number"
+                                                min="0"
+                                                style={{ width: '100%', padding: '0.42rem 2rem 0.42rem 0.6rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.78rem', color: '#0f172a', fontFamily: "'Poppins', sans-serif", outline: 'none', boxSizing: 'border-box' }}
+                                                value={newStageTargetMW}
                                                 onChange={e => {
-                                                    const raw = e.target.value.replace(/,/g, '');
-                                                    if (raw === '' || !isNaN(raw)) setNewStageTargetMW(raw);
+                                                    const val = e.target.value;
+                                                    if (val === '' || /^\d+$/.test(val)) setNewStageTargetMW(val === '' ? '' : parseInt(val, 10));
                                                 }}
+                                                onFocus={e => { e.target.style.borderColor = '#0f172a'; e.target.style.background = '#fff'; }}
+                                                onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
                                             />
-                                            <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>MW</span>
+                                            <span style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.62rem', fontWeight: 600, color: '#94a3b8', pointerEvents: 'none' }}>MW</span>
                                         </div>
                                     </div>
                                 </div>
 
+                                {/* Settings */}
                                 <div>
-                                    <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: 600 }}>Assign Settings</label>
-                                    <div style={{ display: 'flex', gap: '1rem' }}>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold Setting 1</label>
-                                            <select
-                                                className="platinum-input"
-                                                style={{ width: '100%', fontSize: '0.8rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)' }}
-                                                value={newStageSettings[0] || ''}
-                                                onChange={e => {
-                                                    const updated = [...newStageSettings];
-                                                    updated[0] = e.target.value || null;
-                                                    setNewStageSettings(updated);
-                                                }}
-                                            >
-                                                <option value="">-- None --</option>
-                                                {globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS')).map(s => (
-                                                    <option key={s.id} value={s.id}>{s.label}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Threshold Setting 2</label>
-                                            <select
-                                                className="platinum-input"
-                                                style={{ width: '100%', fontSize: '0.8rem', padding: '0.5rem', background: 'rgba(0,0,0,0.2)' }}
-                                                value={newStageSettings[1] || ''}
-                                                onChange={e => {
-                                                    const updated = [...newStageSettings];
-                                                    if (updated.length === 0) updated.push(null);
-                                                    updated[1] = e.target.value || null;
-                                                    setNewStageSettings(updated);
-                                                }}
-                                            >
-                                                <option value="">-- None --</option>
-                                                {globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS')).map(s => (
-                                                    <option key={s.id} value={s.id}>{s.label}</option>
-                                                ))}
-                                            </select>
-                                        </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
+                                        <span style={{ fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#94a3b8' }}>Threshold Settings</span>
+                                        <div style={{ flex: 1, height: '1px', background: '#f1f5f9' }} />
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                        {[0, 1].map(i => (
+                                            <div key={i} style={{ flex: 1 }}>
+                                                <label style={{ fontSize: '0.57rem', fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: '5px' }}>Setting {i + 1}</label>
+                                                <select
+                                                    style={{ width: '100%', padding: '0.42rem 0.6rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.75rem', color: '#334155', fontFamily: "'Poppins', sans-serif", outline: 'none', cursor: 'pointer', boxSizing: 'border-box' }}
+                                                    value={newStageSettings[i] || ''}
+                                                    onChange={e => {
+                                                        const updated = [...newStageSettings];
+                                                        if (i === 1 && updated.length === 0) updated.push(null);
+                                                        updated[i] = e.target.value || null;
+                                                        setNewStageSettings(updated);
+                                                    }}
+                                                    onFocus={e => { e.target.style.borderColor = '#0f172a'; e.target.style.background = '#fff'; }}
+                                                    onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }}
+                                                >
+                                                    <option value="">— None —</option>
+                                                    {globalSettings.filter(s => s.scheme_type === (schemeType.includes('UFLS') ? 'UFLS' : 'UVLS')).map(s => (
+                                                        <option key={s.id} value={s.id}>{s.label}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
+                            </div>
 
-                                <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                                    <button className="btn-secondary" style={{ flex: 1, padding: '0.75rem' }} onClick={() => setShowCreateStageModal(false)}>Cancel</button>
-                                    <button className="btn-primary" style={{ flex: 1, padding: '0.75rem' }} onClick={confirmAddStage}>
-                                        {editingStageIdx !== null ? "Save Changes" : "Create Stage"}
-                                    </button>
-                                </div>
+                            {/* Footer */}
+                            <div style={{ display: 'flex', gap: '0.6rem', padding: '0.85rem 1.25rem', borderTop: '1px solid #f1f5f9' }}>
+                                <button
+                                    onClick={() => setShowCreateStageModal(false)}
+                                    style={{ flex: 1, padding: '0.5rem 1rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '7px', fontSize: '0.75rem', fontWeight: 600, color: '#64748b', fontFamily: "'Poppins', sans-serif", cursor: 'pointer' }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmAddStage}
+                                    style={{ flex: 2, padding: '0.5rem 1rem', background: '#0891b2', border: '1px solid #0891b2', borderRadius: '7px', fontSize: '0.75rem', fontWeight: 600, color: '#fff', fontFamily: "'Poppins', sans-serif", cursor: 'pointer' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = '#0e7490'}
+                                    onMouseLeave={e => e.currentTarget.style.background = '#0891b2'}
+                                >
+                                    {editingStageIdx !== null ? 'Save Changes' : 'Create Stage'}
+                                </button>
                             </div>
                         </motion.div>
                     </motion.div>

@@ -64,7 +64,7 @@ const CompactRegionalMetrics = ({ data, labelKey = 'region', valueKey = 'assigne
                             }}>
                                 {label}
                             </span>
-                            <span style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'rgba(255,255,255,0.8)' }}>
+                            <span style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'rgba(255,255,255,0.8)', whiteSpace: 'nowrap' }}>
                                 <span style={{ fontWeight: 700, color: progressPercent > 100 ? '#ef4444' : '#fff' }}>
                                     {assigned.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                                 </span>
