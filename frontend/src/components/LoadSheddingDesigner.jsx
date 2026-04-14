@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     Plus,
     Trash2,
@@ -95,6 +95,17 @@ const LoadSheddingDesigner = () => {
 
     const [saving, setSaving] = useState(false);
     const [publishing, setPublishing] = useState(false);
+    const [isDirty, setIsDirty] = useState(false);
+    const skipDirtyRef = useRef(true); // skip dirty on initial hydration and draft loads
+
+    // Mark workspace dirty whenever stages change, except on initial load or after a draft load/save
+    useEffect(() => {
+        if (skipDirtyRef.current) {
+            skipDirtyRef.current = false;
+            return;
+        }
+        setIsDirty(true);
+    }, [stages]);
     const [searchTerm, setSearchTerm] = useState('');
     const [gridData, setGridData] = useState(null);
     const [fetchingAnalytics, setFetchingAnalytics] = useState(false);
@@ -109,6 +120,7 @@ const LoadSheddingDesigner = () => {
     const [editingBayId, setEditingBayId] = useState(null);
     const [editingPocketId, setEditingPocketId] = useState(null);
     const [hoveredPocketId, setHoveredPocketId] = useState(null);
+    const [baySortConfig, setBaySortConfig] = useState({ key: 'substation', direction: 'asc' });
 
     // --- Settings Tab State ---
     const [activeGlobalSettingsTab, setActiveGlobalSettingsTab] = useState('ufls'); // 'ufls' | 'uvls' | 'conflict'
@@ -125,6 +137,61 @@ const LoadSheddingDesigner = () => {
             return a.time_delay - b.time_delay; // or smaller delay first (per example: 0s before 60s)
         });
     };
+
+    const handleBaySort = (key) => {
+        setBaySortConfig(prev => {
+            if (prev.key === key) {
+                return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+            }
+            return { key, direction: 'asc' };
+        });
+    };
+
+    const sortedTransformerBays = useMemo(() => {
+        const bays = stages[activeStageIdx]?.transformer_bays || [];
+        if (!baySortConfig.key) return bays;
+        return [...bays].sort((a, b) => {
+            const subIdA = a.relay_substation_id || '';
+            const subIdB = b.relay_substation_id || '';
+            const detailA = detailedSubstations[subIdA];
+            const detailB = detailedSubstations[subIdB];
+            let valA, valB;
+            if (baySortConfig.key === 'substation') {
+                valA = subIdA.toLowerCase();
+                valB = subIdB.toLowerCase();
+            } else if (baySortConfig.key === 'voltage') {
+                valA = detailA?.voltage || '';
+                valB = detailB?.voltage || '';
+            } else if (baySortConfig.key === 'mw') {
+                let mwA = 0, mwB = 0;
+                if (detailA?.db_transformers) {
+                    (a.transformers || []).forEach(txObj => {
+                        const tId = typeof txObj === 'object' ? txObj.id : txObj;
+                        const dbTx = detailA.db_transformers.find(t => String(t.id) === String(tId));
+                        if (dbTx) {
+                            const tx = detailA.transformers?.find(t => t.name === `TX T${dbTx.transformer_no}`) || detailA.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
+                            if (tx?.load_mw != null) mwA += parseFloat(tx.load_mw);
+                        }
+                    });
+                }
+                if (detailB?.db_transformers) {
+                    (b.transformers || []).forEach(txObj => {
+                        const tId = typeof txObj === 'object' ? txObj.id : txObj;
+                        const dbTx = detailB.db_transformers.find(t => String(t.id) === String(tId));
+                        if (dbTx) {
+                            const tx = detailB.transformers?.find(t => t.name === `TX T${dbTx.transformer_no}`) || detailB.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
+                            if (tx?.load_mw != null) mwB += parseFloat(tx.load_mw);
+                        }
+                    });
+                }
+                valA = mwA;
+                valB = mwB;
+            }
+            if (valA < valB) return baySortConfig.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return baySortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [stages, activeStageIdx, baySortConfig, detailedSubstations]);
 
     // --- Create Stage Modal State ---
     const [showCreateStageModal, setShowCreateStageModal] = useState(false);
@@ -181,6 +248,33 @@ const LoadSheddingDesigner = () => {
             sessionStorage.setItem('ls_draft_state', JSON.stringify(draftState));
         }
     }, [activeVersionId, schemeType, versionLabel, reviewYear, targetPercentage, isMetricsDrawerOpen, isNewlyCloned, stages, activeStageIdx, detailedSubstations, view]);
+
+    // --- Asset Library: auto-expand tree to matching nodes on search ---
+    useEffect(() => {
+        if (!searchTerm) return;
+        const term = searchTerm.toLowerCase();
+        const toExpand = new Set();
+        relays.forEach(relay => {
+            const sub = substations.find(s => s.substation_id === (relay.substation_id || relay.substation));
+            if (!sub) return;
+            const subId = sub.substation_id;
+            const region = sub.region || 'Unknown Region';
+            const grid = sub.grid || 'Unknown Grid';
+            const subMatches = subId.toLowerCase().includes(term) || (sub.name || '').toLowerCase().includes(term);
+            const relayMatches = (relay.relay_name || '').toLowerCase().includes(term);
+            if (subMatches || relayMatches) {
+                toExpand.add(`region-${region}`);
+                toExpand.add(`grid-${region}-${grid}`);
+                toExpand.add(`sub-${region}-${grid}-${subId}`);
+            }
+            if (relayMatches) {
+                toExpand.add(`relay-${relay.id}`);
+            }
+        });
+        if (toExpand.size > 0) {
+            setExpandedNodes(prev => new Set([...prev, ...toExpand]));
+        }
+    }, [searchTerm, relays, substations]);
 
     // --- Pocket Preview ---
     useEffect(() => {
@@ -337,8 +431,10 @@ const LoadSheddingDesigner = () => {
                 );
                 // Sort by stage_number
                 detailedStages.sort((a, b) => a.stage_number - b.stage_number);
+                skipDirtyRef.current = true;
                 setStages(detailedStages);
-                
+                setIsDirty(false);
+
                 // Fetch detailed substation data for all substations in all stages (for MW calculations)
                 const allSubIds = [...new Set(detailedStages.flatMap(s => 
                     [...(s.transformer_bays?.map(b => b.relay_substation_id) || []),
@@ -360,7 +456,9 @@ const LoadSheddingDesigner = () => {
                     }
                 }
             } else {
+                skipDirtyRef.current = true;
                 setStages([{ id: Date.now(), stage_number: 1, label: 'Stage 1', target_mw: 1000, transformer_bays: [], pocket_bays: [], setting_ids: [] }]);
+                setIsDirty(false);
             }
             setActiveStageIdx(0);
             setView('designer');
@@ -832,6 +930,7 @@ const LoadSheddingDesigner = () => {
             }
 
             sessionStorage.removeItem('ls_draft_state');
+            setIsDirty(false);
             alert("Draft saved successfully!");
             return vId;
         } catch (err) {
@@ -1661,7 +1760,7 @@ const LoadSheddingDesigner = () => {
                         </button>
                     )}
                     {/* Save */}
-                    <button onClick={handleSaveWorkspace} disabled={saving || publishing} style={{ height: '28px', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 700, color: '#fff', background: '#059669', border: 'none', borderRadius: '6px', cursor: 'pointer', opacity: (saving || publishing) ? 0.6 : 1 }} onMouseEnter={e => { if (!saving && !publishing) e.currentTarget.style.background = '#047857'; }} onMouseLeave={e => e.currentTarget.style.background = '#059669'}>
+                    <button onClick={handleSaveWorkspace} disabled={saving || publishing || !isDirty} style={{ height: '28px', padding: '0 12px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 700, color: '#fff', background: isDirty ? '#059669' : '#94a3b8', border: 'none', borderRadius: '6px', cursor: isDirty ? 'pointer' : 'default', opacity: (saving || publishing) ? 0.6 : 1, transition: 'background 0.2s' }} onMouseEnter={e => { if (isDirty && !saving && !publishing) e.currentTarget.style.background = '#047857'; }} onMouseLeave={e => e.currentTarget.style.background = isDirty ? '#059669' : '#94a3b8'}>
                         {saving ? <RotateCcw size={11} className="animate-spin" /> : <Save size={11} />}
                         {saving ? 'Saving...' : 'Save'}
                     </button>
@@ -1747,11 +1846,23 @@ const LoadSheddingDesigner = () => {
                                         })}
                                     </div>
                                 </div>
-                                {/* Regional breakdown */}
+                                {/* Regional breakdown — scheme-wide */}
                                 {gridData?.regional_breakdown && (
-                                    <div style={{ padding: '1rem' }}>
-                                        <div style={{ fontSize: '0.58rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.65rem' }}>Regional</div>
+                                    <div style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0' }}>
+                                        <div style={{ fontSize: '0.58rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.65rem' }}>All-Stage Regional</div>
                                         <CompactRegionalMetrics data={getOverallRegionalSpiralData()} labelKey="region" valueKey="assigned_mw" targetKey="target_mw" />
+                                    </div>
+                                )}
+                                {/* Regional breakdown — active stage */}
+                                {gridData?.regional_breakdown && stages[activeStageIdx] && (
+                                    <div style={{ padding: '1rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+                                            <div style={{ fontSize: '0.58rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8' }}>Stage Regional</div>
+                                            <span style={{ fontSize: '0.57rem', fontWeight: 600, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 5px' }}>
+                                                {stages[activeStageIdx].label}
+                                            </span>
+                                        </div>
+                                        <CompactRegionalMetrics data={getStageRegionalSpiralData(stages[activeStageIdx])} labelKey="region" valueKey="assigned_mw" targetKey="target_mw" />
                                     </div>
                                 )}
                             </>
@@ -1779,19 +1890,19 @@ const LoadSheddingDesigner = () => {
                                 </div>
                                 <span style={{ fontSize: '0.67rem', fontFamily: 'monospace', fontWeight: 700, color: '#334155' }}>{formatMW(calculateTransformerMW(stages[activeStageIdx]))} MW</span>
                             </div>
-                            {stages[activeStageIdx]?.transformer_bays?.length > 0 ? (
+                            {sortedTransformerBays.length > 0 ? (
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                     <thead>
                                         <tr>
-                                            <th style={{ padding: '0.4rem 1.25rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '26%' }}>Substation</th>
+                                            <th onClick={() => handleBaySort('substation')} style={{ padding: '0.4rem 1.25rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '26%', cursor: 'pointer' }}>Substation {baySortConfig.key === 'substation' ? (baySortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
                                             <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9' }}>Transformers</th>
-                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '26%' }}>Voltage</th>
-                                            <th style={{ padding: '0.4rem 0.75rem', textAlign: 'right', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '70px' }}>MW</th>
+                                            <th onClick={() => handleBaySort('voltage')} style={{ padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '26%', cursor: 'pointer' }}>Voltage {baySortConfig.key === 'voltage' ? (baySortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
+                                            <th onClick={() => handleBaySort('mw')} style={{ padding: '0.4rem 0.75rem', textAlign: 'right', fontSize: '0.57rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', borderBottom: '1px solid #f1f5f9', width: '70px', cursor: 'pointer' }}>MW {baySortConfig.key === 'mw' ? (baySortConfig.direction === 'asc' ? '↑' : '↓') : ''}</th>
                                             <th style={{ padding: '0.4rem 1.25rem 0.4rem 0.4rem', borderBottom: '1px solid #f1f5f9', width: '48px' }}></th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {stages[activeStageIdx].transformer_bays.map((bay, bayIdx) => {
+                                        {sortedTransformerBays.map((bay, bayIdx) => {
                                             const subId = bay.relay_substation_id;
                                             const detail = detailedSubstations[subId];
                                             const relayObj = relays.find(r => r.id === bay.relay);
@@ -1828,7 +1939,7 @@ const LoadSheddingDesigner = () => {
                                                     <td style={{ padding: '0.5rem 1.25rem 0.5rem 0.4rem', textAlign: 'right' }}>
                                                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '3px' }}>
                                                             <button onClick={() => setEditingBayId(editingBayId === bay.id ? null : bay.id)} title="Edit transformers" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: editingBayId === bay.id ? '#f1f5f9' : '#fff', border: `1px solid ${editingBayId === bay.id ? '#cbd5e1' : '#e2e8f0'}`, borderRadius: '4px', cursor: 'pointer', color: editingBayId === bay.id ? '#0f172a' : '#64748b' }} onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }} onMouseLeave={e => { if (editingBayId !== bay.id) { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; } }}><FiEdit2 size={10} /></button>
-                                                            <button onClick={() => { const ns = [...stages]; const nb = [...ns[activeStageIdx].transformer_bays]; nb.splice(bayIdx, 1); ns[activeStageIdx] = { ...ns[activeStageIdx], transformer_bays: nb }; setStages(ns); }} title="Remove" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }} onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}><X size={10} /></button>
+                                                            <button onClick={() => { const ns = [...stages]; const nb = ns[activeStageIdx].transformer_bays.filter(b => b.id !== bay.id); ns[activeStageIdx] = { ...ns[activeStageIdx], transformer_bays: nb }; setStages(ns); }} title="Remove" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }} onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}><X size={10} /></button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -2061,7 +2172,7 @@ const LoadSheddingDesigner = () => {
                             <div style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
                                 <div style={{ position: 'relative' }}>
                                     <Search style={{ position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} size={12} />
-                                    <input type="text" placeholder="Search substation / relay..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ width: '100%', padding: '0.4rem 1.6rem 0.4rem 1.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', color: '#0f172a', fontSize: '0.68rem', outline: 'none', fontFamily: "'Poppins',sans-serif", boxSizing: 'border-box' }} onFocus={e => { e.target.style.borderColor = '#94a3b8'; e.target.style.background = '#fff'; }} onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }} />
+                                    <input type="text" placeholder="Search substation" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ width: '100%', padding: '0.4rem 1.6rem 0.4rem 1.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', color: '#0f172a', fontSize: '0.68rem', outline: 'none', fontFamily: "'Poppins',sans-serif", boxSizing: 'border-box' }} onFocus={e => { e.target.style.borderColor = '#94a3b8'; e.target.style.background = '#fff'; }} onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.background = '#f8fafc'; }} />
                                     {searchTerm && <button onClick={() => setSearchTerm('')} style={{ position: 'absolute', right: '0.4rem', top: '50%', transform: 'translateY(-50%)', width: '16px', height: '16px', borderRadius: '999px', border: 'none', background: '#e2e8f0', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0 }}><X size={9} /></button>}
                                 </div>
                             </div>
@@ -2075,7 +2186,7 @@ const LoadSheddingDesigner = () => {
                                         const region = sub.region || 'Unknown Region';
                                         const grid = sub.grid || 'Unknown Grid';
                                         const subId = sub.substation_id;
-                                        if (term && !subId.toLowerCase().includes(term) && !(relay.relay_name || '').toLowerCase().includes(term)) return;
+                                        if (term && !subId.toLowerCase().includes(term) && !(sub.name || '').toLowerCase().includes(term) && !(relay.relay_name || '').toLowerCase().includes(term)) return;
                                         if (!tree[region]) tree[region] = {};
                                         if (!tree[region][grid]) tree[region][grid] = {};
                                         if (!tree[region][grid][subId]) tree[region][grid][subId] = { substation: sub, relays: [] };

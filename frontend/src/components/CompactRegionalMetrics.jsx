@@ -22,17 +22,18 @@ const CompactRegionalMetrics = ({ data, labelKey = 'region', valueKey = 'assigne
                 const target = parseVal(item[targetKey]);
                 const assigned = parseVal(item[valueKey]);
                 
-                // Cap progress at 150% visually
-                const progressPercent = target > 0 ? Math.min((assigned / target) * 100, 150) : 0;
+                // Cap progress at 100% visually — over-assigned regions still show full bar
+                const progressPercent = target > 0 ? Math.min((assigned / target) * 100, 100) : 0;
                 
                 // The width of the "Target" track relative to the biggest region
                 const trackWidthPercent = (target / maxTarget) * 100;
 
                 const label = item[labelKey];
 
-                const color = colorFunction 
-                    ? colorFunction(item, idx) 
-                    : (progressPercent > 100 ? '#ef4444' : `hsl(${190 + (idx * 30)}, 90%, 50%)`); // red if over-assigned
+                const isOver = target > 0 && assigned > target;
+                const color = colorFunction
+                    ? colorFunction(item, idx)
+                    : (isOver ? '#ef4444' : `hsl(${190 + (idx * 30)}, 90%, 50%)`); // red if over-assigned
 
                 const isHovered = hoveredIndex === idx;
 
@@ -65,7 +66,7 @@ const CompactRegionalMetrics = ({ data, labelKey = 'region', valueKey = 'assigne
                                 {label}
                             </span>
                             <span style={{ fontSize: '0.7rem', fontFamily: 'monospace', color: 'rgba(255,255,255,0.8)', whiteSpace: 'nowrap' }}>
-                                <span style={{ fontWeight: 700, color: progressPercent > 100 ? '#ef4444' : '#fff' }}>
+                                <span style={{ fontWeight: 700, color: isOver ? '#ef4444' : '#fff' }}>
                                     {assigned.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                                 </span>
                                 <span style={{ color: 'var(--text-secondary)' }}> / {target.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MW</span>

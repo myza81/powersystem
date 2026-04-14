@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, MapPin, AlertTriangle, Edit2, Upload, Plus, RefreshCw, Database, Zap, GitBranch, ShieldAlert, Trash2, CheckCircle2, FileText } from 'lucide-react';
+import { X, Save, MapPin, AlertTriangle, Edit2, Upload, Plus, RefreshCw, Database, Zap, GitBranch, ShieldAlert, Trash2, CheckCircle2, FileText, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api';
 
@@ -1072,6 +1072,206 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
         </div >
     );
 };
+// ── Critical Customer Inline Form ────────────────────────────────────────────
+const SENS_LABELS = { 3: 'High', 2: 'Medium', 1: 'Low' };
+const SENS_COLORS = { 3: '#ef4444', 2: '#f97316', 1: '#eab308' };
+
+const CriticalCustomerRow = ({ tag, categories, loadTransformers, isSelected, onEdit, onDelete }) => {
+    const [hovering, setHovering] = React.useState(false);
+    const catName = categories.find(c => c.id === tag.category)?.category_name || '—';
+    const sens = tag.sensitivity_impact;
+    const txBays = (tag.load_transformers || []).map(id => {
+        const lt = loadTransformers.find(l => l.id === id);
+        return lt ? lt.bay_id : null;
+    }).filter(Boolean);
+
+    return (
+        <div
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
+            style={{
+                display: 'grid', gridTemplateColumns: '1fr 120px 90px 1fr 70px 80px',
+                gap: '6px', alignItems: 'center', padding: '7px 16px',
+                borderBottom: isSelected ? 'none' : '1px solid #f1f5f9',
+                background: isSelected ? 'rgba(4,125,96,0.03)' : hovering ? '#f8fafc' : '#fff',
+                borderLeft: isSelected ? '3px solid #047d60' : '3px solid transparent',
+                transition: 'all 0.15s',
+            }}
+        >
+            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tag.asset || '—'}</div>
+            <div>
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '4px' }}>{catName}</span>
+            </div>
+            <div>
+                {sens ? (
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: SENS_COLORS[sens], background: `${SENS_COLORS[sens]}18`, padding: '2px 8px', borderRadius: '4px', border: `1px solid ${SENS_COLORS[sens]}30` }}>
+                        {SENS_LABELS[sens]}
+                    </span>
+                ) : <span style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>—</span>}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                {txBays.length > 0 ? txBays.map(bay => (
+                    <span key={bay} style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 600, color: '#047d60', background: 'rgba(4,125,96,0.08)', border: '1px solid rgba(4,125,96,0.2)', padding: '1px 6px', borderRadius: '4px' }}>{bay}</span>
+                )) : <span style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>—</span>}
+            </div>
+            <div>
+                <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: tag.is_inforce ? 'rgba(4,125,96,0.08)' : '#f1f5f9', color: tag.is_inforce ? '#047d60' : '#94a3b8', border: `1px solid ${tag.is_inforce ? 'rgba(4,125,96,0.2)' : '#e2e8f0'}` }}>
+                    {tag.is_inforce ? 'Active' : 'Off'}
+                </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
+                <button type="button" onClick={e => { e.stopPropagation(); onEdit(); }} title="Edit"
+                    style={{ background: hovering ? '#f0f9ff' : 'transparent', border: hovering ? '1px solid #bae6fd' : '1px solid transparent', color: '#0284c7', cursor: 'pointer', padding: '4px 6px', borderRadius: '5px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                    <Edit2 size={13} />
+                </button>
+                <button type="button" onClick={e => { e.stopPropagation(); onDelete(); }} title="Delete"
+                    style={{ background: hovering ? '#fef2f2' : 'transparent', border: hovering ? '1px solid #fecaca' : '1px solid transparent', color: '#ef4444', cursor: 'pointer', padding: '4px 6px', borderRadius: '5px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                    <Trash2 size={13} />
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const CriticalCustomerInlineForm = ({ data, loadTransformers, categories, sources, onSave, onCancel }) => {
+    const isEditing = !!data?.id;
+    const [form, setForm] = React.useState({
+        asset: data?.asset || '',
+        category: data?.category || '',
+        load_transformers: data?.load_transformers || [],
+        sensitivity_impact: data?.sensitivity_impact !== undefined ? String(data.sensitivity_impact) : '',
+        source: data?.source || '',
+        notes: data?.notes || '',
+        is_inforce: data?.is_inforce ?? true,
+    });
+    const [sourceMode, setSourceMode] = React.useState(sources.length === 0 ? 'new' : 'existing');
+    const [sourceForm, setSourceForm] = React.useState({ issued_date: '', source_file: null });
+    const [saving, setSaving] = React.useState(false);
+    const [error, setError] = React.useState(null);
+
+    const handleSave = async () => {
+        if (!form.asset.trim()) { setError('Please enter a customer name.'); return; }
+        if (!form.category) { setError('Please select a category.'); return; }
+        if (!form.load_transformers.length) { setError('Please select at least one transformer bay.'); return; }
+        setSaving(true);
+        setError(null);
+        const err = await onSave({ ...form, id: data?.id, sourceMode, sourceForm });
+        if (err) setError(err);
+        setSaving(false);
+    };
+
+    const lbl = (text) => (
+        <label style={{ display: 'block', fontSize: '0.65rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{text}</label>
+    );
+    const inp = { padding: '0.4rem 0.65rem', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '6px', color: '#0f172a', outline: 'none', boxSizing: 'border-box', width: '100%', background: '#fff' };
+
+    return (
+        <div style={{ padding: '1rem 1rem 1rem 1.25rem', background: 'rgba(4,125,96,0.03)', borderTop: '2px solid #047d60', borderBottom: '1px solid rgba(4,125,96,0.12)', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {/* Row 1: Name · Category · Sensitivity · Status */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '0.65rem', alignItems: 'end' }}>
+                <div>{lbl('Customer Name')}<input value={form.asset} onChange={e => setForm(f => ({ ...f, asset: e.target.value }))} placeholder="e.g. TUDM Kuantan" style={inp} /></div>
+                <div>{lbl('Category')}
+                    <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={inp}>
+                        <option value="">Select…</option>
+                        {categories.map(c => <option key={c.id} value={c.id}>{c.category_name}</option>)}
+                    </select>
+                </div>
+                <div>{lbl('Sensitivity')}
+                    <select value={form.sensitivity_impact} onChange={e => setForm(f => ({ ...f, sensitivity_impact: e.target.value }))} style={inp}>
+                        <option value="">— None —</option>
+                        <option value="3">High</option>
+                        <option value="2">Medium</option>
+                        <option value="1">Low</option>
+                    </select>
+                </div>
+                <div>{lbl('Status')}
+                    <div onClick={() => setForm(f => ({ ...f, is_inforce: !f.is_inforce }))}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '0.4rem 0.65rem', borderRadius: '6px', border: '1px solid #e2e8f0', userSelect: 'none', whiteSpace: 'nowrap', background: '#fff' }}>
+                        <div style={{ width: '26px', height: '15px', background: form.is_inforce ? '#047d60' : '#cbd5e1', borderRadius: '99px', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+                            <div style={{ position: 'absolute', top: '2px', left: form.is_inforce ? '13px' : '2px', width: '11px', height: '11px', background: '#fff', borderRadius: '50%', transition: 'left 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.2)' }} />
+                        </div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: form.is_inforce ? '#047d60' : '#94a3b8' }}>{form.is_inforce ? 'Active' : 'Off'}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Row 2: Load Transformer Bays */}
+            <div>
+                {lbl('Load Transformer Bays')}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '7px', background: '#f8fafc', minHeight: '38px' }}>
+                    {loadTransformers.length === 0
+                        ? <span style={{ fontSize: '0.73rem', color: '#94a3b8', fontStyle: 'italic' }}>No load transformers available.</span>
+                        : loadTransformers.map(lt => {
+                            const checked = form.load_transformers.includes(lt.id);
+                            return (
+                                <label key={lt.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem', fontFamily: 'monospace', padding: '3px 8px', borderRadius: '5px', cursor: 'pointer', background: checked ? 'rgba(4,125,96,0.08)' : '#fff', border: `1px solid ${checked ? 'rgba(4,125,96,0.3)' : '#e2e8f0'}`, color: checked ? '#047d60' : '#475569', fontWeight: checked ? 600 : 400, transition: 'all 0.15s', userSelect: 'none' }}>
+                                    <input type="checkbox" checked={checked} onChange={e => setForm(f => ({ ...f, load_transformers: e.target.checked ? [...f.load_transformers, lt.id] : f.load_transformers.filter(id => id !== lt.id) }))} style={{ display: 'none' }} />
+                                    {lt.bay_id}{lt.lv_voltage && <span style={{ fontSize: '0.63rem', opacity: 0.7 }}>{lt.lv_voltage}kV</span>}
+                                </label>
+                            );
+                        })}
+                </div>
+            </div>
+
+            {/* Row 3: Source Documentation */}
+            <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    {lbl('Source Documentation')}
+                    <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '5px', padding: '2px', gap: '2px' }}>
+                        {['existing', 'new'].map(mode => (
+                            <button key={mode} type="button" onClick={() => setSourceMode(mode)} style={{ padding: '2px 9px', fontSize: '0.68rem', fontWeight: 600, borderRadius: '3px', border: 'none', cursor: 'pointer', background: sourceMode === mode ? '#fff' : 'transparent', color: sourceMode === mode ? '#0f172a' : '#94a3b8', boxShadow: sourceMode === mode ? '0 1px 2px rgba(0,0,0,0.07)' : 'none', transition: 'all 0.15s' }}>
+                                {mode === 'existing' ? 'Existing' : 'Upload New'}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                {sourceMode === 'existing' ? (
+                    <select value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))} style={inp}>
+                        <option value="">Select source document…</option>
+                        {sources.map(src => <option key={src.id} value={src.id}>{src.source_file ? src.source_file.split('/').pop() : 'Unnamed Source'}</option>)}
+                    </select>
+                ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.65rem' }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', marginBottom: '3px' }}>Issued Date</label>
+                            <input type="date" value={sourceForm.issued_date} onChange={e => setSourceForm(f => ({ ...f, issued_date: e.target.value }))} style={{ ...inp }} />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', fontSize: '0.65rem', color: '#94a3b8', marginBottom: '3px' }}>Document File</label>
+                            <input type="file" onChange={e => setSourceForm(f => ({ ...f, source_file: e.target.files[0] || null }))} style={{ ...inp, padding: '0.35rem 0.65rem', fontSize: '0.73rem', color: '#475569' }} />
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Row 4: Notes */}
+            <div>
+                {lbl('Notes')}
+                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Additional context…" rows={2}
+                    style={{ ...inp, resize: 'vertical', fontFamily: 'inherit' }} />
+            </div>
+
+            {/* Error */}
+            {error && (
+                <div style={{ padding: '7px 10px', borderRadius: '6px', background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'flex-start', gap: '7px' }}>
+                    <AlertTriangle size={13} color="#ef4444" style={{ flexShrink: 0, marginTop: '1px' }} />
+                    <span style={{ fontSize: '0.72rem', color: '#dc2626', lineHeight: 1.4 }}>{error}</span>
+                </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button type="button" onClick={onCancel} style={{ padding: '6px 16px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer', fontFamily: "'Poppins', sans-serif" }}>Cancel</button>
+                <button type="button" onClick={handleSave} disabled={saving} style={{ padding: '6px 18px', borderRadius: '6px', border: 'none', background: '#047d60', color: '#fff', fontSize: '0.74rem', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: saving ? 0.7 : 1, fontFamily: "'Poppins', sans-serif" }}>
+                    {saving ? <RefreshCw size={12} /> : <Save size={12} />}
+                    {saving ? 'Saving…' : (isEditing ? 'Update' : 'Add Customer')}
+                </button>
+            </div>
+        </div>
+    );
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstationRefresh, status, loading }) => {
     const [formData, setFormData] = useState(substation || {
         mnemonic: '',
@@ -1114,6 +1314,75 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
         }
     }, [assetStatus]);
 
+    const fetchCriticalData = async () => {
+        if (!substation?.substation_id) return;
+        setCriticalLoading(true);
+        try {
+            const [assetsRes, catRes, srcRes] = await Promise.all([
+                api.get(`/critical-assets/?substation=${substation.substation_id}`),
+                api.get('/critical-categories/'),
+                api.get('/critical-sources/'),
+            ]);
+            setCriticalAssets(assetsRes.data || []);
+            setCriticalCategories(catRes.data || []);
+            setCriticalSources(srcRes.data || []);
+        } catch {
+            setCriticalStatus({ type: 'error', msg: 'Failed to load critical customers.' });
+        }
+        setCriticalLoading(false);
+    };
+
+    const handleCriticalSave = async ({ id, sourceMode, sourceForm: sf, category, ...rest }) => {
+        if (!substation?.substation_id) return 'No substation.';
+        try {
+            let sourceId = rest.source || null;
+            if (sourceMode === 'new' && sf?.source_file) {
+                const fd = new FormData();
+                fd.append('source_file', sf.source_file);
+                if (sf.issued_date) fd.append('issued_date', sf.issued_date);
+                const srcRes = await api.post('/critical-sources/', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                sourceId = srcRes.data.id;
+            }
+            const payload = {
+                asset: rest.asset,
+                substation: substation.substation_id,
+                load_transformers: rest.load_transformers,
+                category,
+                sensitivity_impact: rest.sensitivity_impact ? parseInt(rest.sensitivity_impact, 10) : null,
+                source: sourceId,
+                notes: rest.notes,
+                is_inforce: rest.is_inforce,
+            };
+            if (id) {
+                await api.patch(`/critical-assets/${id}/`, payload);
+            } else {
+                await api.post('/critical-assets/', payload);
+            }
+            setEditingCriticalId(null);
+            await fetchCriticalData();
+            setCriticalStatus({ type: 'success', msg: id ? 'Customer updated.' : 'Customer added.' });
+            return null;
+        } catch (err) {
+            return err.response?.data
+                ? Object.entries(err.response.data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' | ')
+                : 'Failed to save.';
+        }
+    };
+
+    const handleCriticalDelete = async (id) => {
+        if (!window.confirm('Delete this critical customer?')) return;
+        setCriticalLoading(true);
+        try {
+            await api.delete(`/critical-assets/${id}/`);
+            await fetchCriticalData();
+            setCriticalStatus({ type: 'success', msg: 'Customer deleted.' });
+        } catch {
+            setCriticalStatus({ type: 'error', msg: 'Failed to delete.' });
+        }
+        setCriticalLoading(false);
+    };
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Modal Control State
     const [editingAsset, setEditingAsset] = useState(null); // { type: 'load'|'auto'|'branch', data: item|null }
 
@@ -1127,6 +1396,22 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
     const [inlineBranchForm, setInlineBranchForm] = useState({});
     // null = closed, 'new' = adding, relay.id = editing that relay
     const [editingLSRId, setEditingLSRId] = useState(null);
+
+    // ── Critical Customers ────────────────────────────────────────────────────
+    const [criticalAssets, setCriticalAssets] = useState([]);
+    const [criticalCategories, setCriticalCategories] = useState([]);
+    const [criticalSources, setCriticalSources] = useState([]);
+    const [criticalLoading, setCriticalLoading] = useState(false);
+    const [criticalStatus, setCriticalStatus] = useState(null);
+    // null = closed | 'new' = adding new | tag.id = editing that tag
+    const [editingCriticalId, setEditingCriticalId] = useState(null);
+
+    useEffect(() => {
+        if (criticalStatus?.type === 'success') {
+            const t = setTimeout(() => setCriticalStatus(null), 5000);
+            return () => clearTimeout(t);
+        }
+    }, [criticalStatus]);
 
     const handleInlineSave = async (type, formData) => {
         if (!substation?.substation_id) return;
@@ -1245,6 +1530,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
         if (canManageAssets) {
             fetchAssets();
             fetchSubstations();
+            fetchCriticalData();
         }
     }, [canManageAssets, substation?.substation_id]);
 
@@ -1606,6 +1892,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                     { id: 'auto', label: 'Auto Transformers', icon: Database, count: autoTransformers.length },
                                     { id: 'branch', label: 'Incoming Branches', icon: GitBranch, count: incomingBranches.length },
                                     { id: 'lsr', label: 'Load Shedding Relays', icon: ShieldAlert, count: loadSheddingRelays.length },
+                                    { id: 'critical', label: 'Critical Customers', icon: Users, count: criticalAssets.length },
                                 ].map(tab => (
                                     <button
                                         key={tab.id}
@@ -2163,6 +2450,111 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                     onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#047d60'; }}
                                                     onMouseLeave={e => { e.currentTarget.style.background = '#fafafa'; e.currentTarget.style.color = '#94a3b8'; }}>
                                                     <Plus size={13} /> Add relay
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div style={{ padding: '2rem', textAlign: 'center', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #e2e8f0' }}>
+                                            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>Save substation details first to manage assets</div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Separator */}
+                                <div style={{ borderTop: '1px solid #e2e8f0', margin: '0.5rem 0' }} />
+
+                                {/* Section: Critical Customers */}
+                                <div id="critical">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
+                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(239,68,68,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <Users size={15} color="#ef4444" />
+                                        </div>
+                                        <div>
+                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Critical Customers</h3>
+                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Protected loads at this substation</div>
+                                        </div>
+                                        <span style={{ fontSize: '0.62rem', fontWeight: 700, background: criticalAssets.length > 0 ? 'rgba(239,68,68,0.08)' : '#f1f5f9', color: criticalAssets.length > 0 ? '#ef4444' : '#94a3b8', padding: '2px 8px', borderRadius: '20px', border: `1px solid ${criticalAssets.length > 0 ? 'rgba(239,68,68,0.2)' : '#e2e8f0'}` }}>
+                                            {criticalAssets.length} customer{criticalAssets.length !== 1 ? 's' : ''}
+                                        </span>
+                                        <button type="button" onClick={fetchCriticalData} disabled={criticalLoading}
+                                            style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #e2e8f0', color: '#94a3b8', cursor: 'pointer', padding: '5px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
+                                            <RefreshCw size={13} className={criticalLoading ? 'animate-spin' : ''} />
+                                        </button>
+                                    </div>
+
+                                    {/* Status message */}
+                                    {criticalStatus && (
+                                        <div style={{ marginBottom: '0.75rem', padding: '0.55rem 0.75rem', borderRadius: '7px', background: criticalStatus.type === 'success' ? 'rgba(4,125,96,0.08)' : '#fef2f2', border: `1px solid ${criticalStatus.type === 'success' ? 'rgba(4,125,96,0.2)' : '#fecaca'}`, fontSize: '0.75rem', color: criticalStatus.type === 'success' ? '#047d60' : '#dc2626' }}>
+                                            {criticalStatus.msg}
+                                        </div>
+                                    )}
+
+                                    {canManageAssets ? (
+                                        <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                                            {/* Table header */}
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 90px 1fr 70px 80px', gap: '6px', padding: '8px 16px', background: 'linear-gradient(135deg, rgba(239,68,68,0.06), rgba(239,68,68,0.02))', borderBottom: '1px solid #e2e8f0', fontSize: '0.7rem', fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Poppins', sans-serif" }}>
+                                                <div>Customer</div>
+                                                <div>Category</div>
+                                                <div>Sensitivity</div>
+                                                <div>TX Bays</div>
+                                                <div style={{ textAlign: 'center' }}>Status</div>
+                                                <div style={{ textAlign: 'center' }}>Action</div>
+                                            </div>
+
+                                            {/* Existing rows */}
+                                            {criticalAssets.map(tag => (
+                                                <React.Fragment key={tag.id}>
+                                                    <CriticalCustomerRow
+                                                        tag={tag}
+                                                        categories={criticalCategories}
+                                                        loadTransformers={loadTransformers}
+                                                        isSelected={editingCriticalId === tag.id}
+                                                        onEdit={() => setEditingCriticalId(editingCriticalId === tag.id ? null : tag.id)}
+                                                        onDelete={() => handleCriticalDelete(tag.id)}
+                                                    />
+                                                    {editingCriticalId === tag.id && (
+                                                        <CriticalCustomerInlineForm
+                                                            data={tag}
+                                                            loadTransformers={loadTransformers}
+                                                            categories={criticalCategories}
+                                                            sources={criticalSources}
+                                                            onSave={handleCriticalSave}
+                                                            onCancel={() => setEditingCriticalId(null)}
+                                                        />
+                                                    )}
+                                                </React.Fragment>
+                                            ))}
+
+                                            {/* Empty state */}
+                                            {criticalAssets.length === 0 && editingCriticalId !== 'new' && (
+                                                <div style={{ padding: '2.25rem 1rem', textAlign: 'center', background: '#fafafa' }}>
+                                                    <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.6rem' }}>
+                                                        <Users size={15} color="#cbd5e1" />
+                                                    </div>
+                                                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>No critical customers</div>
+                                                    <div style={{ fontSize: '0.68rem', color: '#cbd5e1', marginTop: '2px' }}>Click "Add customer" to register one</div>
+                                                </div>
+                                            )}
+
+                                            {/* New inline form */}
+                                            {editingCriticalId === 'new' && (
+                                                <CriticalCustomerInlineForm
+                                                    data={null}
+                                                    loadTransformers={loadTransformers}
+                                                    categories={criticalCategories}
+                                                    sources={criticalSources}
+                                                    onSave={handleCriticalSave}
+                                                    onCancel={() => setEditingCriticalId(null)}
+                                                />
+                                            )}
+
+                                            {/* Add button */}
+                                            {editingCriticalId !== 'new' && (
+                                                <button type="button" onClick={() => setEditingCriticalId('new')}
+                                                    style={{ width: '100%', padding: '9px 16px', border: 'none', borderTop: '1px dashed #e2e8f0', background: '#fafafa', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.74rem', fontWeight: 600, fontFamily: "'Poppins', sans-serif", transition: 'all 0.15s' }}
+                                                    onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = '#fafafa'; e.currentTarget.style.color = '#94a3b8'; }}>
+                                                    <Plus size={13} /> Add customer
                                                 </button>
                                             )}
                                         </div>
