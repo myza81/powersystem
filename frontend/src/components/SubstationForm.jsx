@@ -713,7 +713,7 @@ const LSRInlineForm = ({ data, substation, loadTransformers, autoTransformers, i
                     </div>
                 </div>
                 <div>
-                    <div style={{ ...inputLabelStyle, marginBottom: '5px' }}>Trip Auto Transformers</div>
+                    <div style={{ ...inputLabelStyle, marginBottom: '5px' }}>Trip Interbus Transformers</div>
                     <div style={chipBox}>
                         {filteredATs.length === 0 && <span style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>None for {targetV}kV</span>}
                         {filteredATs.map(at => {
@@ -783,7 +783,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
     const isBranch = type === 'branch';
     const isLSR = type === 'lsr';
     const title = data?.id ? 'Edit' : 'Add';
-    const typeLabel = isLSR ? 'Load Shedding Relay' : type === 'load' ? 'Load Transformer' : type === 'auto' ? 'Auto Transformer' : 'Incoming Branch';
+    const typeLabel = isLSR ? 'Load Shedding Relay' : type === 'load' ? 'Load Transformer' : type === 'auto' ? 'Interbus Transformer' : 'Incoming Branch';
 
     // Calculate available voltages at this substation
     const availableVoltages = React.useMemo(() => {
@@ -938,9 +938,9 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                         </div>
 
                         <div>
-                            <label style={inputLabelStyle}>Auto Transformers</label>
+                            <label style={inputLabelStyle}>Interbus Transformers</label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f1f5f9', alignItems: 'flex-start' }}>
-                                {filteredATs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No auto transformers available for {targetV}kV.</div>}
+                                {filteredATs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No interbus transformers available for {targetV}kV.</div>}
                                 {filteredATs.map((at) => {
                                     const checked = (assetForm.auto_transformers || []).includes(at.id);
                                     const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && r.auto_transformers.includes(at.id));
@@ -1670,7 +1670,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
         const selectedBays = fullBaysList.filter(b => normalizedBayIds.includes(b.id));
         if (selectedBays.length === 0) return null;
 
-        const label = type === 'load' ? 'Load Transformer' : type === 'auto' ? 'Auto Transformer' : 'Incoming Branch';
+        const label = type === 'load' ? 'Load Transformer' : type === 'auto' ? 'Interbus Transformer' : 'Incoming Branch';
 
         const cardStyle = {
             display: 'flex',
@@ -1889,7 +1889,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                 {[
                                     { id: 'details', label: 'Details & Location', icon: MapPin },
                                     { id: 'load', label: 'Load Transformers', icon: Zap, count: loadTransformers.length },
-                                    { id: 'auto', label: 'Auto Transformers', icon: Database, count: autoTransformers.length },
+                                    { id: 'auto', label: 'Interbus Transformers', icon: Database, count: autoTransformers.length },
                                     { id: 'branch', label: 'Incoming Branches', icon: GitBranch, count: incomingBranches.length },
                                     { id: 'lsr', label: 'Load Shedding Relays', icon: ShieldAlert, count: loadSheddingRelays.length },
                                     { id: 'critical', label: 'Critical Customers', icon: Users, count: criticalAssets.length },
@@ -2171,14 +2171,14 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                 {/* Separator */}
                                 <div style={{ borderTop: '1px solid #e2e8f0', margin: '0.5rem 0' }} />
 
-                                {/* Section: Auto Transformers */}
+                                {/* Section: Interbus Transformers */}
                                 <div id="auto">
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
                                         <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             <Database size={15} color="#047d60" />
                                         </div>
                                         <div>
-                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Auto Transformers</h3>
+                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Interbus Transformers</h3>
                                             <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>HV/HV step-down units</div>
                                         </div>
                                         <span style={{
@@ -2227,7 +2227,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                                     <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.6rem' }}>
                                                         <Database size={15} color="#cbd5e1" />
                                                     </div>
-                                                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>No auto transformers</div>
+                                                    <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#94a3b8' }}>No interbus transformers</div>
                                                     <div style={{ fontSize: '0.68rem', color: '#cbd5e1', marginTop: '2px' }}>Click "Add unit" to register one</div>
                                                 </div>
                                             )}

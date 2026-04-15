@@ -445,10 +445,10 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
                                     }
                                 </div>
 
-                                {/* Auto Transformers */}
+                                {/* Interbus Transformers */}
                                 <div>
                                     <SectionLabel icon={Zap}>
-                                        Auto Transformers
+                                        Interbus Transformers
                                         <span style={{ marginLeft: 'auto', background: '#f1f5f9', color: '#64748b', fontSize: '0.6rem', padding: '0 5px', borderRadius: '8px' }}>
                                             {autoTransformers.length}
                                         </span>
