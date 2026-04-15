@@ -2354,7 +2354,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                         </div>
                                         <div>
                                             <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Load Shedding Relays</h3>
-                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Breaker trip wiring assignments</div>
+                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Site Load Shedding Scheme Matrix</div>
                                         </div>
                                         <span style={{
                                             fontSize: '0.62rem', fontWeight: 700,
@@ -2471,7 +2471,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                         </div>
                                         <div>
                                             <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Critical Customers</h3>
-                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Protected loads at this substation</div>
+                                            <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Critical customers supplied by this substation</div>
                                         </div>
                                         <span style={{ fontSize: '0.62rem', fontWeight: 700, background: criticalAssets.length > 0 ? 'rgba(239,68,68,0.08)' : '#f1f5f9', color: criticalAssets.length > 0 ? '#ef4444' : '#94a3b8', padding: '2px 8px', borderRadius: '20px', border: `1px solid ${criticalAssets.length > 0 ? 'rgba(239,68,68,0.2)' : '#e2e8f0'}` }}>
                                             {criticalAssets.length} customer{criticalAssets.length !== 1 ? 's' : ''}

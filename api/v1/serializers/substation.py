@@ -9,6 +9,7 @@ from core.models import (
     EquipmentSnapshotState,
     LoadSheddingRelay,
 )
+from api.v1.serializers.critical import CriticalAssetSerializer
 
 class SubstationSerializer(serializers.ModelSerializer):
     """
@@ -79,110 +80,6 @@ class TransformerDetailSerializer(serializers.Serializer):
     windv2 = serializers.FloatField()
     windv3 = serializers.FloatField(allow_null=True)
 
-class SubstationDetailSerializer(SubstationSerializer):
-    """
-    V2: Detailed Substation Serializer (Includes live network data).
-    Used for single-item lookups (Search/Detail view).
-    """
-    transformers = serializers.SerializerMethodField()
-    
-    class Meta(SubstationSerializer.Meta):
-        fields = SubstationSerializer.Meta.fields + ['transformers']
-
-    def get_transformers(self, obj):
-        snapshot = self.get_snapshot()
-        if not snapshot:
-            return []
-        
-        from django.db.models import Q
-        transformers = []
-        from core.models import TopologyBus
-        bus_ids = list(TopologyBus.objects.filter(
-            topology_version=snapshot.topology_version,
-            substation=obj,
-        ).values_list('id', flat=True))
-        
-        # 1. Physical Transformers (TopologyTransformer)
-        from core.models import TopologyTransformer
-        tx_queryset = TopologyTransformer.objects.filter(
-            topology_version=snapshot.topology_version
-        ).filter(
-            Q(from_bus_id__in=bus_ids) | Q(to_bus_id__in=bus_ids)
-        ).distinct().select_related('from_bus', 'to_bus', 'tertiary_bus')
-        
-        from core.models import NetworkLoad
-        # Pre-fetch allloads for this substation to handle topological swaps/mismatches
-        all_sub_loads = list(NetworkLoad.objects.filter(snapshot=snapshot, bus_id__in=bus_ids))
-        sub_load_map = {l.load_id: l for l in all_sub_loads}
-        
-        from django.db.models import Sum
-        for tx in tx_queryset:
-            load_bus = tx.to_bus if tx.to_bus_id in bus_ids else tx.from_bus
-            
-            # 1. Primary: Match by ID on the local bus
-            target_load = load_bus.loads.filter(load_id=tx.ckt_id).first()
-            if not target_load:
-                target_load = load_bus.loads.filter(load_id=f"T{tx.ckt_id}").first()
-            
-            # 2. Fallback: Search substation-wide if local match fails (handles topological swaps like PRGS132)
-            if not target_load:
-                target_load = sub_load_map.get(str(tx.ckt_id))
-                if not target_load:
-                    target_load = sub_load_map.get(f"T{tx.ckt_id}")
-            
-            if target_load:
-                load_p = target_load.p_mw
-                load_q = target_load.q_mvar
-            else:
-                # 3. Final Fallback: Aggregate the entire local bus
-                load_data = load_bus.loads.aggregate(p=Sum('p_mw'), q=Sum('q_mvar'))
-                load_p = load_data['p'] or 0.0
-                load_q = load_data['q'] or 0.0
-            
-            transformers.append({
-                'id': f"TX-{tx.ckt_id}-{tx.from_bus.bus_number}-{tx.to_bus.bus_number}",
-                'name': f"TX {tx.ckt_id}",
-                'type': 'Transformer',
-                'voltage_ratio': f"{tx.from_bus.base_kv:.0f}/{tx.to_bus.base_kv:.0f}kV" + (f"/{tx.tertiary_bus.base_kv:.0f}kV" if tx.tertiary_bus else ""),
-                'load_mw': round(load_p, 2),
-                'load_mvar': round(load_q, 2),
-                'nomv1': tx.nomv1,
-                'nomv2': tx.nomv2,
-                'nomv3': tx.nomv3,
-                'windv1': tx.windv1,
-                'windv2': tx.windv2,
-                'windv3': tx.windv3
-            })
-
-        # 2. Modeled Transformers (NetworkLoad with T-prefixed IDs)
-        from core.models import NetworkLoad
-        load_txs = NetworkLoad.objects.filter(
-            snapshot=snapshot,
-            bus_id__in=bus_ids,
-            load_id__istartswith='T'
-        ).select_related('bus')
-
-        for ltx in load_txs:
-            # Check for duplicates (if already found as physical TX)
-            if any(t['name'] == f"TX {ltx.load_id.strip()}" for t in transformers):
-                continue
-
-            transformers.append({
-                'id': f"LOAD-TX-{ltx.load_id}-{ltx.bus.bus_number}",
-                'name': f"TX {ltx.load_id.strip()}",
-                'type': 'Load-Based',
-                'voltage_ratio': f"{ltx.bus.base_kv:.0f}kV LV", # Only have one side info
-                'load_mw': round(ltx.p_mw, 2),
-                'load_mvar': round(ltx.q_mvar, 2),
-                'nomv1': ltx.bus.base_kv,
-                'nomv2': 0.0,
-                'nomv3': None,
-                'windv1': 1.0,
-                'windv2': 0.0,
-                'windv3': None
-            })
-            
-        return transformers
 
 
 class WritableAssetField(serializers.PrimaryKeyRelatedField):
@@ -319,6 +216,118 @@ class LoadSheddingRelaySerializer(serializers.ModelSerializer):
 
         return attrs
 
+
+
+class SubstationDetailSerializer(SubstationSerializer):
+    """
+    V2: Detailed Substation Serializer (Includes live network data + bay assets).
+    Used for single-item lookups (GET /substations/{id}/).
+    Bay assets are nested to avoid N+1 round-trips from the frontend.
+    Prefetch is handled in SubstationViewSet.get_queryset for the retrieve action.
+    """
+    transformers = serializers.SerializerMethodField()
+    load_transformers = LoadTransformerSerializer(many=True, read_only=True)
+    auto_transformers = AutoTransformerSerializer(many=True, read_only=True)
+    incoming_branches = IncomingBranchSerializer(many=True, read_only=True)
+    load_shedding_relays = LoadSheddingRelaySerializer(many=True, read_only=True)
+    critical_assets = CriticalAssetSerializer(many=True, read_only=True)
+
+    class Meta(SubstationSerializer.Meta):
+        fields = SubstationSerializer.Meta.fields + [
+            'transformers',
+            'load_transformers',
+            'auto_transformers',
+            'incoming_branches',
+            'load_shedding_relays',
+            'critical_assets',
+        ]
+
+    def get_transformers(self, obj):
+        snapshot = self.get_snapshot()
+        if not snapshot:
+            return []
+
+        from django.db.models import Q
+        transformers = []
+        from core.models import TopologyBus
+        bus_ids = list(TopologyBus.objects.filter(
+            topology_version=snapshot.topology_version,
+            substation=obj,
+        ).values_list('id', flat=True))
+
+        # 1. Physical Transformers (TopologyTransformer)
+        from core.models import TopologyTransformer
+        tx_queryset = TopologyTransformer.objects.filter(
+            topology_version=snapshot.topology_version
+        ).filter(
+            Q(from_bus_id__in=bus_ids) | Q(to_bus_id__in=bus_ids)
+        ).distinct().select_related('from_bus', 'to_bus', 'tertiary_bus')
+
+        from core.models import NetworkLoad
+        all_sub_loads = list(NetworkLoad.objects.filter(snapshot=snapshot, bus_id__in=bus_ids))
+        sub_load_map = {l.load_id: l for l in all_sub_loads}
+
+        from django.db.models import Sum
+        for tx in tx_queryset:
+            load_bus = tx.to_bus if tx.to_bus_id in bus_ids else tx.from_bus
+
+            target_load = load_bus.loads.filter(load_id=tx.ckt_id).first()
+            if not target_load:
+                target_load = load_bus.loads.filter(load_id=f"T{tx.ckt_id}").first()
+            if not target_load:
+                target_load = sub_load_map.get(str(tx.ckt_id))
+            if not target_load:
+                target_load = sub_load_map.get(f"T{tx.ckt_id}")
+
+            if target_load:
+                load_p = target_load.p_mw
+                load_q = target_load.q_mvar
+            else:
+                load_data = load_bus.loads.aggregate(p=Sum('p_mw'), q=Sum('q_mvar'))
+                load_p = load_data['p'] or 0.0
+                load_q = load_data['q'] or 0.0
+
+            transformers.append({
+                'id': f"TX-{tx.ckt_id}-{tx.from_bus.bus_number}-{tx.to_bus.bus_number}",
+                'name': f"TX {tx.ckt_id}",
+                'type': 'Transformer',
+                'voltage_ratio': f"{tx.from_bus.base_kv:.0f}/{tx.to_bus.base_kv:.0f}kV" + (f"/{tx.tertiary_bus.base_kv:.0f}kV" if tx.tertiary_bus else ""),
+                'load_mw': round(load_p, 2),
+                'load_mvar': round(load_q, 2),
+                'nomv1': tx.nomv1,
+                'nomv2': tx.nomv2,
+                'nomv3': tx.nomv3,
+                'windv1': tx.windv1,
+                'windv2': tx.windv2,
+                'windv3': tx.windv3
+            })
+
+        # 2. Modeled Transformers (NetworkLoad with T-prefixed IDs)
+        load_txs = NetworkLoad.objects.filter(
+            snapshot=snapshot,
+            bus_id__in=bus_ids,
+            load_id__istartswith='T'
+        ).select_related('bus')
+
+        for ltx in load_txs:
+            if any(t['name'] == f"TX {ltx.load_id.strip()}" for t in transformers):
+                continue
+            transformers.append({
+                'id': f"LOAD-TX-{ltx.load_id}-{ltx.bus.bus_number}",
+                'name': f"TX {ltx.load_id.strip()}",
+                'type': 'Load-Based',
+                'voltage_ratio': f"{ltx.bus.base_kv:.0f}kV LV",
+                'load_mw': round(ltx.p_mw, 2),
+                'load_mvar': round(ltx.q_mvar, 2),
+                'nomv1': ltx.bus.base_kv,
+                'nomv2': 0.0,
+                'nomv3': None,
+                'windv1': 1.0,
+                'windv2': 0.0,
+                'windv3': None
+            })
+
+        return transformers
 
 
 class EquipmentTopologyMapSerializer(serializers.ModelSerializer):

@@ -14,6 +14,24 @@ class SubstationViewSet(viewsets.ModelViewSet):
     queryset = Substation.objects.all()
     serializer_class = SubstationSerializer
 
+    def get_queryset(self):
+        # On retrieve, prefetch all bay assets so SubstationDetailSerializer
+        # renders without N+1 queries. The list action stays lean.
+        if self.action == 'retrieve':
+            return Substation.objects.prefetch_related(
+                'load_transformers',
+                'auto_transformers',
+                'incoming_branches',
+                'load_shedding_relays',
+                'load_shedding_relays__load_transformers',
+                'load_shedding_relays__auto_transformers',
+                'load_shedding_relays__incoming_branches',
+                'critical_assets',
+                'critical_assets__category',
+                'critical_assets__load_transformers',
+            )
+        return Substation.objects.all()
+
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return SubstationDetailSerializer

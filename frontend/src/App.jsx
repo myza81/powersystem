@@ -20,6 +20,7 @@ import SnapshotManager from './components/SnapshotManager';
 import LoadSheddingSchemeReviewer from './components/LoadSheddingSchemeReviewer';
 import LoadSheddingDesigner from './components/LoadSheddingDesigner';
 import CriticalSubstationManager from './components/CriticalSubstationManager';
+import SubstationProfileModal from './components/SubstationProfileModal';
 import api from './api';
 import LoginForm from './components/LoginForm';
 
@@ -60,6 +61,7 @@ const App = () => {
     const [selectedSnapshotId, setSelectedSnapshotId] = useState(null);
 
     const [selectedSub, setSelectedSub] = useState(null);
+    const [profileSub, setProfileSub] = useState(null);
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState(null);
     const [viewingSld, setViewingSld] = useState(null);
@@ -459,7 +461,7 @@ const App = () => {
                                             <SubstationCard
                                                 key={sub.substation_id}
                                                 substation={sub}
-                                                onEdit={() => { setSelectedSub(sub); setView('edit'); }}
+                                                onEdit={() => setProfileSub(sub)}
                                                 onSLDUpload={handleSLDUpload}
                                                 onProcess={handleProcessSLD}
                                                 processing={loading}
@@ -677,6 +679,20 @@ const App = () => {
                         onClose={() => setViewingSld(null)}
                     />
                 )}
+
+                <AnimatePresence>
+                    {profileSub && (
+                        <SubstationProfileModal
+                            substation={profileSub}
+                            onClose={() => setProfileSub(null)}
+                            onEdit={() => {
+                                setProfileSub(null);
+                                setSelectedSub(profileSub);
+                                setView('edit');
+                            }}
+                        />
+                    )}
+                </AnimatePresence>
 
             </div>
         </MainLayout>
