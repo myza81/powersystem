@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { PlusCircle, X, Save, FileText, Trash2, Edit2, LayoutGrid, BarChart2, MapPin, ShieldAlert, Info } from 'lucide-react';
+import { LayoutGrid, BarChart2, MapPin, ShieldAlert, Info } from 'lucide-react';
 import api from '../api';
 import CriticalSubstationCard from './CriticalSubstationCard';
 import CriticalSubstationListRow from './CriticalSubstationListRow';
@@ -66,73 +66,27 @@ const InfoTip = ({ text, direction = 'up' }) => {
     );
 };
 
-const CriticalSubstationManager = () => {
+const CriticalSubstationManager = ({ onEditSubstation }) => {
     const [tags, setTags] = useState([]);
     const [substations, setSubstations] = useState([]);
     const [categories, setCategories] = useState([]);
-    const [sources, setSources] = useState([]);
-    const [loadTransformers, setLoadTransformers] = useState([]);
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('assets');
     const [filterCriteria, setFilterCriteria] = useState(DEFAULT_FILTERS);
     const [listDisplayMode, setListDisplayMode] = useState('grid');
 
-    const formatBayTagLabel = (bayId, lvVoltage) => {
-        if (!bayId) return '';
-        const match = bayId.match(/_T(\d+)$/i) || bayId.match(/T(\d+)/i);
-        const base = match ? `T${match[1]}` : bayId;
-        if (lvVoltage) {
-            return `${base} ${lvVoltage}kV`;
-        }
-        return base;
-    };
-
-    const tagPillStyle = {
-        display: 'inline-block',
-        fontSize: '0.7rem',
-        background: 'rgba(255,255,255,0.08)',
-        color: '#fff',
-        padding: '2px 8px',
-        borderRadius: '6px',
-        border: '1px solid rgba(255,255,255,0.12)'
-    };
-
-    const [showForm, setShowForm] = useState(false);
-    const [selectedSubstation, setSelectedSubstation] = useState('');
-    const [editingTagId, setEditingTagId] = useState('');
-    const [formMode, setFormMode] = useState('create');
-    const [sourceMode, setSourceMode] = useState('existing');
-    const [sourceForm, setSourceForm] = useState({
-        reference: '',
-        source_file: null,
-        issued_date: '',
-        notes: ''
-    });
-    const [formData, setFormData] = useState({
-        load_transformers: [],
-        categories: [],
-        sensitivity_impact: '',
-        source: '',
-        asset: '',
-        asset_id: '',
-        notes: '',
-        is_inforce: true,
-    });
-
     const fetchAll = async () => {
         setLoading(true);
         try {
-            const [tagRes, subRes, catRes, srcRes] = await Promise.all([
+            const [tagRes, subRes, catRes] = await Promise.all([
                 api.get('/critical-assets/'),
-                api.get('/substations/'),
+                api.get('/substations/?is_critical=true'),
                 api.get('/critical-categories/'),
-                api.get('/critical-sources/')
             ]);
             setTags(tagRes.data || []);
             setSubstations(subRes.data || []);
             setCategories(catRes.data || []);
-            setSources(srcRes.data || []);
         } catch (err) {
             setStatus({ type: 'error', msg: 'Failed to load critical substations.' });
         }
@@ -151,28 +105,6 @@ const CriticalSubstationManager = () => {
             return () => clearTimeout(timer);
         }
     }, [status]);
-
-    useEffect(() => {
-        if (sources.length === 0) {
-            setSourceMode('new');
-        }
-    }, [sources.length]);
-
-    useEffect(() => {
-        const fetchLoadTransformers = async () => {
-            if (!selectedSubstation) {
-                setLoadTransformers([]);
-                return;
-            }
-            try {
-                const res = await api.get(`/load-transformers/?substation=${selectedSubstation}`);
-                setLoadTransformers(res.data || []);
-            } catch (err) {
-                setStatus({ type: 'error', msg: 'Failed to load load transformers.' });
-            }
-        };
-        fetchLoadTransformers();
-    }, [selectedSubstation]);
 
     const grouped = useMemo(() => {
         const map = {};
@@ -265,155 +197,6 @@ const CriticalSubstationManager = () => {
 
         return map;
     }, [grouped, filteredSubstations]);
-
-    const handleSave = async () => {
-        console.log('--- handleSave triggered ---');
-        console.log('Selected Substation:', selectedSubstation);
-        console.log('Form Data:', formData);
-        console.log('Source Mode:', sourceMode);
-        console.log('Editing Tag ID:', editingTagId);
-
-        if (!selectedSubstation) {
-            console.warn('Blocked: No substation selected');
-            setStatus({ type: 'error', msg: 'Select a substation.' });
-            return;
-        }
-        if (!formData.load_transformers.length || !formData.categories.length) {
-            console.warn('Blocked: Missing bay or category', { load_transformers: formData.load_transformers.length, categories: formData.categories.length });
-            setStatus({ type: 'error', msg: 'Please select at least one bay and one category.' });
-            return;
-        }
-        if (!formData.asset || !formData.asset.trim()) {
-            console.warn('Blocked: Empty asset name');
-            setStatus({ type: 'error', msg: 'Please enter an asset name.' });
-            return;
-        }
-
-        setLoading(true);
-        try {
-            let sourceId = formData.source || null;
-
-            // If user explicitly chose to upload a new source
-            if (sourceMode === 'new' && sourceForm.source_file) {
-                const sourcePayload = new FormData();
-                sourcePayload.append('source_file', sourceForm.source_file);
-                if (sourceForm.issued_date) {
-                    sourcePayload.append('issued_date', sourceForm.issued_date);
-                }
-                const sourceRes = await api.post('/critical-sources/', sourcePayload, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-                sourceId = sourceRes.data.id;
-            }
-            // If sourceMode is 'existing', sourceId is simply 'formData.source' which is already handled above.
-
-            // 1. Create or Update the CriticalAsset with load_transformers array
-            const assetPayload = {
-                asset: formData.asset || '',
-                substation: selectedSubstation,
-                load_transformers: formData.load_transformers,
-                category: formData.categories[0], // primary category
-                sensitivity_impact: formData.sensitivity_impact ? parseInt(formData.sensitivity_impact, 10) : null,
-                source: sourceId,
-                notes: formData.notes,
-                is_inforce: formData.is_inforce,
-            };
-
-            if (editingTagId && formData.asset_id) {
-                // If editing an existing asset, patch it
-                await api.patch(`/critical-assets/${formData.asset_id}/`, assetPayload);
-                setStatus({ type: 'success', msg: 'Critical asset updated.' });
-            } else {
-                await api.post('/critical-assets/', assetPayload);
-                setStatus({ type: 'success', msg: 'Critical asset created.' });
-            }
-
-            setShowForm(false);
-            setEditingTagId('');
-            setSourceMode(sources.length === 0 ? 'new' : 'existing');
-            setSourceForm({ reference: '', source_file: null, issued_date: '' });
-            setFormData({ load_transformers: [], categories: [], sensitivity_impact: '', source: '', asset: '', notes: '', is_inforce: true });
-            fetchAll();
-        } catch (err) {
-            setStatus({ type: 'error', msg: 'Failed to create tag.' });
-        }
-        setLoading(false);
-    };
-
-    const openEditModal = (substationId) => {
-        setStatus(null);
-        const items = grouped[substationId] || [];
-        if (!items.length) {
-            setSelectedSubstation(substationId);
-            setEditingTagId('');
-            setFormMode('edit');
-            setSourceMode(sources.length === 0 ? 'new' : 'existing');
-            setSourceForm({ reference: '', source_file: null, issued_date: '' });
-            setFormData({ load_transformers: [], categories: [], sensitivity_impact: '', source: '', asset: '', notes: '', is_inforce: true });
-            setShowForm(true);
-            return;
-        }
-
-        const first = items[0];
-        setSelectedSubstation(substationId);
-        setEditingTagId(first.id);
-        setFormMode('edit');
-        setSourceMode(sources.length === 0 ? 'new' : 'existing');
-        setSourceForm({ reference: '', source_file: null, issued_date: '', notes: '' });
-        setFormData({
-            load_transformers: first.load_transformers || [],
-            categories: [first.category],
-            sensitivity_impact: first.sensitivity_impact || '',
-            source: first.source || '',
-            asset: first.asset || '',
-            asset_id: first.id || '',
-            notes: first.notes || '',
-            is_inforce: first.is_inforce,
-        });
-        setShowForm(true);
-    };
-
-    const openAddModal = (substationId) => {
-        setStatus(null);
-        setSelectedSubstation(substationId);
-        setEditingTagId('');
-        setFormMode('create');
-        setSourceMode(sources.length === 0 ? 'new' : 'existing');
-        setSourceForm({ reference: '', source_file: null, issued_date: '', notes: '' });
-        setFormData({
-            load_transformers: [],
-            categories: [],
-            sensitivity_impact: '',
-            source: '',
-            asset: '',
-            asset_id: '',
-            notes: '',
-            is_inforce: true
-        });
-        setShowForm(true);
-    };
-
-    const openEditTagModal = (tag) => {
-        setStatus(null);
-        setSelectedSubstation(tag.substation);
-        setEditingTagId(tag.id);
-        setFormMode('edit');
-        setSourceMode('existing');
-        setSourceForm({ reference: '', url: '', issued_date: '', notes: '' });
-        setFormData({
-            load_transformers: tag.load_transformers || [],
-            categories: [tag.category],
-            sensitivity_impact: tag.sensitivity_impact || '',
-            source: tag.source || '',
-            asset: tag.asset || '',
-            asset_id: tag.id || '',
-            notes: tag.notes || '',
-            is_inforce: tag.is_inforce,
-        });
-        setShowForm(true);
-    };
-
-    const selectedSubstationTags = selectedSubstation ? (grouped[selectedSubstation] || []) : [];
 
     // Filter substations for the map (only those with critical assets)
     const criticalSubstationsForMap = useMemo(() => {
@@ -534,7 +317,7 @@ const CriticalSubstationManager = () => {
                             substations={substations}
                             currentFilters={filterCriteria}
                             onUpdateFilters={setFilterCriteria}
-                            onRegister={() => openAddModal('')}
+                            onRegister={() => onEditSubstation && onEditSubstation('')}
                             extraLabel="Category"
                             extraValue={filterCriteria.category}
                             onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, category: val }))}
@@ -559,7 +342,7 @@ const CriticalSubstationManager = () => {
                             substations={substations}
                             currentFilters={filterCriteria}
                             onUpdateFilters={setFilterCriteria}
-                            onRegister={() => openAddModal('')}
+                            onRegister={() => onEditSubstation && onEditSubstation('')}
                             extraLabel="Category"
                             extraValue={filterCriteria.category}
                             onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, category: val }))}
@@ -585,9 +368,8 @@ const CriticalSubstationManager = () => {
                                             key={subId}
                                             substation={substationLookup[subId] || { substation_id: subId, name: subId }}
                                             tags={filteredGrouped[subId]}
-                                            allTransformers={loadTransformers}
-                                            onEditAsset={openEditTagModal}
-                                            onAddAsset={() => openAddModal(subId)}
+                                            onEditAsset={(tag) => onEditSubstation && onEditSubstation(tag.substation)}
+                                            onAddAsset={() => onEditSubstation && onEditSubstation(subId)}
                                         />
                                     ))}
                                 </AnimatePresence>
@@ -617,8 +399,8 @@ const CriticalSubstationManager = () => {
                                             key={subId}
                                             substation={substationLookup[subId] || { substation_id: subId, name: subId }}
                                             tags={filteredGrouped[subId]}
-                                            onEditAsset={openEditTagModal}
-                                            onAddAsset={() => openAddModal(subId)}
+                                            onEditAsset={(tag) => onEditSubstation && onEditSubstation(tag.substation)}
+                                            onAddAsset={() => onEditSubstation && onEditSubstation(subId)}
                                         />
                                     ))}
                                 </AnimatePresence>
@@ -1051,368 +833,6 @@ const CriticalSubstationManager = () => {
                 )}
             </div>
 
-            <AnimatePresence>
-                {showForm && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        style={{
-                            position: 'fixed',
-                            inset: 0,
-                            background: 'rgba(15, 23, 42, 0.4)',
-                            backdropFilter: 'blur(4px)',
-                            zIndex: 2000,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '1rem',
-                        }}
-                        onClick={() => setShowForm(false)}
-                    >
-                        <motion.div
-                            initial={{ scale: 0.97, y: 8, opacity: 0 }}
-                            animate={{ scale: 1, y: 0, opacity: 1 }}
-                            exit={{ scale: 0.97, y: 8, opacity: 0 }}
-                            transition={{ duration: 0.18 }}
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                                maxWidth: '560px',
-                                width: '100%',
-                                background: '#fff',
-                                borderRadius: '14px',
-                                border: '1px solid #e2e8f0',
-                                boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                maxHeight: '90vh',
-                                overflow: 'hidden',
-                            }}
-                        >
-                            {/* Header */}
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                padding: '1rem 1.25rem',
-                                borderBottom: '1px solid #f1f5f9',
-                            }}>
-                                <div>
-                                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>
-                                        {formMode === 'edit' ? 'Edit Critical Customer' : 'New Critical Customer'}
-                                    </div>
-                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '1px' }}>
-                                        {formMode === 'edit' ? 'Update the critical customer and their supplying load transformers' : 'Register a critical customer and the load transformers supplying them'}
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setShowForm(false)}
-                                    style={{
-                                        background: 'transparent',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '6px',
-                                        color: '#94a3b8',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: '5px',
-                                        transition: 'all 0.15s',
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#64748b'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#94a3b8'; }}
-                                >
-                                    <X size={15} />
-                                </button>
-                            </div>
-
-                            {/* Body */}
-                            <div style={{ overflowY: 'auto', padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-
-                                {/* Row 1: Substation + Category */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>Substation</label>
-                                        <select
-                                            value={selectedSubstation}
-                                            onChange={(e) => setSelectedSubstation(e.target.value)}
-                                            style={{ width: '100%', padding: '0.45rem 0.65rem', fontSize: '0.8rem', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#0f172a', background: '#fff', outline: 'none' }}
-                                        >
-                                            <option value="">Select substation…</option>
-                                            {substations.map(s => (
-                                                <option key={s.substation_id} value={s.substation_id}>{s.substation_id} — {s.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>Category</label>
-                                        <select
-                                            value={formData.categories[0] || ''}
-                                            onChange={(e) => setFormData({ ...formData, categories: [e.target.value] })}
-                                            style={{ width: '100%', padding: '0.45rem 0.65rem', fontSize: '0.8rem', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#0f172a', background: '#fff', outline: 'none' }}
-                                        >
-                                            <option value="">Select category…</option>
-                                            {categories.map(cat => (
-                                                <option key={cat.id} value={cat.id}>{cat.category_name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                {/* Row 2: Asset Name + Sensitivity + Status */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '0.75rem', alignItems: 'end' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>Critical Customer</label>
-                                        <input
-                                            value={formData.asset}
-                                            onChange={(e) => setFormData({ ...formData, asset: e.target.value })}
-                                            placeholder="e.g. TUDM Kuantan"
-                                            style={{ width: '100%', padding: '0.45rem 0.65rem', fontSize: '0.8rem', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>Sensitivity</label>
-                                        <select
-                                            value={formData.sensitivity_impact}
-                                            onChange={(e) => setFormData({ ...formData, sensitivity_impact: e.target.value })}
-                                            style={{ width: '100%', padding: '0.45rem 0.65rem', fontSize: '0.8rem', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#0f172a', background: '#fff', outline: 'none' }}
-                                        >
-                                            <option value="">— None —</option>
-                                            <option value="3">High</option>
-                                            <option value="2">Medium</option>
-                                            <option value="1">Low</option>
-                                        </select>
-                                    </div>
-                                    <div style={{ paddingBottom: '1px' }}>
-                                        <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>Status</label>
-                                        <div
-                                            onClick={() => setFormData({ ...formData, is_inforce: !formData.is_inforce })}
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '7px',
-                                                cursor: 'pointer',
-                                                padding: '0.45rem 0.75rem',
-                                                borderRadius: '7px',
-                                                border: 'none',
-                                                background: 'transparent',
-                                                userSelect: 'none',
-                                                transition: 'all 0.2s',
-                                                whiteSpace: 'nowrap',
-                                            }}
-                                        >
-                                            <div style={{
-                                                width: '28px', height: '16px',
-                                                background: formData.is_inforce ? '#047d60' : '#cbd5e1',
-                                                borderRadius: '99px',
-                                                position: 'relative',
-                                                transition: 'background 0.2s',
-                                                flexShrink: 0,
-                                            }}>
-                                                <motion.div
-                                                    animate={{ x: formData.is_inforce ? 13 : 1 }}
-                                                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                                    style={{ position: 'absolute', top: '2px', width: '12px', height: '12px', background: '#fff', borderRadius: '50%', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}
-                                                />
-                                            </div>
-                                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: formData.is_inforce ? '#047d60' : '#94a3b8' }}>
-                                                {formData.is_inforce ? 'Active' : 'Inactive'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Row 3: Load Transformer Bays */}
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem' }}>Load Transformer Bays</label>
-                                    <div style={{
-                                        display: 'flex',
-                                        flexWrap: 'wrap',
-                                        gap: '0.35rem',
-                                        maxHeight: '110px',
-                                        overflowY: 'auto',
-                                        padding: '0.5rem',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '8px',
-                                        background: '#f8fafc',
-                                        alignItems: 'flex-start',
-                                    }}>
-                                        {loadTransformers.length === 0 ? (
-                                            <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic' }}>No load transformers available for this substation.</span>
-                                        ) : loadTransformers.map((lt) => {
-                                            const checked = formData.load_transformers.includes(lt.id);
-                                            return (
-                                                <label
-                                                    key={lt.id}
-                                                    style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        fontSize: '0.72rem',
-                                                        fontFamily: 'monospace',
-                                                        padding: '3px 8px',
-                                                        borderRadius: '5px',
-                                                        cursor: 'pointer',
-                                                        background: checked ? 'rgba(4, 125, 96, 0.08)' : '#fff',
-                                                        border: `1px solid ${checked ? 'rgba(4, 125, 96, 0.3)' : '#e2e8f0'}`,
-                                                        color: checked ? '#047d60' : '#475569',
-                                                        fontWeight: checked ? 600 : 400,
-                                                        transition: 'all 0.15s',
-                                                        userSelect: 'none',
-                                                    }}
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={checked}
-                                                        onChange={(e) => {
-                                                            if (e.target.checked) {
-                                                                setFormData({ ...formData, load_transformers: [...formData.load_transformers, lt.id] });
-                                                            } else {
-                                                                setFormData({ ...formData, load_transformers: formData.load_transformers.filter(id => id !== lt.id) });
-                                                            }
-                                                        }}
-                                                        style={{ display: 'none' }}
-                                                    />
-                                                    {lt.bay_id}
-                                                    {lt.lv_voltage && <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>{lt.lv_voltage}kV</span>}
-                                                </label>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* Row 4: Source Documentation */}
-                                <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-                                        <label style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Source Documentation</label>
-                                        <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '6px', padding: '2px', gap: '2px' }}>
-                                            {['existing', 'new'].map(mode => (
-                                                <button
-                                                    key={mode}
-                                                    type="button"
-                                                    onClick={() => setSourceMode(mode)}
-                                                    style={{
-                                                        padding: '3px 10px',
-                                                        fontSize: '0.7rem',
-                                                        fontWeight: 600,
-                                                        borderRadius: '4px',
-                                                        border: 'none',
-                                                        cursor: 'pointer',
-                                                        background: sourceMode === mode ? '#fff' : 'transparent',
-                                                        color: sourceMode === mode ? '#0f172a' : '#94a3b8',
-                                                        boxShadow: sourceMode === mode ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                                                        transition: 'all 0.15s',
-                                                    }}
-                                                >
-                                                    {mode === 'existing' ? 'Existing' : 'Upload New'}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {sourceMode === 'existing' ? (
-                                        <select
-                                            value={formData.source}
-                                            onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                                            style={{ width: '100%', padding: '0.45rem 0.65rem', fontSize: '0.8rem', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#0f172a', background: '#fff', outline: 'none' }}
-                                        >
-                                            <option value="">Select source document…</option>
-                                            {sources.map(src => (
-                                                <option key={src.id} value={src.id}>{src.source_file ? src.source_file.split('/').pop() : 'Unnamed Source'}</option>
-                                            ))}
-                                        </select>
-                                    ) : (
-                                        <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: '0.75rem' }}>
-                                            <div>
-                                                <label style={{ display: 'block', fontSize: '0.68rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Issued Date</label>
-                                                <input
-                                                    type="date"
-                                                    value={sourceForm.issued_date}
-                                                    onChange={(e) => setSourceForm({ ...sourceForm, issued_date: e.target.value })}
-                                                    style={{ width: '100%', padding: '0.45rem 0.65rem', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#0f172a', outline: 'none', boxSizing: 'border-box' }}
-                                                />
-                                            </div>
-                                            <div>
-                                                <label style={{ display: 'block', fontSize: '0.68rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Document File</label>
-                                                <input
-                                                    type="file"
-                                                    onChange={(e) => setSourceForm({ ...sourceForm, source_file: e.target.files[0] || null })}
-                                                    style={{ width: '100%', padding: '0.4rem 0.65rem', fontSize: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#475569', outline: 'none', boxSizing: 'border-box' }}
-                                                />
-                                            </div>
-                                            <div style={{ gridColumn: 'span 2' }}>
-                                                <label style={{ display: 'block', fontSize: '0.68rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Notes</label>
-                                                <textarea
-                                                    value={formData.notes}
-                                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                                    placeholder="Additional context…"
-                                                    rows={2}
-                                                    style={{ width: '100%', padding: '0.45rem 0.65rem', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '7px', color: '#0f172a', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Footer */}
-                            <div style={{
-                                display: 'flex',
-                                gap: '0.5rem',
-                                padding: '0.75rem 1.25rem',
-                                borderTop: '1px solid #f1f5f9',
-                                background: '#fafafa',
-                                flexShrink: 0,
-                            }}>
-                                <button
-                                    onClick={handleSave}
-                                    disabled={loading}
-                                    style={{
-                                        flex: 1,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '6px',
-                                        padding: '0.5rem',
-                                        fontSize: '0.8rem',
-                                        fontWeight: 600,
-                                        background: '#ff9f43',
-                                        color: '#fff',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        cursor: loading ? 'not-allowed' : 'pointer',
-                                        opacity: loading ? 0.7 : 1,
-                                        transition: 'all 0.15s',
-                                    }}
-                                    onMouseEnter={e => { if (!loading) e.currentTarget.style.background = '#f7921e'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = '#ff9f43'; }}
-                                >
-                                    <Save size={14} />
-                                    {editingTagId ? 'Update Asset' : 'Save Asset'}
-                                </button>
-                                <button
-                                    onClick={() => setShowForm(false)}
-                                    style={{
-                                        padding: '0.5rem 1.25rem',
-                                        fontSize: '0.8rem',
-                                        fontWeight: 600,
-                                        background: 'transparent',
-                                        color: '#64748b',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s',
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#475569'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </motion.div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </div>
     );
 };

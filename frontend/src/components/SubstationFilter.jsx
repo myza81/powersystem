@@ -22,55 +22,56 @@ const SubstationFilter = ({
     const { region, grid, state, voltage, ownership, search, hasRelay, commissionYear, transformerYear } = currentFilters;
     const currentExtraValue = extraValue || ownership;
 
-    // Extract unique values based on independent filters
-    const uniqueValues = useMemo(() => {
-        const getDecadeRange = (year) => {
-            if (!year) return null;
-            const startYear = Math.floor((year - 1) / 10) * 10 + 1;
-            const endYear = startYear + 9;
-            return `${startYear}-${endYear}`;
-        };
+    const getDecadeRange = (year) => {
+        if (!year) return null;
+        const startYear = Math.floor((year - 1) / 10) * 10 + 1;
+        return `${startYear}-${startYear + 9}`;
+    };
 
-        // Regions options: filter substations by grid + state
-        const regionFiltered = substations.filter(s =>
-            (grid === 'All' || s.grid === grid) &&
-            (state === 'All' || s.state === state)
-        );
-        const regions = ['All', ...new Set(regionFiltered.map(s => s.region).filter(Boolean))].sort();
+    // Each dropdown only re-computes when its own dependencies change
+    const regions = useMemo(() =>
+        ['All', ...new Set(substations
+            .filter(s => (grid === 'All' || s.grid === grid) && (state === 'All' || s.state === state))
+            .map(s => s.region).filter(Boolean))].sort()
+    , [substations, grid, state]);
 
-        // Grids options: filter substations by region + state
-        const gridFiltered = substations.filter(s =>
-            (region === 'All' || s.region === region) &&
-            (state === 'All' || s.state === state)
-        );
-        const grids = ['All', ...new Set(gridFiltered.map(s => s.grid).filter(Boolean))].sort();
+    const grids = useMemo(() =>
+        ['All', ...new Set(substations
+            .filter(s => (region === 'All' || s.region === region) && (state === 'All' || s.state === state))
+            .map(s => s.grid).filter(Boolean))].sort()
+    , [substations, region, state]);
 
-        // States options: filter substations by region + grid
-        const stateFiltered = substations.filter(s =>
-            (region === 'All' || s.region === region) &&
-            (grid === 'All' || s.grid === grid)
-        );
-        const states = ['All', ...new Set(stateFiltered.map(s => s.state).filter(Boolean))].sort();
+    const states = useMemo(() =>
+        ['All', ...new Set(substations
+            .filter(s => (region === 'All' || s.region === region) && (grid === 'All' || s.grid === grid))
+            .map(s => s.state).filter(Boolean))].sort()
+    , [substations, region, grid]);
 
-        // Voltages: show voltages available in the currently filtered set (by R/G/S)
-        const vFiltered = substations.filter(s =>
-            (region === 'All' || s.region === region) &&
-            (grid === 'All' || s.grid === grid) &&
-            (state === 'All' || s.state === state)
-        );
-        const voltages = ['All', ...new Set(vFiltered.map(s => s.voltage).filter(Boolean))].sort((a, b) => b - a);
+    const voltages = useMemo(() =>
+        ['All', ...new Set(substations
+            .filter(s =>
+                (region === 'All' || s.region === region) &&
+                (grid === 'All' || s.grid === grid) &&
+                (state === 'All' || s.state === state))
+            .map(s => s.voltage).filter(Boolean))].sort((a, b) => b - a)
+    , [substations, region, grid, state]);
 
-        // Ownerships and Decades (mostly global or semi-global)
-        const ownerships = extraOptions || ['All', ...new Set(substations.map(s => s.ownership).filter(Boolean))].sort();
+    // These scan the whole dataset — only re-run when substations or extraOptions change
+    const ownerships = useMemo(() =>
+        extraOptions || ['All', ...new Set(substations.map(s => s.ownership).filter(Boolean))].sort()
+    , [substations, extraOptions]);
 
+    const decades = useMemo(() => {
         const years = substations.map(s => s.commission_date ? new Date(s.commission_date).getFullYear() : null).filter(Boolean);
-        const decades = ['All', ...new Set(years.map(getDecadeRange))].sort((a, b) => b.localeCompare(a));
+        return ['All', ...new Set(years.map(getDecadeRange))].sort((a, b) => b.localeCompare(a));
+    }, [substations]);
 
+    const txDecades = useMemo(() => {
         const txYears = substations.flatMap(s => s.transformer_commissioning_years || []);
-        const txDecades = ['All', ...new Set(txYears.map(getDecadeRange))].sort((a, b) => b.localeCompare(a));
+        return ['All', ...new Set(txYears.map(getDecadeRange))].sort((a, b) => b.localeCompare(a));
+    }, [substations]);
 
-        return { regions, grids, states, voltages, ownerships, decades, txDecades };
-    }, [substations, region, grid, state, voltage, extraOptions]);
+    const uniqueValues = { regions, grids, states, voltages, ownerships, decades, txDecades };
 
     const updateFilter = (key, value) => {
         onUpdateFilters({ ...currentFilters, [key]: value });
@@ -251,4 +252,4 @@ const FilterDropdown = ({ label, value, options, onChange, disabled, suffix = ''
     </div>
 );
 
-export default SubstationFilter;
+export default React.memo(SubstationFilter);

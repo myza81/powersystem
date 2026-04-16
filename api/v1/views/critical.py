@@ -36,9 +36,10 @@ class CriticalAssetViewSet(BaseCriticalViewSet):
     serializer_class = CriticalAssetSerializer
     search_fields = ['asset', 'category__category_name']
 
-
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related(
+            'category', 'source'
+        ).prefetch_related('load_transformers')
         substation_id = self.request.query_params.get('substation')
         if substation_id:
             queryset = queryset.filter(substation__substation_id=substation_id)

@@ -52,14 +52,20 @@ class SubstationSerializer(serializers.ModelSerializer):
         )['t'] or 0.0
     
     def get_is_critical(self, obj):
-        from core.models import CriticalAsset
-        return CriticalAsset.objects.filter(substation=obj, is_inforce=True).exists()
+        # Uses prefetched critical_assets when available (list action), avoiding N+1
+        return any(ca.is_inforce for ca in obj.critical_assets.all())
 
     def get_has_active_relay(self, obj):
-        return LoadSheddingRelay.objects.filter(substation=obj, is_active=True).exists()
+        # Uses prefetched load_shedding_relays when available (list action), avoiding N+1
+        return any(r.is_active for r in obj.load_shedding_relays.all())
 
     def get_transformer_commissioning_years(self, obj):
-        return list(obj.load_transformers.filter(commissioning_date__isnull=False).values_list('commissioning_date__year', flat=True).distinct())
+        # Uses prefetched load_transformers when available (list action), avoiding N+1
+        return sorted({
+            lt.commissioning_date.year
+            for lt in obj.load_transformers.all()
+            if lt.commissioning_date is not None
+        })
 
 class TransformerDetailSerializer(serializers.Serializer):
     """
@@ -110,10 +116,24 @@ class LoadTransformerSerializer(serializers.ModelSerializer):
 
 
 class IncomingBranchSerializer(serializers.ModelSerializer):
+    to_substation_detail = serializers.SerializerMethodField()
+
+    def get_to_substation_detail(self, obj):
+        s = obj.to_substation
+        if not s:
+            return None
+        return {
+            'substation_id': s.substation_id,
+            'name': s.name,
+            'latitude': s.latitude,
+            'longitude': s.longitude,
+            'voltage': s.voltage,
+        }
+
     class Meta:
         model = IncomingBranch
         fields = [
-            'id', 'bay_id', 'substation', 'to_substation', 'ckt_id',
+            'id', 'bay_id', 'substation', 'to_substation', 'to_substation_detail', 'ckt_id',
             'breaker_number', 'commissioning_date',
             'created_at', 'updated_at'
         ]

@@ -15,13 +15,11 @@ class SubstationViewSet(viewsets.ModelViewSet):
     serializer_class = SubstationSerializer
 
     def get_queryset(self):
-        # On retrieve, prefetch all bay assets so SubstationDetailSerializer
-        # renders without N+1 queries. The list action stays lean.
         if self.action == 'retrieve':
             return Substation.objects.prefetch_related(
                 'load_transformers',
                 'auto_transformers',
-                'incoming_branches',
+                'incoming_branches__to_substation',
                 'load_shedding_relays',
                 'load_shedding_relays__load_transformers',
                 'load_shedding_relays__auto_transformers',
@@ -30,6 +28,22 @@ class SubstationViewSet(viewsets.ModelViewSet):
                 'critical_assets__category',
                 'critical_assets__load_transformers',
             )
+
+        if self.action == 'list':
+            from core.models import CriticalAsset
+            from django.db.models import Exists, OuterRef
+            qs = Substation.objects.prefetch_related(
+                'load_transformers',
+                'load_shedding_relays',
+                'critical_assets',
+            )
+            # Optional filter: only substations with at least one active critical asset
+            if self.request.query_params.get('is_critical') in ('true', '1'):
+                qs = qs.filter(
+                    Exists(CriticalAsset.objects.filter(substation=OuterRef('pk'), is_inforce=True))
+                )
+            return qs
+
         return Substation.objects.all()
 
     def get_serializer_class(self):

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ShieldAlert, FileText, Plus, Zap, CircuitBoard, Gauge } from 'lucide-react';
 
@@ -6,7 +6,7 @@ const CriticalSubstationCard = ({ substation, tags, onEditAsset, onAddAsset }) =
     const activeCount = tags.filter(t => t.is_inforce).length;
     const inactiveCount = tags.length - activeCount;
 
-    const groupedAssets = tags.map(asset => {
+    const groupedAssets = useMemo(() => tags.map(asset => {
         let voltageGroups = {};
         if (asset.load_transformers_details && asset.load_transformers_details.length > 0) {
             asset.load_transformers_details.forEach(lt => {
@@ -32,7 +32,7 @@ const CriticalSubstationCard = ({ substation, tags, onEditAsset, onAddAsset }) =
             sourceFile: asset.source_file || null,
             isActive: asset.is_inforce
         };
-    });
+    }), [tags]);
 
     const containerStyle = {
         background: '#fff',
@@ -341,4 +341,4 @@ const CriticalSubstationCard = ({ substation, tags, onEditAsset, onAddAsset }) =
     );
 };
 
-export default CriticalSubstationCard;
+export default React.memo(CriticalSubstationCard);

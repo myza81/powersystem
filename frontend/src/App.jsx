@@ -670,7 +670,12 @@ const App = () => {
                 )}
 
                 {view === 'critical-substations' && (
-                    <CriticalSubstationManager />
+                    <CriticalSubstationManager
+                        onEditSubstation={(substationId) => {
+                            const sub = substations.find(s => s.substation_id === substationId);
+                            if (sub) { setSelectedSub(sub); setView('edit'); }
+                        }}
+                    />
                 )}
 
                 {viewingSld && (

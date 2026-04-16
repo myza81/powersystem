@@ -6,29 +6,42 @@ import {
 } from 'lucide-react';
 import { LuCircuitBoard } from 'react-icons/lu';
 import { FiAlertCircle } from 'react-icons/fi';
-import { MapContainer, TileLayer, CircleMarker, Tooltip as MapTooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Tooltip as MapTooltip, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../api';
 import SldViewer from './SldViewer';
 import { CardLoader } from './Loader';
 
-// ── voltage colour helpers (mirrors SubstationForm pillStyle) ────────────────
-const voltageStyle = (v) => {
-    if (v >= 500) return { bg: '#1e293b', color: '#ffffff', border: '#334155' };
-    if (v >= 275) return { bg: '#e0f2fe', color: '#0369a1', border: '#bae6fd' };
-    if (v >= 230) return { bg: '#fef3c7', color: '#b45309', border: '#fde68a' };
-    return { bg: '#ecfdf5', color: '#047d60', border: '#a7f3d0' };
-};
 
 const SENSITIVITY_LABEL = { 1: 'Low', 2: 'Medium', 3: 'High' };
 const SENSITIVITY_COLOR = { 1: '#16a34a', 2: '#d97706', 3: '#dc2626' };
+
+// Returns a stroke/fill color based on voltage level
+const voltageColor = (v) => {
+    if (!v) return '#94a3b8';
+    if (v >= 500) return '#334155';   // 500 kV — dark slate
+    if (v >= 275) return '#0369a1';   // 275 kV — blue
+    if (v >= 230) return '#b45309';   // 230 kV — amber
+    return '#047d60';                  // 132 kV and below — green
+};
+
+// Fits the map viewport to include all given latlng points
+const FitBounds = ({ points }) => {
+    const map = useMap();
+    React.useEffect(() => {
+        if (points.length > 1) {
+            map.fitBounds(points, { padding: [32, 32] });
+        }
+    }, [map, points]);
+    return null;
+};
 
 // ── sub-components ───────────────────────────────────────────────────────────
 
 const SectionLabel = ({ icon: Icon, children }) => (
     <div style={{
         display: 'flex', alignItems: 'center', gap: '6px',
-        fontSize: '0.6rem', fontWeight: 700,
+        fontSize: '0.7rem', fontWeight: 700,
         textTransform: 'uppercase', letterSpacing: '0.09em',
         color: '#94a3b8',
         marginBottom: '8px', paddingBottom: '6px',
@@ -53,7 +66,7 @@ const InfoRow = ({ label, value, mono = false }) => {
             </span>
             <span style={{
                 fontSize: '0.68rem', fontWeight: 600, color: '#1e293b',
-                fontFamily: mono ? 'monospace' : "'Poppins', sans-serif",
+                fontFamily: "'Poppins', sans-serif",
             }}>
                 {value}
             </span>
@@ -123,8 +136,6 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
     const lsRelays          = detail?.load_shedding_relays || [];
     const criticalAssets    = detail?.critical_assets     || [];
 
-    const vs = voltageStyle(sub.voltage);
-
     return (
         <>
             {/* ── Outer wrapper — flex centering (same pattern as SubstationForm) ── */}
@@ -170,16 +181,6 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
                         {/* Left: ID + Name + pills */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {/* Voltage pill */}
-                                <span style={{
-                                    fontSize: '0.65rem', fontWeight: 700,
-                                    background: vs.bg, color: vs.color,
-                                    border: `1px solid ${vs.border}`,
-                                    padding: '2px 8px', borderRadius: '5px',
-                                    fontFamily: 'monospace',
-                                }}>
-                                    {sub.voltage} kV
-                                </span>
                                 {/* Substation ID */}
                                 <span style={{
                                     fontSize: '1.1rem', fontWeight: 700,
@@ -207,7 +208,7 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
                                         border: '1px solid #fde68a',
                                         padding: '1px 6px', borderRadius: '4px',
                                     }}>
-                                        <LuCircuitBoard size={9} /> LS Relay
+                                        <LuCircuitBoard size={9} /> Load Shed Relay
                                     </span>
                                 )}
                             </div>
@@ -215,27 +216,6 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
                             <span style={{ fontSize: '1rem', fontWeight: 600, color: '#1e293b' }}>
                                 {sub.name}
                             </span>
-                            {/* Meta pills row */}
-                            <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                                {[sub.ownership, sub.grid, sub.region, sub.state].filter(Boolean).map((v, i) => (
-                                    <span key={i} style={{
-                                        fontSize: '0.62rem', fontWeight: 500,
-                                        background: '#f1f5f9', color: '#64748b',
-                                        padding: '1px 7px', borderRadius: '4px',
-                                    }}>
-                                        {v}
-                                    </span>
-                                ))}
-                                {sub.commission_date && (
-                                    <span style={{
-                                        fontSize: '0.62rem', fontWeight: 500,
-                                        background: '#f0fdf4', color: '#047d60',
-                                        padding: '1px 7px', borderRadius: '4px',
-                                    }}>
-                                        Est. {new Date(sub.commission_date).getFullYear()}
-                                    </span>
-                                )}
-                            </div>
                         </div>
 
                         {/* Right: Edit + Close */}
@@ -391,26 +371,63 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
                                         <MapContainer
                                             center={[lat, lng]}
                                             zoom={12}
-                                            zoomControl={false}
-                                            dragging={false}
-                                            touchZoom={false}
-                                            doubleClickZoom={false}
-                                            scrollWheelZoom={false}
-                                            boxZoom={false}
-                                            keyboard={false}
+                                            zoomControl={true}
+                                            dragging={true}
+                                            touchZoom={true}
+                                            doubleClickZoom={true}
+                                            scrollWheelZoom={true}
+                                            boxZoom={true}
+                                            keyboard={true}
                                             attributionControl={false}
                                             style={{ height: '100%', width: '100%' }}
                                         >
                                             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                                            <CircleMarker
-                                                center={[lat, lng]}
-                                                radius={9}
-                                                pathOptions={{ color: '#047d60', fillColor: '#047d60', fillOpacity: 0.85, weight: 2 }}
-                                            >
-                                                <MapTooltip permanent direction="top" offset={[0, -12]}>
-                                                    <span style={{ fontSize: '0.7rem', fontWeight: 600 }}>{sub.substation_id}</span>
-                                                </MapTooltip>
-                                            </CircleMarker>
+                                            {(() => {
+                                                const remotes = incomingBranches
+                                                    .map(ib => ib.to_substation_detail)
+                                                    .filter(d => d && d.latitude && d.longitude);
+                                                const allPoints = [[lat, lng], ...remotes.map(d => [parseFloat(d.latitude), parseFloat(d.longitude)])];
+                                                return (
+                                                    <>
+                                                        <FitBounds points={allPoints} />
+                                                        {/* Lines from main substation to each remote end */}
+                                                        {remotes.map((d, i) => (
+                                                            <Polyline
+                                                                key={i}
+                                                                positions={[[lat, lng], [parseFloat(d.latitude), parseFloat(d.longitude)]]}
+                                                                pathOptions={{ color: voltageColor(d.voltage), weight: 2.5, opacity: 0.75 }}
+                                                            />
+                                                        ))}
+                                                        {/* Remote end substation markers */}
+                                                        {remotes.map((d, i) => {
+                                                            const vc = voltageColor(d.voltage);
+                                                            return (
+                                                                <CircleMarker
+                                                                    key={i}
+                                                                    center={[parseFloat(d.latitude), parseFloat(d.longitude)]}
+                                                                    radius={7}
+                                                                    pathOptions={{ color: vc, fillColor: vc, fillOpacity: 0.6, weight: 2 }}
+                                                                >
+                                                                    <MapTooltip direction="top" offset={[0, -10]}>
+                                                                        <span style={{ fontSize: '0.65rem', fontWeight: 600 }}>{d.substation_id}</span>
+                                                                        {d.voltage && <span style={{ fontSize: '0.6rem', color: '#64748b' }}> · {d.voltage} kV</span>}
+                                                                    </MapTooltip>
+                                                                </CircleMarker>
+                                                            );
+                                                        })}
+                                                        {/* Main substation marker — on top */}
+                                                        <CircleMarker
+                                                            center={[lat, lng]}
+                                                            radius={9}
+                                                            pathOptions={{ color: '#047d60', fillColor: '#047d60', fillOpacity: 0.85, weight: 2 }}
+                                                        >
+                                                            <MapTooltip permanent direction="top" offset={[0, -12]}>
+                                                                <span style={{ fontSize: '0.7rem', fontWeight: 600 }}>{sub.substation_id}</span>
+                                                            </MapTooltip>
+                                                        </CircleMarker>
+                                                    </>
+                                                );
+                                            })()}
                                         </MapContainer>
                                     </div>
                                 ) : (
@@ -487,10 +504,10 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
                                     }
                                 </div>
 
-                                {/* LS Relays */}
+                                {/* Load Shed Relay */}
                                 <div>
                                     <SectionLabel icon={LuCircuitBoard}>
-                                        LS Relays
+                                        Load Shedding Relay
                                         <span style={{ marginLeft: 'auto', background: '#f1f5f9', color: '#64748b', fontSize: '0.6rem', padding: '0 5px', borderRadius: '8px' }}>
                                             {lsRelays.length}
                                         </span>
