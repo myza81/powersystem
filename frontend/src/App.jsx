@@ -66,6 +66,7 @@ const App = () => {
     const [status, setStatus] = useState(null);
     const [viewingSld, setViewingSld] = useState(null);
     const [locatingSubstation, setLocatingSubstation] = useState(null);
+    const [initialAssetId, setInitialAssetId] = useState(null);
 
     // Auto-clear success messages after 5 seconds
     useEffect(() => {
@@ -614,9 +615,10 @@ const App = () => {
                 {view === 'create' || view === 'edit' ? (
                     <SubstationForm
                         substation={selectedSub}
+                        initialAssetId={initialAssetId}
                         onSave={handleSave}
                         onSubstationRefresh={handleRefreshSubstation}
-                        onCancel={() => setView('list')}
+                        onCancel={() => { setView('list'); setInitialAssetId(null); }}
                         onConfigEdit={() => setView('config')}
                         onSLDUpload={handleSLDUpload}
                         status={status}
@@ -671,9 +673,13 @@ const App = () => {
 
                 {view === 'critical-substations' && (
                     <CriticalSubstationManager
-                        onEditSubstation={(substationId) => {
+                        onEditSubstation={(substationId, assetId) => {
                             const sub = substations.find(s => s.substation_id === substationId);
-                            if (sub) { setSelectedSub(sub); setView('edit'); }
+                            if (sub) { 
+                                setSelectedSub(sub); 
+                                setInitialAssetId(assetId);
+                                setView('edit'); 
+                            }
                         }}
                     />
                 )}

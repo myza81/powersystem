@@ -98,7 +98,7 @@ const SubstationFilter = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f766e' }}>
                     <Filter size={18} />
-                    <span style={{ fontWeight: 600 }}>Filter Assets</span>
+                    <span style={{ fontWeight: 600 }}>Filter Substations</span>
                 </div>
 
                 <div style={{ display: 'flex', gap: '0.75rem', flex: 1, justifyContent: 'flex-end', alignItems: 'center' }}>
@@ -179,25 +179,27 @@ const SubstationFilter = ({
                         </button>
                     </div>
 
-                    <button
-                        onClick={onRegister}
-                        style={{
-                            background: 'linear-gradient(135deg, #047d60, #059669)',
-                            border: 'none',
-                            borderRadius: '6px',
-                            padding: '0 12px',
-                            fontSize: '0.8rem',
-                            height: '36px',
-                            color: '#fff',
-                            fontWeight: 600,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        <PlusCircle size={14} /> Register
-                    </button>
+                    {onRegister && (
+                        <button
+                            onClick={onRegister}
+                            style={{
+                                background: 'linear-gradient(135deg, #047d60, #059669)',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '0 12px',
+                                fontSize: '0.8rem',
+                                height: '36px',
+                                color: '#fff',
+                                fontWeight: 600,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <PlusCircle size={14} /> Register
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -245,7 +247,7 @@ const FilterDropdown = ({ label, value, options, onChange, disabled, suffix = ''
         >
             {options.map(opt => (
                 <option key={opt} value={opt} style={{ background: '#fff' }}>
-                    {opt === 'All' ? `All ${label} s` : `${opt}${suffix} `}
+                    {opt === 'All' ? `All ${label}s` : `${opt}${suffix}`}
                 </option>
             ))}
         </select>

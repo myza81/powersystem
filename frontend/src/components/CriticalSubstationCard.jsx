@@ -13,8 +13,8 @@ const CriticalSubstationCard = ({ substation, tags, onEditAsset, onAddAsset }) =
                 const volt = lt.lv_voltage ? `${lt.lv_voltage}kV` : '';
                 if (!voltageGroups[volt]) voltageGroups[volt] = [];
 
-                const match = lt.bay_id.match(/_T(\d+)$/i) || lt.bay_id.match(/T(\d+)/i);
-                const base = match ? `T${match[1]}` : lt.bay_id;
+                const parts = lt.bay_id.split('_');
+                const base = parts[parts.length - 1].toUpperCase();
                 voltageGroups[volt].push(base);
             });
         }
@@ -134,18 +134,7 @@ const CriticalSubstationCard = ({ substation, tags, onEditAsset, onAddAsset }) =
         letterSpacing: '0.3px'
     });
 
-    const bayTagStyle = (isActive) => ({
-        fontSize: '0.65rem',
-        fontWeight: 600,
-        fontFamily: 'monospace',
-        color: isActive ? '#0f172a' : '#64748b',
-        background: isActive ? 'rgba(4, 125, 96, 0.08)' : 'rgba(100, 116, 139, 0.06)',
-        border: `1px solid ${isActive ? 'rgba(4, 125, 96, 0.15)' : 'rgba(100, 116, 139, 0.1)'}`,
-        padding: '2px 6px',
-        borderRadius: '4px'
-    });
-
-    const getGaugeColors = (sensitivity) => {
+const getGaugeColors = (sensitivity) => {
         const colors = {
             3: { bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.3)', text: '#ef4444', icon: '#ef4444' },
             2: { bg: 'rgba(249, 115, 22, 0.1)', border: 'rgba(249, 115, 22, 0.3)', text: '#f97316', icon: '#f97316' },
@@ -239,12 +228,8 @@ const CriticalSubstationCard = ({ substation, tags, onEditAsset, onAddAsset }) =
                                     {item.voltageGroups[0]?.voltage || 'Unknown'}
                                 </span>
                             </div>
-                            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                {item.voltageGroups[0]?.bays.map((bay, bIdx) => (
-                                    <span key={bIdx} style={bayTagStyle(item.isActive)}>
-                                        {bay}
-                                    </span>
-                                ))}
+                            <div style={{ fontSize: '0.65rem', color: item.isActive ? '#475569' : '#94a3b8', fontFamily: 'monospace' }}>
+                                {item.voltageGroups[0]?.bays.join(', ')}
                             </div>
                         </div>
 

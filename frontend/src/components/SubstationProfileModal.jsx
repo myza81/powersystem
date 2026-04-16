@@ -454,7 +454,7 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
                                         : loadTransformers.map(lt => (
                                             <AssetRow
                                                 key={lt.id}
-                                                left={lt.bay_id}
+                                                left={lt.bay_id.split('_').pop().toUpperCase()}
                                                 right={`${lt.capacity_mva ? lt.capacity_mva + ' MVA · ' : ''}${lt.lv_voltage} kV`}
                                                 leftColor="#047d60"
                                             />
@@ -592,11 +592,11 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
                                             <div style={{ padding: '0.75rem 1.75rem 1.1rem' }}>
                                                 {/* Table header */}
                                                 <div style={{
-                                                    display: 'grid', gridTemplateColumns: '1fr 160px 100px 80px',
+                                                    display: 'grid', gridTemplateColumns: '1fr 130px 160px 100px 80px 40px',
                                                     gap: '0.5rem', paddingBottom: '6px',
                                                     borderBottom: '1px solid #f1f5f9', marginBottom: '2px',
                                                 }}>
-                                                    {['Customer', 'Category', 'Sensitivity', 'Status'].map(h => (
+                                                    {['Customer', 'Load Tx', 'Category', 'Sensitivity', 'Status', 'Docs'].map(h => (
                                                         <span key={h} style={{
                                                             fontSize: '0.58rem', fontWeight: 700,
                                                             textTransform: 'uppercase', letterSpacing: '0.08em',
@@ -604,14 +604,29 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
                                                         }}>{h}</span>
                                                     ))}
                                                 </div>
-                                                {criticalAssets.map(ca => (
+                                                {criticalAssets.map(ca => {
+                                                    const voltGroups = (ca.load_transformers_details || []).reduce((acc, lt) => {
+                                                        const v = lt.lv_voltage ? `${lt.lv_voltage}kV` : 'Unknown';
+                                                        const parts = lt.bay_id.split('_');
+                                                        const tx = parts[parts.length - 1].toUpperCase();
+                                                        if (!acc[v]) acc[v] = [];
+                                                        acc[v].push(tx);
+                                                        return acc;
+                                                    }, {});
+                                                    const loadTxLabel = Object.entries(voltGroups)
+                                                        .map(([v, txs]) => `${txs.join(', ')} ${v}`)
+                                                        .join('; ') || '—';
+                                                    return (
                                                     <div key={ca.id} style={{
-                                                        display: 'grid', gridTemplateColumns: '1fr 160px 100px 80px',
+                                                        display: 'grid', gridTemplateColumns: '1fr 130px 160px 100px 80px 40px',
                                                         gap: '0.5rem', padding: '6px 0',
                                                         borderBottom: '1px solid #f8fafc', alignItems: 'center',
                                                     }}>
                                                         <span style={{ fontSize: '0.72rem', fontWeight: 500, color: '#1e293b', fontFamily: "'Poppins', sans-serif" }}>
                                                             {ca.asset}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#475569' }}>
+                                                            {loadTxLabel}
                                                         </span>
                                                         <span style={{
                                                             fontSize: '0.62rem', fontWeight: 500,
@@ -636,8 +651,24 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
                                                         }}>
                                                             {ca.is_inforce ? '● Active' : '○ Inactive'}
                                                         </span>
+                                                        <div>
+                                                            {ca.source_file ? (
+                                                                <a
+                                                                    href={ca.source_file}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    title="View source document"
+                                                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '3px', borderRadius: '4px', border: '1px solid #e2e8f0', color: '#64748b', textDecoration: 'none', transition: 'all 0.15s' }}
+                                                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,159,67,0.08)'; e.currentTarget.style.borderColor = '#ff9f43'; e.currentTarget.style.color = '#ff9f43'; }}
+                                                                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}
+                                                                >
+                                                                    <FileText size={12} />
+                                                                </a>
+                                                            ) : <span style={{ color: '#e2e8f0', fontSize: '0.65rem' }}>—</span>}
+                                                        </div>
                                                     </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </motion.div>

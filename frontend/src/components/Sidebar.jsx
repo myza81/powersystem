@@ -38,7 +38,7 @@ const NAV_GROUPS = [
         icon: Boxes,
         items: [
             { id: 'list',                  label: 'Substation',        icon: Building2 },
-            { id: 'critical-substations',  label: 'Critical Customers', icon: ShieldAlert },
+            { id: 'critical-substations',  label: 'Critical Substations', icon: ShieldAlert },
         ],
     },
     {

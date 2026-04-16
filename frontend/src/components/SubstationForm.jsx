@@ -832,10 +832,10 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
             >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#fff', margin: 0 }}>{title} {typeLabel}</h3>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', marginTop: '0.25rem' }}>{substation?.name} ({substation?.substation_id})</div>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a', margin: 0 }}>{title} {typeLabel}</h3>
+                        <div style={{ fontSize: '0.75rem', color: '#047d60', marginTop: '0.25rem' }}>{substation?.name} ({substation?.substation_id})</div>
                     </div>
-                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '0.25rem' }}>
+                    <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '0.25rem' }}>
                         <X size={18} />
                     </button>
                 </div>
@@ -860,7 +860,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                             <div style={{ gridColumn: 'span 1' }}>
                                 <label style={inputLabelStyle}>Voltage Level</label>
                                 <select
-                                    className="input-field"
+                                    style={{ padding: '6px 10px', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#f8fafc', color: '#0f172a', outline: 'none', width: '100%', fontFamily: "'Poppins', sans-serif", boxSizing: 'border-box' }}
                                     value={assetForm.target_voltage || ''}
                                     onChange={(e) => {
                                         const v = parseInt(e.target.value);
@@ -880,8 +880,8 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                         <option key={v} value={v}>{v}kV</option>
                                     ))}
                                 </select>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                                    Name: <span style={{ color: 'var(--accent-cyan)' }}>{assetForm.relay_name || '...'}</span>
+                                <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '4px' }}>
+                                    Name: <span style={{ color: '#047d60' }}>{assetForm.relay_name || '...'}</span>
                                 </div>
                             </div>
                             <div style={{ gridColumn: 'span 1' }}>
@@ -900,7 +900,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                         <motion.div animate={{ x: assetForm.is_active !== false ? 20 : 0 }} transition={{ type: "spring", stiffness: 500, damping: 30 }}
                                             style={{ width: '14px', height: '14px', background: '#fff', borderRadius: '50%', boxShadow: '0 2px 4px #f1f5f9' }} />
                                     </div>
-                                    <span style={{ fontSize: '0.75rem', color: assetForm.is_active !== false ? '#fff' : 'var(--text-secondary)', fontWeight: 500 }}>
+                                    <span style={{ fontSize: '0.75rem', color: assetForm.is_active !== false ? '#047d60' : '#64748b', fontWeight: 500 }}>
                                         {assetForm.is_active !== false ? 'Active' : 'Off'}
                                     </span>
                                 </div>
@@ -910,7 +910,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                         <div>
                             <label style={inputLabelStyle}>Load Transformers</label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f1f5f9', alignItems: 'flex-start' }}>
-                                {filteredLTs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No load transformers available for {targetV}kV.</div>}
+                                {filteredLTs.length === 0 && <div style={{ color: '#64748b', fontSize: '0.7rem', width: '100%' }}>No load transformers available for {targetV}kV.</div>}
                                 {filteredLTs.map((lt) => {
                                     const checked = (assetForm.load_transformers || []).includes(lt.id);
                                     const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && r.load_transformers.includes(lt.id));
@@ -920,9 +920,9 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                         <label key={lt.id} style={{
                                             display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px',
                                             cursor: isClaimed ? 'not-allowed' : 'pointer',
-                                            background: isClaimed ? '#f8fafc' : checked ? 'rgba(0, 191, 255, 0.2)' : '#f1f5f9',
-                                            border: `1px solid ${isClaimed ? '#f1f5f9' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
-                                            color: isClaimed ? '#cbd5e1' : checked ? '#fff' : 'var(--text-secondary)',
+                                            background: isClaimed ? '#f8fafc' : checked ? 'rgba(4,125,96,0.1)' : '#f1f5f9',
+                                            border: `1px solid ${isClaimed ? '#f1f5f9' : checked ? 'rgba(4,125,96,0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                            color: isClaimed ? '#cbd5e1' : checked ? '#047d60' : '#64748b',
                                             transition: 'all 0.2s', userSelect: 'none',
                                             opacity: isClaimed ? 0.4 : 1
                                         }}>
@@ -940,7 +940,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                         <div>
                             <label style={inputLabelStyle}>Interbus Transformers</label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f1f5f9', alignItems: 'flex-start' }}>
-                                {filteredATs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No interbus transformers available for {targetV}kV.</div>}
+                                {filteredATs.length === 0 && <div style={{ color: '#64748b', fontSize: '0.7rem', width: '100%' }}>No interbus transformers available for {targetV}kV.</div>}
                                 {filteredATs.map((at) => {
                                     const checked = (assetForm.auto_transformers || []).includes(at.id);
                                     const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && r.auto_transformers.includes(at.id));
@@ -950,9 +950,9 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                         <label key={at.id} style={{
                                             display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px',
                                             cursor: isClaimed ? 'not-allowed' : 'pointer',
-                                            background: isClaimed ? '#f8fafc' : checked ? 'rgba(0, 191, 255, 0.2)' : '#f1f5f9',
-                                            border: `1px solid ${isClaimed ? '#f1f5f9' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
-                                            color: isClaimed ? '#cbd5e1' : checked ? '#fff' : 'var(--text-secondary)',
+                                            background: isClaimed ? '#f8fafc' : checked ? 'rgba(4,125,96,0.1)' : '#f1f5f9',
+                                            border: `1px solid ${isClaimed ? '#f1f5f9' : checked ? 'rgba(4,125,96,0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                            color: isClaimed ? '#cbd5e1' : checked ? '#047d60' : '#64748b',
                                             transition: 'all 0.2s', userSelect: 'none',
                                             opacity: isClaimed ? 0.4 : 1
                                         }}>
@@ -970,7 +970,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                         <div>
                             <label style={inputLabelStyle}>Incoming Branches</label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', maxHeight: '120px', overflowY: 'auto', padding: '0.4rem', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f1f5f9', alignItems: 'flex-start' }}>
-                                {filteredIBs.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', width: '100%' }}>No branches available for {targetV}kV.</div>}
+                                {filteredIBs.length === 0 && <div style={{ color: '#64748b', fontSize: '0.7rem', width: '100%' }}>No branches available for {targetV}kV.</div>}
                                 {filteredIBs.map((ib) => {
                                     const checked = (assetForm.incoming_branches || []).some(b => (typeof b === 'object' ? b.id : b) === ib.id);
                                     const OWNER = substation.load_shedding_relays?.find(r => r.id !== data?.id && (r.incoming_branches || []).some(b => (typeof b === 'object' ? b.id : b) === ib.id));
@@ -980,9 +980,9 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                         <label key={ib.id} style={{
                                             display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '999px',
                                             cursor: isClaimed ? 'not-allowed' : 'pointer',
-                                            background: isClaimed ? '#f8fafc' : checked ? 'rgba(0, 191, 255, 0.2)' : '#f1f5f9',
-                                            border: `1px solid ${isClaimed ? '#f1f5f9' : checked ? 'rgba(0, 191, 255, 0.5)' : 'rgba(255, 255, 255, 0.1)'}`,
-                                            color: isClaimed ? '#cbd5e1' : checked ? '#fff' : 'var(--text-secondary)',
+                                            background: isClaimed ? '#f8fafc' : checked ? 'rgba(4,125,96,0.1)' : '#f1f5f9',
+                                            border: `1px solid ${isClaimed ? '#f1f5f9' : checked ? 'rgba(4,125,96,0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                            color: isClaimed ? '#cbd5e1' : checked ? '#047d60' : '#64748b',
                                             transition: 'all 0.2s', userSelect: 'none',
                                             opacity: isClaimed ? 0.4 : 1
                                         }}>
@@ -999,7 +999,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
 
                         <div>
                             <label style={inputLabelStyle}>Relay Notes</label>
-                            <textarea className="input-field" value={assetForm.notes || ''} onChange={(e) => setAssetForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any details..." rows={2} style={{ resize: 'vertical' }} />
+                            <textarea value={assetForm.notes || ''} onChange={(e) => setAssetForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any details..." rows={2} style={{ padding: '6px 10px', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#f8fafc', color: '#0f172a', outline: 'none', width: '100%', fontFamily: "'Poppins', sans-serif", boxSizing: 'border-box', resize: 'vertical' }} />
                         </div>
                     </div>
                 ) : (
@@ -1008,7 +1008,7 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                             <>
                                 <div style={{ gridColumn: 'span 2' }}>
                                     <label style={inputLabelStyle}>Target Station</label>
-                                    <select className="input-field" value={assetForm.to_substation || ''} onChange={(e) => setAssetForm(f => ({ ...f, to_substation: e.target.value }))}>
+                                    <select style={{ padding: '6px 10px', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#f8fafc', color: '#0f172a', outline: 'none', width: '100%', fontFamily: "'Poppins', sans-serif", boxSizing: 'border-box' }} value={assetForm.to_substation || ''} onChange={(e) => setAssetForm(f => ({ ...f, to_substation: e.target.value }))}>
                                         <option value="">-- Select Substation --</option>
                                         {substationOptions.map((s) => (
                                             <option key={s.substation_id} value={s.substation_id}>{s.name} ({s.substation_id})</option>
@@ -1017,33 +1017,33 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
                                 </div>
                                 <div>
                                     <label style={inputLabelStyle}>Circuit No</label>
-                                    <input className="input-field mono" value={assetForm.ckt_id || ''} onChange={(e) => setAssetForm(f => ({ ...f, ckt_id: e.target.value }))} placeholder="1" />
+                                    <input value={assetForm.ckt_id || ''} onChange={(e) => setAssetForm(f => ({ ...f, ckt_id: e.target.value }))} placeholder="1" style={{ padding: '6px 10px', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#f8fafc', color: '#0f172a', outline: 'none', width: '100%', fontFamily: 'monospace', boxSizing: 'border-box' }} />
                                 </div>
                                 <div>
                                     <label style={inputLabelStyle}>Breaker ID</label>
-                                    <input className="input-field mono" value={assetForm.breaker_number || ''} onChange={(e) => setAssetForm(f => ({ ...f, breaker_number: e.target.value }))} placeholder="e.g., 105" />
+                                    <input value={assetForm.breaker_number || ''} onChange={(e) => setAssetForm(f => ({ ...f, breaker_number: e.target.value }))} placeholder="e.g., 105" style={{ padding: '6px 10px', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#f8fafc', color: '#0f172a', outline: 'none', width: '100%', fontFamily: 'monospace', boxSizing: 'border-box' }} />
                                 </div>
                             </>
                         ) : (
                             <>
                                 <div>
                                     <label style={inputLabelStyle}>Unit Number</label>
-                                    <input className="input-field mono" type="number" value={assetForm.transformer_no || ''} onChange={(e) => setAssetForm(f => ({ ...f, transformer_no: e.target.value }))} placeholder="e.g., 1" />
+                                    <input type="number" value={assetForm.transformer_no || ''} onChange={(e) => setAssetForm(f => ({ ...f, transformer_no: e.target.value }))} placeholder="e.g., 1" style={{ padding: '6px 10px', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#f8fafc', color: '#0f172a', outline: 'none', width: '100%', fontFamily: 'monospace', boxSizing: 'border-box' }} />
                                 </div>
                                 <div>
                                     <label style={inputLabelStyle}>LV (kV)</label>
-                                    <select className="input-field mono" value={assetForm.lv_voltage || ''} onChange={(e) => setAssetForm(f => ({ ...f, lv_voltage: e.target.value }))}>
+                                    <select style={{ padding: '6px 10px', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#f8fafc', color: '#0f172a', outline: 'none', width: '100%', fontFamily: 'monospace', boxSizing: 'border-box' }} value={assetForm.lv_voltage || ''} onChange={(e) => setAssetForm(f => ({ ...f, lv_voltage: e.target.value }))}>
                                         <option value="">-- Select --</option>
                                         {(type === 'load' ? LOAD_LV : AUTO_LV).map(v => <option key={v} value={v}>{v} kV</option>)}
                                     </select>
                                 </div>
                                 <div>
                                     <label style={inputLabelStyle}>Capacity (MVA)</label>
-                                    <input className="input-field mono" type="number" value={assetForm.capacity_mva || ''} onChange={(e) => setAssetForm(f => ({ ...f, capacity_mva: e.target.value }))} placeholder="e.g., 30" />
+                                    <input type="number" value={assetForm.capacity_mva || ''} onChange={(e) => setAssetForm(f => ({ ...f, capacity_mva: e.target.value }))} placeholder="e.g., 30" style={{ padding: '6px 10px', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#f8fafc', color: '#0f172a', outline: 'none', width: '100%', fontFamily: 'monospace', boxSizing: 'border-box' }} />
                                 </div>
                                 <div>
-                                    <label style={inputLabelStyle}>Commissioning Date <span style={{ color: 'var(--text-secondary)', fontSize: '0.6rem' }}>(Optional)</span></label>
-                                    <input className="input-field mono" type="date" value={assetForm.commissioning_date || ''} onChange={(e) => setAssetForm(f => ({ ...f, commissioning_date: e.target.value }))} />
+                                    <label style={inputLabelStyle}>Commissioning Date <span style={{ color: '#64748b', fontSize: '0.6rem' }}>(Optional)</span></label>
+                                    <input type="date" value={assetForm.commissioning_date || ''} onChange={(e) => setAssetForm(f => ({ ...f, commissioning_date: e.target.value }))} style={{ padding: '6px 10px', fontSize: '0.78rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#f8fafc', color: '#0f172a', outline: 'none', width: '100%', fontFamily: 'monospace', boxSizing: 'border-box' }} />
                                 </div>
                             </>
                         )}
@@ -1052,16 +1052,15 @@ const AssetModal = ({ type, data, onClose, onSave, assetLoading, assetStatus, as
 
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                     <button onClick={onClose}
-                        style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', background: 'transparent', border: '1px solid #e2e8f0', color: 'var(--text-secondary)', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#fff'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                        style={{ flex: 1, padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', background: 'transparent', border: '1px solid #e2e8f0', color: '#64748b', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#334155'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b'; }}
                     >
                         Cancel
                     </button>
                     <button
                         onClick={() => onSave(type)}
-                        className="btn-primary"
-                        style={{ flex: 2, padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                        style={{ flex: 2, background: '#047d60', color: '#fff', border: 'none', padding: '7px 16px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
                         disabled={assetLoading}
                     >
                         {assetLoading ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
@@ -1082,15 +1081,21 @@ const CriticalCustomerRow = ({ tag, categories, loadTransformers, isSelected, on
     const sens = tag.sensitivity_impact;
     const txBays = (tag.load_transformers || []).map(id => {
         const lt = loadTransformers.find(l => l.id === id);
-        return lt ? lt.bay_id : null;
+        if (!lt) return null;
+        const parts = lt.bay_id.split('_');
+        return parts[parts.length - 1].toUpperCase();
     }).filter(Boolean);
+    const lvVoltages = [...new Set((tag.load_transformers || []).map(id => {
+        const lt = loadTransformers.find(l => l.id === id);
+        return lt?.lv_voltage ? `${lt.lv_voltage}kV` : null;
+    }).filter(Boolean))];
 
     return (
         <div
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
             style={{
-                display: 'grid', gridTemplateColumns: '1fr 120px 90px 1fr 70px 80px',
+                display: 'grid', gridTemplateColumns: '1fr 120px 90px 1fr 70px 70px 80px',
                 gap: '6px', alignItems: 'center', padding: '7px 16px',
                 borderBottom: isSelected ? 'none' : '1px solid #f1f5f9',
                 background: isSelected ? 'rgba(4,125,96,0.03)' : hovering ? '#f8fafc' : '#fff',
@@ -1098,7 +1103,7 @@ const CriticalCustomerRow = ({ tag, categories, loadTransformers, isSelected, on
                 transition: 'all 0.15s',
             }}
         >
-            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tag.asset || '—'}</div>
+            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#0f172a', wordBreak: 'break-word' }}>{tag.asset || '—'}</div>
             <div>
                 <span style={{ fontSize: '0.65rem', fontWeight: 700, background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '4px' }}>{catName}</span>
             </div>
@@ -1109,10 +1114,11 @@ const CriticalCustomerRow = ({ tag, categories, loadTransformers, isSelected, on
                     </span>
                 ) : <span style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>—</span>}
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
-                {txBays.length > 0 ? txBays.map(bay => (
-                    <span key={bay} style={{ fontSize: '0.65rem', fontFamily: 'monospace', fontWeight: 600, color: '#047d60', background: 'rgba(4,125,96,0.08)', border: '1px solid rgba(4,125,96,0.2)', padding: '1px 6px', borderRadius: '4px' }}>{bay}</span>
-                )) : <span style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>—</span>}
+            <div style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#475569' }}>
+                {txBays.length > 0 ? txBays.join(', ') : <span style={{ color: '#cbd5e1' }}>—</span>}
+            </div>
+            <div style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#0369a1' }}>
+                {lvVoltages.length > 0 ? lvVoltages.join(', ') : <span style={{ color: '#cbd5e1' }}>—</span>}
             </div>
             <div>
                 <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: tag.is_inforce ? 'rgba(4,125,96,0.08)' : '#f1f5f9', color: tag.is_inforce ? '#047d60' : '#94a3b8', border: `1px solid ${tag.is_inforce ? 'rgba(4,125,96,0.2)' : '#e2e8f0'}` }}>
@@ -1272,7 +1278,7 @@ const CriticalCustomerInlineForm = ({ data, loadTransformers, categories, source
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstationRefresh, status, loading }) => {
+const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstationRefresh, status, loading, initialAssetId }) => {
     const [formData, setFormData] = useState(substation || {
         mnemonic: '',
         name: '',
@@ -1289,6 +1295,20 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
             setFormData(substation);
         }
     }, [substation]);
+    
+    useEffect(() => {
+        if (initialAssetId) {
+            if (initialAssetId === 'new') {
+                setEditingCriticalId('new');
+            } else {
+                setEditingCriticalId(initialAssetId);
+            }
+            // Add a small delay to ensure the component is rendered and IDs are present
+            setTimeout(() => {
+                scrollToSection('critical');
+            }, 300);
+        }
+    }, [initialAssetId]);
 
     const scrollToSection = (sectionId) => {
         const element = document.getElementById(sectionId);
@@ -1316,7 +1336,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
     const fetchCriticalData = async () => {
         if (!substation?.substation_id) return;
-        setCriticalLoading(true);
         try {
             const [assetsRes, catRes, srcRes] = await Promise.all([
                 api.get(`/critical-assets/?substation=${substation.substation_id}`),
@@ -1329,7 +1348,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
         } catch {
             setCriticalStatus({ type: 'error', msg: 'Failed to load critical customers.' });
         }
-        setCriticalLoading(false);
     };
 
     const handleCriticalSave = async ({ id, sourceMode, sourceForm: sf, category, ...rest }) => {
@@ -1371,7 +1389,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
     const handleCriticalDelete = async (id) => {
         if (!window.confirm('Delete this critical customer?')) return;
-        setCriticalLoading(true);
         try {
             await api.delete(`/critical-assets/${id}/`);
             await fetchCriticalData();
@@ -1379,7 +1396,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
         } catch {
             setCriticalStatus({ type: 'error', msg: 'Failed to delete.' });
         }
-        setCriticalLoading(false);
     };
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -1401,7 +1417,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
     const [criticalAssets, setCriticalAssets] = useState([]);
     const [criticalCategories, setCriticalCategories] = useState([]);
     const [criticalSources, setCriticalSources] = useState([]);
-    const [criticalLoading, setCriticalLoading] = useState(false);
     const [criticalStatus, setCriticalStatus] = useState(null);
     // null = closed | 'new' = adding new | tag.id = editing that tag
     const [editingCriticalId, setEditingCriticalId] = useState(null);
@@ -1663,125 +1678,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
         setAssetLoading(false);
     };
 
-    const renderBaysGrouped = (bayIds, fullBaysList, type, isActive) => {
-        if (!bayIds || bayIds.length === 0) return null;
-
-        const normalizedBayIds = bayIds.map(bay => typeof bay === 'object' ? bay.id : bay);
-        const selectedBays = fullBaysList.filter(b => normalizedBayIds.includes(b.id));
-        if (selectedBays.length === 0) return null;
-
-        const label = type === 'load' ? 'Load Transformer' : type === 'auto' ? 'Interbus Transformer' : 'Incoming Branch';
-
-        const cardStyle = {
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            gap: '8px',
-            padding: '6px 8px',
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid #f1f5f9',
-            borderRadius: '6px',
-            width: '100%',
-        };
-
-        const getPillStyle = () => ({
-            background: isActive ? 'rgba(0, 188, 212, 0.12)' : '#f1f5f9',
-            border: `1px solid ${isActive ? 'rgba(0, 188, 212, 0.25)' : '#e2e8f0'}`,
-            color: isActive ? 'var(--accent-cyan)' : '#fff',
-            fontSize: '0.6rem',
-            padding: '1px 6px',
-            borderRadius: '4px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '20px'
-        });
-
-        if (type === 'branch') {
-            const groupedBranches = selectedBays.reduce((acc, curr) => {
-                const sub = curr.to_substation || 'Unknown';
-                if (!acc[sub]) acc[sub] = [];
-                acc[sub].push(curr.ckt_id);
-                return acc;
-            }, {});
-
-            return (
-                <div style={cardStyle}>
-                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flex: 1, padding: '4px 0' }}>
-                        {/* Left Column: Category Name */}
-                        <div style={{ minWidth: '120px', flexShrink: 0 }}>
-                            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                                {label}
-                            </span>
-                        </div>
-
-                        {/* Right Column: Assets Grouped by Target Substation */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                            {Object.entries(groupedBranches).map(([sub, ckts]) => (
-                                <div key={sub} style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                    {ckts.map((ckt, idx) => (
-                                        <span key={idx} className="mono" style={{ ...getPillStyle(), minWidth: '80px', textAlign: 'center' }}>
-                                            {sub} {ckt}
-                                        </span>
-                                    ))}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        const grouped = selectedBays.reduce((acc, curr) => {
-            const v = curr.lv_voltage || 'Unknown';
-            if (!acc[v]) acc[v] = [];
-            acc[v].push(`T${curr.transformer_no}`);
-            return acc;
-        }, {});
-
-        return (
-            <div style={cardStyle}>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flex: 1, padding: '4px 0' }}>
-                    {/* Left Column: Category Name */}
-                    <div style={{ minWidth: '120px', flexShrink: 0 }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                            {label}
-                        </span>
-                    </div>
-
-                    {/* Right Column: Assets */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                        {Object.entries(grouped).map(([voltage, txs], vIdx) => (
-                            <div key={voltage} style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                <span style={{
-                                    fontSize: '0.6rem',
-                                    color: isActive ? 'var(--accent-cyan)' : '#fff',
-                                    fontWeight: 700,
-                                    background: isActive ? 'rgba(0, 188, 212, 0.12)' : '#f1f5f9',
-                                    border: `1px solid ${isActive ? 'rgba(0, 188, 212, 0.25)' : '#e2e8f0'}`,
-                                    padding: '1px 0',
-                                    width: '42px',
-                                    display: 'inline-flex',
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                    borderRadius: '4px',
-                                    flexShrink: 0,
-                                    minHeight: '20px'
-                                }}>
-                                    {voltage}kV
-                                </span>
-                                {txs.map((tx, idx) => (
-                                    <span key={idx} className="mono" style={getPillStyle()}>
-                                        {tx}
-                                    </span>
-                                ))}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        );
-    };
 
     return (
         <>
@@ -1892,7 +1788,7 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                     { id: 'auto', label: 'Interbus Transformers', icon: Database, count: autoTransformers.length },
                                     { id: 'branch', label: 'Incoming Branches', icon: GitBranch, count: incomingBranches.length },
                                     { id: 'lsr', label: 'Load Shedding Relays', icon: ShieldAlert, count: loadSheddingRelays.length },
-                                    { id: 'critical', label: 'Critical Customers', icon: Users, count: criticalAssets.length },
+                                    { id: 'critical', label: 'Critical Substations', icon: Users, count: criticalAssets.length },
                                 ].map(tab => (
                                     <button
                                         key={tab.id}
@@ -2068,20 +1964,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                         }}>
                                             {loadTransformers.length} unit{loadTransformers.length !== 1 ? 's' : ''}
                                         </span>
-                                        <button
-                                            type="button"
-                                            onClick={fetchAssets}
-                                            disabled={assetLoading}
-                                            style={{
-                                                marginLeft: 'auto', background: 'transparent',
-                                                border: '1px solid #e2e8f0', color: '#94a3b8',
-                                                cursor: 'pointer', padding: '5px 8px',
-                                                borderRadius: '6px', display: 'flex', alignItems: 'center',
-                                                transition: 'all 0.15s'
-                                            }}
-                                        >
-                                            <RefreshCw size={13} className={assetLoading ? 'animate-spin' : ''} />
-                                        </button>
                                     </div>
 
                                     {canManageAssets ? (
@@ -2190,10 +2072,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                         }}>
                                             {autoTransformers.length} unit{autoTransformers.length !== 1 ? 's' : ''}
                                         </span>
-                                        <button type="button" onClick={fetchAssets} disabled={assetLoading}
-                                            style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #e2e8f0', color: '#94a3b8', cursor: 'pointer', padding: '5px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
-                                            <RefreshCw size={13} className={assetLoading ? 'animate-spin' : ''} />
-                                        </button>
                                     </div>
                                     {canManageAssets ? (
                                         <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -2278,10 +2156,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                         }}>
                                             {incomingBranches.length} line{incomingBranches.length !== 1 ? 's' : ''}
                                         </span>
-                                        <button type="button" onClick={fetchAssets} disabled={assetLoading}
-                                            style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #e2e8f0', color: '#94a3b8', cursor: 'pointer', padding: '5px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
-                                            <RefreshCw size={13} className={assetLoading ? 'animate-spin' : ''} />
-                                        </button>
                                     </div>
                                     {canManageAssets ? (
                                         <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -2365,10 +2239,6 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                         }}>
                                             {loadSheddingRelays.length} assignment{loadSheddingRelays.length !== 1 ? 's' : ''}
                                         </span>
-                                        <button type="button" onClick={fetchAssets} disabled={assetLoading}
-                                            style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #e2e8f0', color: '#94a3b8', cursor: 'pointer', padding: '5px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
-                                            <RefreshCw size={13} className={assetLoading ? 'animate-spin' : ''} />
-                                        </button>
                                     </div>
                                     {canManageAssets ? (
                                         <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -2470,16 +2340,12 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                             <Users size={15} color="#ef4444" />
                                         </div>
                                         <div>
-                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Critical Customers</h3>
+                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Critical Substations</h3>
                                             <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Critical customers supplied by this substation</div>
                                         </div>
                                         <span style={{ fontSize: '0.62rem', fontWeight: 700, background: criticalAssets.length > 0 ? 'rgba(239,68,68,0.08)' : '#f1f5f9', color: criticalAssets.length > 0 ? '#ef4444' : '#94a3b8', padding: '2px 8px', borderRadius: '20px', border: `1px solid ${criticalAssets.length > 0 ? 'rgba(239,68,68,0.2)' : '#e2e8f0'}` }}>
                                             {criticalAssets.length} customer{criticalAssets.length !== 1 ? 's' : ''}
                                         </span>
-                                        <button type="button" onClick={fetchCriticalData} disabled={criticalLoading}
-                                            style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #e2e8f0', color: '#94a3b8', cursor: 'pointer', padding: '5px 8px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'all 0.15s' }}>
-                                            <RefreshCw size={13} className={criticalLoading ? 'animate-spin' : ''} />
-                                        </button>
                                     </div>
 
                                     {/* Status message */}
@@ -2492,11 +2358,12 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                     {canManageAssets ? (
                                         <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                                             {/* Table header */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 90px 1fr 70px 80px', gap: '6px', padding: '8px 16px', background: 'linear-gradient(135deg, rgba(239,68,68,0.06), rgba(239,68,68,0.02))', borderBottom: '1px solid #e2e8f0', fontSize: '0.7rem', fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Poppins', sans-serif" }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 90px 1fr 70px 70px 80px', gap: '6px', padding: '8px 16px', background: 'linear-gradient(135deg, rgba(239,68,68,0.06), rgba(239,68,68,0.02))', borderBottom: '1px solid #e2e8f0', fontSize: '0.7rem', fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: "'Poppins', sans-serif" }}>
                                                 <div>Customer</div>
                                                 <div>Category</div>
                                                 <div>Sensitivity</div>
                                                 <div>TX Bays</div>
+                                                <div>Voltage</div>
                                                 <div style={{ textAlign: 'center' }}>Status</div>
                                                 <div style={{ textAlign: 'center' }}>Action</div>
                                             </div>

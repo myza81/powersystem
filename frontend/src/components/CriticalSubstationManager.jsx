@@ -317,7 +317,6 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
                             substations={substations}
                             currentFilters={filterCriteria}
                             onUpdateFilters={setFilterCriteria}
-                            onRegister={() => onEditSubstation && onEditSubstation('')}
                             extraLabel="Category"
                             extraValue={filterCriteria.category}
                             onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, category: val }))}
@@ -342,7 +341,6 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
                             substations={substations}
                             currentFilters={filterCriteria}
                             onUpdateFilters={setFilterCriteria}
-                            onRegister={() => onEditSubstation && onEditSubstation('')}
                             extraLabel="Category"
                             extraValue={filterCriteria.category}
                             onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, category: val }))}
@@ -368,8 +366,8 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
                                             key={subId}
                                             substation={substationLookup[subId] || { substation_id: subId, name: subId }}
                                             tags={filteredGrouped[subId]}
-                                            onEditAsset={(tag) => onEditSubstation && onEditSubstation(tag.substation)}
-                                            onAddAsset={() => onEditSubstation && onEditSubstation(subId)}
+                                            onEditAsset={(tag) => onEditSubstation && onEditSubstation(tag.substation, tag.id)}
+                                            onAddAsset={() => onEditSubstation && onEditSubstation(subId, 'new')}
                                         />
                                     ))}
                                 </AnimatePresence>
@@ -399,8 +397,8 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
                                             key={subId}
                                             substation={substationLookup[subId] || { substation_id: subId, name: subId }}
                                             tags={filteredGrouped[subId]}
-                                            onEditAsset={(tag) => onEditSubstation && onEditSubstation(tag.substation)}
-                                            onAddAsset={() => onEditSubstation && onEditSubstation(subId)}
+                                            onEditAsset={(tag) => onEditSubstation && onEditSubstation(tag.substation, tag.id)}
+                                            onAddAsset={() => onEditSubstation && onEditSubstation(subId, 'new')}
                                         />
                                     ))}
                                 </AnimatePresence>
