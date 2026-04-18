@@ -38,6 +38,130 @@ const formatDate = (ds) => {
     return new Date(ds).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+// ─── Comparison helpers ───────────────────────────────────────────────────────
+
+const COMP_STAGE_COLORS = [
+    '#3b82f6', '#8b5cf6', '#f97316', '#10b981', '#ef4444', '#eab308', '#ec4899', '#06b6d4'
+];
+
+const COMP_CHANGE_META = {
+    new:       { label: 'New Assignment', color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0' },
+    revised:   { label: 'Revised',        color: '#b45309', bg: '#fffbeb', border: '#fde68a' },
+    defeated:  { label: 'Defeated',       color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+    unchanged: { label: 'Unchanged',      color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
+};
+
+const compactMnemonicComp = (subId) => String(subId || '').replace(/\d+$/, '');
+
+const buildPublishedRows = (stageDetails, substations, relays) => {
+    const subLookup = {};
+    substations.forEach(s => { subLookup[s.substation_id] = s; });
+    const relayLookup = {};
+    relays.forEach(r => { relayLookup[r.id] = r; });
+    const rows = [];
+
+    stageDetails.forEach((stage, stageIdx) => {
+        const stageColor = COMP_STAGE_COLORS[stageIdx % COMP_STAGE_COLORS.length];
+        const settings = stage.settings || [];
+        const threshold1 = settings[0]?.threshold ?? '—';
+        const delay1 = settings[0]?.time_delay ?? '—';
+        const threshold2 = settings[1]?.threshold ?? '—';
+        const delay2 = settings[1]?.time_delay ?? '—';
+
+        (stage.transformer_bays || []).forEach(bay => {
+            const sub = subLookup[bay.relay_substation_id];
+            const relay = relayLookup[bay.relay];
+            const selectedIds = (bay.transformers || []).map(t => typeof t === 'object' ? t.id : t);
+            const selectedTxs = (relay?.load_transformers || []).filter(t =>
+                selectedIds.includes(typeof t === 'object' ? t.id : t)
+            );
+            const feeder = selectedTxs.length > 0
+                ? selectedTxs.map(t => `T${t.transformer_no}`).join(' & ')
+                : (bay.transformers || []).map(t => typeof t === 'object' ? `T${t.id}` : `T${t}`).join(' & ') || '—';
+            const breakerNumber = selectedTxs.map(t => t.lv_breaker_number).filter(Boolean).join(' & ') || '—';
+            const voltageRaw = selectedTxs.map(t => t.lv_voltage).filter(Boolean);
+            const voltage = voltageRaw.length > 0 ? [...new Set(voltageRaw)].join(' & ') : (sub?.voltage || '—');
+
+            rows.push({
+                stageId: stage.id, stageLabel: stage.label, stageColor, stageOrder: stageIdx,
+                type: 'transformer',
+                substationName: sub?.name || bay.relay_substation_id || 'Unknown',
+                substationId: sub?.substation_id || bay.relay_substation_id || '',
+                region: sub?.region || '—', grid: sub?.grid || '—',
+                feeder, breakerNumber, voltage,
+                threshold1, delay1, threshold2, delay2,
+            });
+        });
+
+        (stage.pocket_bays || []).forEach((pocket, pocketIdx) => {
+            const pocketLabel = `Pocket ${pocketIdx + 1}`;
+            const boundaries = pocket.boundaries || [];
+            const isMultiBoundary = boundaries.length > 1;
+            const pocketId = `${stage.id}-pocket-${pocketIdx}`;
+
+            if (isMultiBoundary) {
+                rows.push({
+                    stageId: stage.id, stageLabel: stage.label, stageColor, stageOrder: stageIdx,
+                    type: 'pocket_header', pocketId, pocketLabel,
+                    substationName: '', substationId: '', region: '—', grid: '—', feeder: '', breakerNumber: '',
+                    threshold1, delay1, threshold2, delay2,
+                });
+            }
+
+            boundaries.forEach(boundary => {
+                const sub = subLookup[boundary.relay_substation_id];
+                const relay = relayLookup[boundary.relay];
+                const selectedIds = (boundary.branches || []).map(b => typeof b === 'object' ? b.id : b);
+                const branchObjects = (relay?.incoming_branches || []).filter(b =>
+                    selectedIds.includes(typeof b === 'object' ? b.id : b)
+                );
+                const feeder = branchObjects.length > 0
+                    ? branchObjects.map(b => `${compactMnemonicComp(b.to_substation)} ${b.ckt_id}`).join(' & ')
+                    : (boundary.frozen_assets || []).map(a => `${compactMnemonicComp(a.to_sub)} ${a.ckt_id}`).join(' & ')
+                    || `Boundary: ${boundary.relay_name || '—'}`;
+                const breakerNumber = branchObjects.map(b => b.breaker_number).filter(Boolean).join(' & ') || '—';
+
+                rows.push({
+                    stageId: stage.id, stageLabel: stage.label, stageColor, stageOrder: stageIdx,
+                    type: isMultiBoundary ? 'pocket_boundary' : 'pocket',
+                    pocketId: isMultiBoundary ? pocketId : undefined, pocketLabel,
+                    substationName: sub?.name || boundary.relay_substation_id || 'Unknown',
+                    substationId: sub?.substation_id || boundary.relay_substation_id || '',
+                    region: sub?.region || '—', grid: sub?.grid || '—',
+                    feeder, breakerNumber, voltage: sub?.voltage || '—',
+                    threshold1, delay1, threshold2, delay2,
+                });
+            });
+        });
+    });
+    return rows;
+};
+
+const buildComparisonRowsComp = (rowsA, rowsB) => {
+    const keyOf = r => `${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`;
+    const mapA = new Map();
+    rowsA.filter(r => r.type !== 'pocket_header').forEach(r => mapA.set(keyOf(r), r));
+    const mapB = new Map();
+    rowsB.filter(r => r.type !== 'pocket_header').forEach(r => mapB.set(keyOf(r), r));
+    const results = [];
+    mapA.forEach((rowA, key) => {
+        const rowB = mapB.get(key);
+        if (!rowB) {
+            results.push({ ...rowA, changeType: 'new', oldStageLabel: '—', oldStageColor: null });
+        } else if (rowA.stageLabel !== rowB.stageLabel) {
+            results.push({ ...rowA, changeType: 'revised', oldStageLabel: rowB.stageLabel, oldStageColor: rowB.stageColor });
+        } else {
+            results.push({ ...rowA, changeType: 'unchanged', oldStageLabel: rowB.stageLabel, oldStageColor: rowB.stageColor });
+        }
+    });
+    mapB.forEach((rowB, key) => {
+        if (!mapA.has(key)) {
+            results.push({ ...rowB, changeType: 'defeated', oldStageLabel: rowB.stageLabel, oldStageColor: rowB.stageColor, stageLabel: '—' });
+        }
+    });
+    return results;
+};
+
 const LoadSheddingDesigner = () => {
     // --- Global State ---
     const [currentUser, setCurrentUser] = useState(null);
@@ -111,6 +235,11 @@ const LoadSheddingDesigner = () => {
     const [pocketPreview, setPocketPreview] = useState(null);
     const [fetchingPocket, setFetchingPocket] = useState(false);
     const [showSummaryModal, setShowSummaryModal] = useState(false);
+    const [showCompareModal, setShowCompareModal] = useState(false);
+    const [compareLoading, setCompareLoading] = useState(false);
+    const [compareRows, setCompareRows] = useState([]);
+    const [comparePublishedLabel, setComparePublishedLabel] = useState('');
+    const [compareGroupBy, setCompareGroupBy] = useState('change-type');
 
     // --- Workspace Panel State ---
     const [showLibrary, setShowLibrary] = useState(true);
@@ -1585,6 +1714,104 @@ const LoadSheddingDesigner = () => {
         return rows;
     };
 
+    const buildDraftRows = () => {
+        const rows = [];
+        stages.forEach((stage, stageIdx) => {
+            const stageColor = COMP_STAGE_COLORS[stageIdx % COMP_STAGE_COLORS.length];
+            const settingCells = getStageSettingCells(stage);
+
+            (stage.transformer_bays || []).forEach(bay => {
+                const relay = relays.find(r => String(r.id) === String(bay.relay));
+                const sub = substations.find(s => s.substation_id === bay.relay_substation_id);
+                if (!relay || !sub) return;
+
+                const selectedIds = (bay.transformers || []).map(t => typeof t === 'object' ? t.id : t);
+                const selectedTxs = (relay.load_transformers || []).filter(t => selectedIds.includes(typeof t === 'object' ? t.id : t));
+
+                const feeder = selectedTxs.length > 0
+                    ? selectedTxs.map(t => `T${t.transformer_no}`).join(' & ')
+                    : (bay.transformers && bay.transformers.length > 0)
+                        ? bay.transformers.map(t => typeof t === 'object' ? `T${t.id}` : `T${t}`).join(' & ')
+                        : (bay.frozen_assets || []).map(a => `T${a}`).join(' & ') || '—';
+
+                rows.push({
+                    stageId: stage.id, stageLabel: stage.label, stageColor, stageOrder: stageIdx,
+                    type: 'transformer',
+                    substationName: sub.name || '',
+                    substationId: sub.substation_id || '',
+                    region: sub.region || '—', grid: sub.grid || '—',
+                    feeder,
+                    breakerNumber: selectedTxs.map(t => t.lv_breaker_number).filter(Boolean).join(' & ') || '—',
+                    voltage: sub.voltage || '',
+                    ...settingCells,
+                });
+            });
+
+            const pockets = getEffectiveStagePockets(stage, stageIdx);
+            pockets.forEach(card => {
+                (card.branchGroups || []).forEach(group => {
+                    const localSub = substations.find(s => s.substation_id === group.subId);
+                    if (!localSub) return;
+
+                    const fullBranchIds = (card.branches || []).filter(branchId => String(branchId).startsWith(`${group.subId}_`));
+                    const branchObjects = fullBranchIds.map(branchId => {
+                        for (const relay of relays) {
+                            const found = (relay.incoming_branches || []).find(branch => branch.bay_id === branchId);
+                            if (found) return found;
+                        }
+                        return null;
+                    }).filter(Boolean);
+
+                    const feeder = branchObjects.length > 0
+                        ? branchObjects.map(branch => `${compactSubstationMnemonic(branch.to_substation)} ${branch.ckt_id}`).join(' & ')
+                        : (group.branches || []).join(' & ') || '—';
+
+                    rows.push({
+                        stageId: stage.id, stageLabel: stage.label, stageColor, stageOrder: stageIdx,
+                        type: 'pocket',
+                        substationName: localSub.name || '',
+                        substationId: localSub.substation_id || '',
+                        region: localSub.region || '—', grid: localSub.grid || '—',
+                        feeder,
+                        breakerNumber: branchObjects.map(b => b.breaker_number).filter(Boolean).join(' & ') || '—',
+                        voltage: localSub.voltage || '',
+                        ...settingCells,
+                    });
+                });
+            });
+        });
+        return rows;
+    };
+
+    const openCompareModal = async () => {
+        setShowCompareModal(true);
+        setCompareLoading(true);
+        setCompareRows([]);
+        setComparePublishedLabel('');
+
+        const publishedV = versions
+            .filter(v => v.status === 'active' && v.scheme_type === schemeType)
+            .sort((a, b) => b.review_year - a.review_year || b.version - a.version)[0];
+
+        if (!publishedV) {
+            setCompareLoading(false);
+            return;
+        }
+
+        setComparePublishedLabel(`${publishedV.scheme_type} ${publishedV.review_year} v${publishedV.version}`);
+
+        try {
+            const res = await api.get(`/load-shedding-stages/?version=${publishedV.id}&include_bays=true`);
+            const publishedRows = buildPublishedRows(res.data, substations, relays);
+            const draftRows = buildDraftRows();
+            setCompareRows(buildComparisonRowsComp(draftRows, publishedRows));
+        } catch (err) {
+            console.error('Compare fetch failed', err);
+        } finally {
+            setCompareLoading(false);
+        }
+    };
+
     const isStaff = currentUser?.is_staff || false;
     const drafts = versions.filter(v => v.status === 'draft');
     const published = versions.filter(v => ['active', 'deactivated'].includes(v.status));
@@ -1926,6 +2153,10 @@ const LoadSheddingDesigner = () => {
                     {/* Summary */}
                     <button onClick={() => setShowSummaryModal(true)} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#64748b', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                         <FaTableList size={11} /> Summary
+                    </button>
+                    {/* Compare with published */}
+                    <button onClick={openCompareModal} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#64748b', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                        <FaCodeBranch size={11} /> Compare
                     </button>
                     {/* Publish / Unpublish */}
                     {activeVersionMeta?.status === 'active' ? (
@@ -2940,6 +3171,158 @@ const LoadSheddingDesigner = () => {
                                         </tbody>
                                     </table>
                                 </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {showCompareModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+                    >
+                        <motion.div
+                            initial={{ y: 20, opacity: 0, scale: 0.95 }}
+                            animate={{ y: 0, opacity: 1, scale: 1 }}
+                            exit={{ y: 20, opacity: 0, scale: 0.95 }}
+                            className="glass-card"
+                            style={{ width: '1200px', maxWidth: '96vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column', padding: 0 }}
+                        >
+                            {/* Header */}
+                            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Draft vs Published Comparison</h3>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                        {comparePublishedLabel
+                                            ? <>Draft <strong>(subject)</strong> vs <strong>{comparePublishedLabel}</strong> (baseline)</>
+                                            : `No active published ${schemeType} version found to compare against.`}
+                                    </p>
+                                </div>
+                                <button onClick={() => setShowCompareModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Body */}
+                            <div style={{ padding: '1.25rem 1.5rem 1.5rem', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {compareLoading ? (
+                                    <div style={{ display: 'flex', height: '12rem', alignItems: 'center', justifyContent: 'center' }}>
+                                        <RefreshCw size={24} style={{ color: '#94a3b8' }} className="animate-spin" />
+                                    </div>
+                                ) : !comparePublishedLabel ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '10rem', gap: '0.75rem' }}>
+                                        <FaCodeBranch size={36} style={{ color: '#e2e8f0' }} />
+                                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#94a3b8' }}>No active published {schemeType} version to compare against.</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Publish a version first before using comparison.</div>
+                                    </div>
+                                ) : compareRows.length === 0 ? (
+                                    <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '0.85rem' }}>
+                                        No data to compare. Ensure the draft has bay assignments.
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Summary counts + view toggle */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                            {Object.entries(COMP_CHANGE_META).map(([type, meta]) => {
+                                                const count = compareRows.filter(r => r.changeType === type).length;
+                                                return (
+                                                    <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '8px', background: meta.bg, border: `1px solid ${meta.border}` }}>
+                                                        <span style={{ fontSize: '1rem', fontWeight: 700, color: meta.color, lineHeight: 1 }}>{count}</span>
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: 600, color: meta.color, whiteSpace: 'nowrap' }}>{meta.label}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                            <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                                                {[{ id: 'change-type', label: 'By Change Type' }, { id: 'stage', label: 'By Stage' }].map(opt => (
+                                                    <button key={opt.id} onClick={() => setCompareGroupBy(opt.id)} style={{
+                                                        padding: '6px 14px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600,
+                                                        fontFamily: "'Poppins', sans-serif", cursor: 'pointer', transition: 'all 0.15s',
+                                                        background: compareGroupBy === opt.id ? '#0f172a' : '#f8fafc',
+                                                        color: compareGroupBy === opt.id ? '#fff' : '#64748b',
+                                                        border: compareGroupBy === opt.id ? 'none' : '1px solid #e2e8f0',
+                                                    }}>{opt.label}</button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Table */}
+                                        <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                            {/* Header row */}
+                                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', alignItems: 'center' }}>
+                                                {['Substation', 'ID', 'Region', 'Feeder', 'Published Stage', 'Draft Stage', 'Change'].map((h, i) => (
+                                                    <div key={i} style={{ fontSize: '0.62rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
+                                                ))}
+                                            </div>
+
+                                            {compareGroupBy === 'change-type' ? (
+                                                ['new', 'revised', 'defeated', 'unchanged'].map(ct => {
+                                                    const rows = compareRows.filter(r => r.changeType === ct);
+                                                    if (rows.length === 0) return null;
+                                                    const meta = COMP_CHANGE_META[ct];
+                                                    return (
+                                                        <div key={ct}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', background: meta.bg, borderBottom: `1px solid ${meta.border}`, borderTop: '1px solid #f1f5f9' }}>
+                                                                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: meta.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{meta.label}</span>
+                                                                <span style={{ fontSize: '0.62rem', color: meta.color, opacity: 0.7 }}>{rows.length} assignment{rows.length !== 1 ? 's' : ''}</span>
+                                                            </div>
+                                                            {rows.map((row, i) => (
+                                                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', borderBottom: '1px solid #f8fafc', alignItems: 'center' }}
+                                                                    onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
+                                                                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                                                                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.substationName}</div>
+                                                                    <div style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#475569', fontWeight: 500 }}>{row.substationId || '—'}</div>
+                                                                    <div style={{ fontSize: '0.75rem', color: '#475569' }}>{row.region}</div>
+                                                                    <div style={{ fontSize: '0.78rem', color: '#0f172a', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.feeder}</div>
+                                                                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{row.oldStageLabel || '—'}</div>
+                                                                    <div style={{ fontSize: '0.72rem', color: ct === 'defeated' ? '#94a3b8' : '#0f172a', fontWeight: ct === 'defeated' ? 400 : 500 }}>{ct === 'defeated' ? '—' : row.stageLabel}</div>
+                                                                    <div><span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap' }}>{meta.label}</span></div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })
+                                            ) : (
+                                                (() => {
+                                                    const stageGroups = new Map();
+                                                    compareRows.forEach(row => {
+                                                        const key = row.changeType === 'defeated' ? '__defeated__' : row.stageLabel;
+                                                        if (!stageGroups.has(key)) stageGroups.set(key, { label: key, color: row.stageColor, rows: [] });
+                                                        stageGroups.get(key).rows.push(row);
+                                                    });
+                                                    return [...stageGroups.entries()].map(([key, group]) => (
+                                                        <div key={key}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', background: '#f8fafc', borderBottom: '1px solid #f1f5f9', borderTop: '1px solid #f1f5f9' }}>
+                                                                {key !== '__defeated__' && <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: group.color, flexShrink: 0 }} />}
+                                                                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: key === '__defeated__' ? '#dc2626' : '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                                    {key === '__defeated__' ? 'Defeated (Removed in draft)' : group.label}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>{group.rows.length} assignment{group.rows.length !== 1 ? 's' : ''}</span>
+                                                            </div>
+                                                            {group.rows.map((row, i) => {
+                                                                const meta = COMP_CHANGE_META[row.changeType];
+                                                                return (
+                                                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', borderBottom: '1px solid #f8fafc', alignItems: 'center' }}
+                                                                        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
+                                                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                                                                        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.substationName}</div>
+                                                                        <div style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#475569', fontWeight: 500 }}>{row.substationId || '—'}</div>
+                                                                        <div style={{ fontSize: '0.75rem', color: '#475569' }}>{row.region}</div>
+                                                                        <div style={{ fontSize: '0.78rem', color: '#0f172a', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.feeder}</div>
+                                                                        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{row.oldStageLabel || '—'}</div>
+                                                                        <div style={{ fontSize: '0.72rem', color: row.changeType === 'defeated' ? '#94a3b8' : '#0f172a', fontWeight: row.changeType === 'defeated' ? 400 : 500 }}>{row.changeType === 'defeated' ? '—' : row.stageLabel}</div>
+                                                                        <div><span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap' }}>{meta.label}</span></div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ));
+                                                })()
+                                            )}
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </motion.div>
                     </motion.div>
