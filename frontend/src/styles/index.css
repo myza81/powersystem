@@ -740,19 +740,6 @@ button, input {
   color: rgba(255, 255, 255, 0.2);
 }
 
-/* Precision Datasheet Refinements */
-.datasheet-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1px;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.datasheet-cell {
-  background: #0f1115;
-  padding: 0.5rem;
-}
-
 /* ── Login Page ───────────────────────────────────────────────── */
 
 .login-input-group {
