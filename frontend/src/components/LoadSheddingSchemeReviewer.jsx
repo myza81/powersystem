@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Search, X, Download, RefreshCw, BarChart2, Filter, RotateCcw, AlertCircle, TriangleAlert, CheckCircle2
+    Search, X, Download, RefreshCw, BarChart2, Filter, RotateCcw, AlertCircle, TriangleAlert, CheckCircle2, GripVertical
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { FaBolt, FaLayerGroup, FaCircleNodes, FaCodeBranch, FaTableList, FaShieldHalved } from 'react-icons/fa6';
@@ -311,13 +311,13 @@ const EXPORT_COLUMNS = [
     { key: 'stage',      label: 'Stage',           defaultOn: true,  getValue: r => r.stageLabel },
     { key: 'substation', label: 'Substation',       defaultOn: true,  getValue: r => r.substationName },
     { key: 'substId',    label: 'Substation ID',    defaultOn: true,  getValue: r => r.substationId },
-    { key: 'type',       label: 'Type',             defaultOn: false, getValue: r => r.type === 'transformer' ? 'TX Bay' : 'Network Pocket' },
     { key: 'region',     label: 'Region',           defaultOn: true,  getValue: r => r.region },
     { key: 'grid',       label: 'Grid',             defaultOn: true,  getValue: r => r.grid },
     { key: 'voltage',    label: 'Voltage (kV)',      defaultOn: true,  getValue: r => r.voltage },
     { key: 'feeder',     label: 'Feeder Bay',       defaultOn: true,  getValue: r => r.feeder },
-    { key: 'mw',         label: 'MW',               defaultOn: true,  getValue: r => r.mw != null ? Math.round(r.mw) : '' },
     { key: 'breaker',    label: 'Breaker No.',      defaultOn: true,  getValue: r => r.breakerNumber },
+    { key: 'mw',         label: 'MW',               defaultOn: true,  getValue: r => r.mw != null ? Math.round(r.mw) : '' },
+    { key: 'type',       label: 'Type',             defaultOn: false, getValue: r => r.type === 'transformer' ? 'TX Bay' : 'Network Pocket' },
     { key: 'thresh1',    label: 'Threshold 1 (Hz)', defaultOn: true,  getValue: r => r.threshold1 },
     { key: 'delay1',     label: 'Delay 1 (s)',       defaultOn: true,  getValue: r => r.delay1 },
     { key: 'thresh2',    label: 'Threshold 2 (Hz)', defaultOn: false, getValue: r => r.threshold2 },
@@ -399,6 +399,8 @@ const LoadSheddingSchemeReviewer = () => {
     const [selectedExportCols, setSelectedExportCols] = useState(
         () => new Set(EXPORT_COLUMNS.filter(c => c.defaultOn).map(c => c.key))
     );
+    const [exportColOrder, setExportColOrder] = useState(() => EXPORT_COLUMNS.map(c => c.key));
+    const dragIdx = React.useRef(null);
 
     // Only show published versions
     const publishedVersions = useMemo(() =>
@@ -688,7 +690,8 @@ const LoadSheddingSchemeReviewer = () => {
 
     const handleExportExcel = () => {
         if (!filteredRows.length) return;
-        const cols = EXPORT_COLUMNS.filter(c => selectedExportCols.has(c.key));
+        const colMap = Object.fromEntries(EXPORT_COLUMNS.map(c => [c.key, c]));
+        const cols = exportColOrder.filter(k => selectedExportCols.has(k)).map(k => colMap[k]);
         const schemeType = selectedScheme?.scheme_type || 'LoadShedding';
         const fileName = `${schemeType}_${selectedScheme?.review_year}_v${selectedScheme?.version}_Assignments`;
         const disclaimer = '⚠ UNCONTROLLED COPY — For internal use only. Verify against the published system.';
@@ -1602,7 +1605,8 @@ const LoadSheddingSchemeReviewer = () => {
 
         {/* ── Export column picker modal ──────────────────────────────────── */}
         {showExportModal && (() => {
-            const activeCols = EXPORT_COLUMNS.filter(c => selectedExportCols.has(c.key));
+            const colMap = Object.fromEntries(EXPORT_COLUMNS.map(c => [c.key, c]));
+            const activeCols = exportColOrder.filter(k => selectedExportCols.has(k)).map(k => colMap[k]);
             const previewRows = filteredRows.filter(r => r.type !== 'pocket_header').slice(0, 5);
             const totalRows = filteredRows.filter(r => r.type !== 'pocket_header').length;
             const compMap = new Map();
@@ -1675,52 +1679,74 @@ const LoadSheddingSchemeReviewer = () => {
                                     ))}
                                 </div>
 
-                                {/* Assignment columns */}
+                                {/* Assignment columns — drag to reorder */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                    {EXPORT_COLUMNS.map(col => {
+                                    {exportColOrder.map((key, idx) => {
+                                        const col = colMap[key];
+                                        if (!col) return null;
                                         const isCompCol = col.key === 'comparison';
                                         const disabled = isCompCol && !prevPublishedScheme;
                                         const checked = !disabled && selectedExportCols.has(col.key);
                                         return (
-                                            <label
+                                            <div
                                                 key={col.key}
-                                                title={disabled ? 'No previous published version available' : undefined}
+                                                draggable
+                                                onDragStart={() => { dragIdx.current = idx; }}
+                                                onDragOver={e => e.preventDefault()}
+                                                onDrop={() => {
+                                                    const from = dragIdx.current;
+                                                    if (from === null || from === idx) return;
+                                                    const next = [...exportColOrder];
+                                                    next.splice(idx, 0, next.splice(from, 1)[0]);
+                                                    setExportColOrder(next);
+                                                    dragIdx.current = null;
+                                                }}
+                                                onDragEnd={() => { dragIdx.current = null; }}
+                                                title={disabled ? 'No previous published version available' : 'Drag to reorder'}
                                                 style={{
-                                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                                    display: 'flex', alignItems: 'center', gap: '6px',
                                                     padding: '0.45rem 0.65rem',
-                                                    borderRadius: '7px', cursor: disabled ? 'not-allowed' : 'pointer',
+                                                    borderRadius: '7px',
                                                     background: disabled ? '#f1f5f9' : checked ? 'rgba(4, 125, 96, 0.06)' : '#f8fafc',
                                                     border: `1px solid ${disabled ? '#e2e8f0' : checked ? 'rgba(4, 125, 96, 0.25)' : '#e2e8f0'}`,
                                                     opacity: disabled ? 0.5 : 1,
                                                     transition: 'all 0.12s',
+                                                    cursor: 'grab',
+                                                    userSelect: 'none',
                                                 }}
                                             >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={checked}
-                                                    disabled={disabled}
-                                                    onChange={() => {
-                                                        if (disabled) return;
-                                                        const next = new Set(selectedExportCols);
-                                                        checked ? next.delete(col.key) : next.add(col.key);
-                                                        setSelectedExportCols(next);
-                                                    }}
-                                                    style={{ accentColor: '#047d60', width: '13px', height: '13px', cursor: disabled ? 'not-allowed' : 'pointer', flexShrink: 0 }}
-                                                />
-                                                <span style={{ fontSize: '0.76rem', fontWeight: 500, color: disabled ? '#94a3b8' : checked ? '#047d60' : '#64748b' }}>
-                                                    {col.label}
-                                                    {isCompCol && prevPublishedScheme && (
-                                                        <span style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 400, display: 'block', lineHeight: 1.2 }}>
-                                                            vs {getVersionLabel(prevPublishedScheme)}
-                                                        </span>
-                                                    )}
-                                                    {isCompCol && !prevPublishedScheme && (
-                                                        <span style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 400, display: 'block', lineHeight: 1.2 }}>
-                                                            No prev. version
-                                                        </span>
-                                                    )}
-                                                </span>
-                                            </label>
+                                                <GripVertical size={12} style={{ color: '#cbd5e1', flexShrink: 0 }} />
+                                                <label
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: disabled ? 'not-allowed' : 'pointer', flex: 1, minWidth: 0 }}
+                                                    onClick={e => e.stopPropagation()}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        disabled={disabled}
+                                                        onChange={() => {
+                                                            if (disabled) return;
+                                                            const next = new Set(selectedExportCols);
+                                                            checked ? next.delete(col.key) : next.add(col.key);
+                                                            setSelectedExportCols(next);
+                                                        }}
+                                                        style={{ accentColor: '#047d60', width: '13px', height: '13px', cursor: disabled ? 'not-allowed' : 'pointer', flexShrink: 0 }}
+                                                    />
+                                                    <span style={{ fontSize: '0.76rem', fontWeight: 500, color: disabled ? '#94a3b8' : checked ? '#047d60' : '#64748b' }}>
+                                                        {col.label}
+                                                        {isCompCol && prevPublishedScheme && (
+                                                            <span style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 400, display: 'block', lineHeight: 1.2 }}>
+                                                                vs {getVersionLabel(prevPublishedScheme)}
+                                                            </span>
+                                                        )}
+                                                        {isCompCol && !prevPublishedScheme && (
+                                                            <span style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 400, display: 'block', lineHeight: 1.2 }}>
+                                                                No prev. version
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </label>
+                                            </div>
                                         );
                                     })}
                                 </div>
