@@ -3261,7 +3261,9 @@ const LoadSheddingDesigner = () => {
 
                                             {compareGroupBy === 'change-type' ? (
                                                 ['new', 'revised', 'defeated', 'unchanged'].map(ct => {
-                                                    const rows = compareRows.filter(r => r.changeType === ct);
+                                                    const rows = compareRows
+                                                        .filter(r => r.changeType === ct)
+                                                        .sort((a, b) => (a.region || '').localeCompare(b.region || '') || (a.substationId || '').localeCompare(b.substationId || ''));
                                                     if (rows.length === 0) return null;
                                                     const meta = COMP_CHANGE_META[ct];
                                                     return (
