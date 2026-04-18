@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Edit2, MapPin, FileText, Upload } from 'lucide-react';
-import { BsTools } from 'react-icons/bs';
+import { MapPin, FileText } from 'lucide-react';
 import { LuCircuitBoard } from 'react-icons/lu';
 import { FiAlertCircle } from 'react-icons/fi';
 
-const SubstationCard = ({ substation, onEdit, onSLDUpload, onViewSld, onLocate, onCriticalClick }) => {
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) onSLDUpload(substation.substation_id, file);
-    };
-
+const SubstationCard = ({ substation, isStaff, onEdit, onViewSld, onLocate, onCriticalClick }) => {
 
     return (
         <motion.div

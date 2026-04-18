@@ -346,27 +346,6 @@ const App = () => {
         setLoading(false);
     };
 
-    const handleProcessSLD = async (substationId) => {
-        setLoading(true);
-        setStatus({ type: 'info', msg: `Analyzing SLD for ${substationId}...` });
-        try {
-            const res = await api.post(`/substations/${substationId}/process_sld/`);
-            setSubstations(prev => prev.map(s => s.substation_id === substationId ? res.data : s));
-
-            // Sync selectedSub if it's the one being processed
-            if (selectedSub && selectedSub.substation_id === substationId) {
-                setSelectedSub(res.data);
-            }
-
-            setStatus({ type: 'success', msg: `SLD Intelligence extracted for ${substationId}` });
-        } catch (err) {
-            console.error(err);
-            setStatus({ type: 'error', msg: err.response?.data?.error || "SLD Analysis failed" });
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleResolveIssue = (issue) => {
         if (issue.type === 'create_substation') {
             setSelectedSub({
@@ -493,9 +472,6 @@ const App = () => {
                                                 substation={sub}
                                                 isStaff={isStaff}
                                                 onEdit={() => setProfileSub(sub)}
-                                                onSLDUpload={handleSLDUpload}
-                                                onProcess={handleProcessSLD}
-                                                processing={loading}
                                                 onViewSld={setViewingSld}
                                                 onLocate={setLocatingSubstation}
                                             />
@@ -539,9 +515,6 @@ const App = () => {
                                                     substation={sub}
                                                     isStaff={isStaff}
                                                     onEdit={() => { setSelectedSub(sub); setView('edit'); }}
-                                                    onSLDUpload={handleSLDUpload}
-                                                    onProcess={handleProcessSLD}
-                                                    processing={loading}
                                                     onViewSld={setViewingSld}
                                                     onLocate={setLocatingSubstation}
                                                 />
@@ -662,8 +635,6 @@ const App = () => {
                         substation={selectedSub}
                         onSave={handleSave}
                         onCancel={() => setView('list')}
-                        onProcess={() => handleProcessSLD(selectedSub.substation_id)}
-                        processing={loading}
                         onViewSld={setViewingSld}
                     />
                 )}

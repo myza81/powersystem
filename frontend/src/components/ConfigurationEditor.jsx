@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trash2, Save, X, Zap, Activity, Cpu, Loader2, FileText } from 'lucide-react';
+import { Plus, Trash2, Save, X, Zap, Activity, FileText } from 'lucide-react';
 
-const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processing, onViewSld }) => {
+const ConfigurationEditor = ({ substation, onSave, onCancel, onViewSld }) => {
     // Safety check
     if (!substation) {
         console.error("ConfigurationEditor: substation prop is missing!");
@@ -112,46 +112,24 @@ const ConfigurationEditor = ({ substation, onSave, onCancel, onProcess, processi
                 </div >
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     {substation.sld_file && (
-                        <>
-                            <button
-                                onClick={() => onViewSld(substation)}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    background: 'rgba(255, 255, 255, 0.1)',
-                                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                                    color: 'white',
-                                    padding: '0.5rem 1rem',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.85rem',
-                                    fontWeight: 600
-                                }}
-                            >
-                                <FileText size={16} /> SLD
-                            </button>
-                            <button
-                                onClick={onProcess}
-                                disabled={processing}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    background: 'rgba(0, 229, 255, 0.1)',
-                                    border: '1px solid rgba(0, 229, 255, 0.3)',
-                                    color: 'var(--accent-cyan)',
-                                    padding: '0.5rem 1rem',
-                                    borderRadius: '6px',
-                                    cursor: processing ? 'not-allowed' : 'pointer',
-                                    fontSize: '0.85rem',
-                                    fontWeight: 600
-                                }}
-                            >
-                                {processing ? <Loader2 size={16} className="animate-spin" /> : <Cpu size={16} />}
-                                Run Intelligence
-                            </button>
-                        </>
+                        <button
+                            onClick={() => onViewSld(substation)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                background: 'rgba(255, 255, 255, 0.1)',
+                                border: '1px solid rgba(255, 255, 255, 0.3)',
+                                color: 'white',
+                                padding: '0.5rem 1rem',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '0.85rem',
+                                fontWeight: 600
+                            }}
+                        >
+                            <FileText size={16} /> SLD
+                        </button>
                     )}
                     <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
                         <X size={24} />
