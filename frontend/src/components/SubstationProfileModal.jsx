@@ -220,6 +220,7 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
 
                         {/* Right: Edit + Close */}
                         <div style={{ display: 'flex', gap: '8px', flexShrink: 0, marginLeft: '1rem' }}>
+                            {onEdit && (
                             <button
                                 onClick={onEdit}
                                 style={{
@@ -237,6 +238,7 @@ const SubstationProfileModal = ({ substation: initialData, onClose, onEdit }) =>
                             >
                                 <Edit2 size={13} /> Edit
                             </button>
+                            )}
                             <button
                                 onClick={onClose}
                                 style={{

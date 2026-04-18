@@ -385,6 +385,7 @@ const App = () => {
 
     const isStaff = currentUser?.is_staff || currentUser?.is_superuser || false;
     const isAdmin = currentUser?.is_superuser || false;
+    const isGuest = currentUser?.is_anonymous || false;
 
     // Redirect to safe view if user navigates to a restricted view without permission
     const STAFF_VIEWS = ['snapshots', 'load-shedding-designer', 'create', 'edit', 'config'];
@@ -699,7 +700,7 @@ const App = () => {
                         <SubstationProfileModal
                             substation={profileSub}
                             onClose={() => setProfileSub(null)}
-                            onEdit={() => {
+                            onEdit={isGuest ? null : () => {
                                 setProfileSub(null);
                                 setSelectedSub(profileSub);
                                 setView('edit');
