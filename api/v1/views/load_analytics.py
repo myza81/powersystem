@@ -1,7 +1,6 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Sum, Count
 from core.models import NetworkSnapshot, NetworkLoad, TopologyBus, SnapshotBusState
 
 
