@@ -52,6 +52,7 @@ const App = () => {
 
     // Initialize view from URL or default to 'list'
     const [view, setView] = useState(() => {
+        if (window.location.pathname === '/login') return 'list'; // will redirect after auth check
         const params = new URLSearchParams(window.location.search);
         return params.get('view') || 'list';
     });
@@ -78,18 +79,24 @@ const App = () => {
         }
     }, [status]);
 
-    // Sync URL with view state
+    // Sync URL with view state (only when logged in)
     useEffect(() => {
+        if (!currentUser || showLogin) return;
         const params = new URLSearchParams(window.location.search);
-        if (params.get('view') !== view) {
-            const newUrl = `${window.location.pathname}?view=${view}`;
+        if (params.get('view') !== view || window.location.pathname === '/login') {
+            const newUrl = `/?view=${view}`;
             window.history.pushState({ path: newUrl }, '', newUrl);
         }
-    }, [view]);
+    }, [view, currentUser, showLogin]);
 
     // Handle browser back/forward buttons
     useEffect(() => {
         const handlePopState = () => {
+            if (window.location.pathname === '/login') {
+                setCurrentUser(null);
+                setShowLogin(true);
+                return;
+            }
             const params = new URLSearchParams(window.location.search);
             const newView = params.get('view') || 'list';
             setView(newView);
@@ -123,12 +130,20 @@ const App = () => {
                 if (res.data.id) {
                     setCurrentUser(res.data);
                     setAuthResolved(true);
+                    // If they landed on /login while already authenticated, redirect to app
+                    if (window.location.pathname === '/login') {
+                        window.history.replaceState({}, '', `/?view=${view}`);
+                    }
                     return;
                 }
             } catch (err) {
                 // 401 = not authenticated, fall through to show login
             }
-            setAuthResolved(true); // show login page
+            // Not authenticated — push /login URL
+            if (window.location.pathname !== '/login') {
+                window.history.replaceState({}, '', '/login');
+            }
+            setAuthResolved(true);
         };
         checkUser();
     }, []);
@@ -141,6 +156,7 @@ const App = () => {
             setCurrentUser(res.data);
             setShowLogin(false);
             setLoginError('');
+            window.history.pushState({}, '', `/?view=${view}`);
         } catch (err) {
             setLoginError(err.response?.data?.error || 'Invalid credentials. Please try again.');
         } finally {
@@ -152,12 +168,14 @@ const App = () => {
         setCurrentUser(ANONYMOUS_USER);
         setShowLogin(false);
         setLoginError('');
+        window.history.pushState({}, '', `/?view=${view}`);
     };
 
     const handleShowLogin = () => {
         setCurrentUser(null);
         setShowLogin(true);
         setLoginError('');
+        window.history.pushState({}, '', '/login');
     };
 
     const handleLogout = async () => {
@@ -168,6 +186,7 @@ const App = () => {
         }
         setCurrentUser(null);
         setShowLogin(true);
+        window.history.pushState({}, '', '/login');
     };
 
     // Apply Filters whenever criteria or substations change

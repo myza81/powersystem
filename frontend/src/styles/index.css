@@ -189,6 +189,7 @@ button, input {
 .text-gradient {
   background: var(--accent-gradient);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   display: inline-block;
 }
@@ -758,26 +759,26 @@ button, input {
   position: relative;
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
   border-radius: 10px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   overflow: hidden;
 }
 
 .login-input-group:focus-within {
-  border-color: rgba(0, 229, 255, 0.4);
-  background: rgba(0, 229, 255, 0.03);
-  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.07);
+  border-color: #024031;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(2, 64, 49, 0.08);
 }
 
 .login-input-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0 0 14px;
-  color: rgba(255, 255, 255, 0.3);
+  width: 42px;
   flex-shrink: 0;
+  color: #94a3b8;
 }
 
 .login-input {
@@ -785,22 +786,22 @@ button, input {
   background: transparent;
   border: none;
   outline: none;
-  color: #fff;
+  color: #0f172a;
   padding: 0.8rem 0.75rem;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-family: inherit;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 .login-input::placeholder {
-  color: rgba(255, 255, 255, 0.25);
+  color: #94a3b8;
   font-size: 0.875rem;
 }
 
 .login-eye-btn {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.35);
+  color: #94a3b8;
   padding: 0 14px;
   display: flex;
   align-items: center;
@@ -809,7 +810,7 @@ button, input {
 }
 
 .login-eye-btn:hover {
-  color: rgba(255, 255, 255, 0.7);
+  color: #475569;
 }
 
 .login-submit-btn {
@@ -818,35 +819,36 @@ button, input {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+  background: #024031;
   border: none;
   border-radius: 10px;
-  color: #000;
+  color: #fff;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-family: inherit;
   padding: 0.85rem 1.5rem;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.2s ease;
   letter-spacing: 0.01em;
 }
 
 .login-submit-btn:hover:not(:disabled) {
-  filter: brightness(1.1);
-  box-shadow: 0 8px 24px rgba(0, 229, 255, 0.3);
+  background: #035a44;
+  box-shadow: 0 6px 20px rgba(2, 64, 49, 0.28);
   transform: translateY(-1px);
 }
 
 .login-submit-btn:disabled {
   cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .login-spinner {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 2px solid rgba(0, 0, 0, 0.2);
-  border-top-color: rgba(0, 0, 0, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
 }
@@ -856,8 +858,8 @@ button, input {
   align-items: center;
   gap: 12px;
   margin: 1.25rem 0;
-  color: rgba(255, 255, 255, 0.2);
-  font-size: 0.8rem;
+  color: #94a3b8;
+  font-size: 0.78rem;
 }
 
 .login-divider::before,
@@ -865,7 +867,7 @@ button, input {
   content: '';
   flex: 1;
   height: 1px;
-  background: rgba(255, 255, 255, 0.07);
+  background: #e2e8f0;
 }
 
 .login-anon-btn {
@@ -874,33 +876,33 @@ button, input {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #fff;
+  border: 1.5px solid #cbd5e1;
   border-radius: 10px;
-  color: rgba(255, 255, 255, 0.55);
+  color: #475569;
   font-weight: 500;
   font-size: 0.875rem;
   font-family: inherit;
   padding: 0.75rem 1.5rem;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.2s ease;
 }
 
 .login-anon-btn:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.04);
+  border-color: #94a3b8;
+  color: #1e293b;
+  background: #f8fafc;
 }
 
 .login-error {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(245, 101, 101, 0.1);
-  border: 1px solid rgba(245, 101, 101, 0.25);
+  background: #fef2f2;
+  border: 1px solid #fecaca;
   border-radius: 8px;
-  color: #fc8181;
-  font-size: 0.85rem;
+  color: #dc2626;
+  font-size: 0.82rem;
   padding: 0.6rem 0.9rem;
 }
 
