@@ -3188,7 +3188,7 @@ const LoadSheddingDesigner = () => {
                             animate={{ y: 0, opacity: 1, scale: 1 }}
                             exit={{ y: 20, opacity: 0, scale: 0.95 }}
                             className="glass-card"
-                            style={{ width: '1200px', maxWidth: '96vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column', padding: 0 }}
+                            style={{ width: '1200px', maxWidth: '96vw', height: '88vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
                         >
                             {/* Header */}
                             <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
