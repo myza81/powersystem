@@ -3196,7 +3196,7 @@ const LoadSheddingDesigner = () => {
                                     <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Draft vs Published Comparison</h3>
                                     <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                                         {comparePublishedLabel
-                                            ? <>Draft <strong>(subject)</strong> vs <strong>{comparePublishedLabel}</strong> (baseline)</>
+                                            ? <>Draft vs <strong>{comparePublishedLabel}</strong></>
                                             : `No active published ${schemeType} version found to compare against.`}
                                     </p>
                                 </div>
@@ -3250,8 +3250,8 @@ const LoadSheddingDesigner = () => {
                                         {/* Table */}
                                         <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                                             {/* Sticky header row */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', alignItems: 'center', position: 'sticky', top: 0, zIndex: 1 }}>
-                                                {['Substation', 'ID', 'Region', 'Feeder', 'Published Stage', 'Draft Stage', 'Change'].map((h, i) => (
+                                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 220px', gap: '0.75rem', padding: '0.6rem 1rem', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', alignItems: 'center', position: 'sticky', top: 0, zIndex: 1 }}>
+                                                {['Substation', 'ID', 'Region', 'Feeder', 'Change'].map((h, i) => (
                                                     <div key={i} style={{ fontSize: '0.62rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
                                                 ))}
                                             </div>
@@ -3271,16 +3271,17 @@ const LoadSheddingDesigner = () => {
                                                                 <span style={{ fontSize: '0.62rem', color: meta.color, opacity: 0.7 }}>{rows.length} assignment{rows.length !== 1 ? 's' : ''}</span>
                                                             </div>
                                                             {rows.map((row, i) => (
-                                                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', borderBottom: '1px solid #f8fafc', alignItems: 'center' }}
+                                                                <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 220px', gap: '0.75rem', padding: '0.6rem 1rem', borderBottom: '1px solid #f8fafc', alignItems: 'center' }}
                                                                     onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
                                                                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
                                                                     <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.substationName}</div>
                                                                     <div style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#475569', fontWeight: 500 }}>{row.substationId || '—'}</div>
                                                                     <div style={{ fontSize: '0.75rem', color: '#475569' }}>{row.region}</div>
                                                                     <div style={{ fontSize: '0.78rem', color: '#0f172a', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.feeder}</div>
-                                                                    <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{row.oldStageLabel || '—'}</div>
-                                                                    <div style={{ fontSize: '0.72rem', color: ct === 'defeated' ? '#94a3b8' : '#0f172a', fontWeight: ct === 'defeated' ? 400 : 500 }}>{ct === 'defeated' ? '—' : row.stageLabel}</div>
-                                                                    <div><span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap' }}>{meta.label}</span></div>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                        <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap', flexShrink: 0 }}>{meta.label}</span>
+                                                                        <span style={{ fontSize: '0.72rem', color: '#64748b', whiteSpace: 'nowrap' }}>{row.oldStageLabel || '—'} → {ct === 'defeated' ? '—' : row.stageLabel}</span>
+                                                                    </div>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -3306,16 +3307,17 @@ const LoadSheddingDesigner = () => {
                                                             {group.rows.map((row, i) => {
                                                                 const meta = COMP_CHANGE_META[row.changeType];
                                                                 return (
-                                                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', borderBottom: '1px solid #f8fafc', alignItems: 'center' }}
+                                                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 220px', gap: '0.75rem', padding: '0.6rem 1rem', borderBottom: '1px solid #f8fafc', alignItems: 'center' }}
                                                                         onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
                                                                         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
                                                                         <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.substationName}</div>
                                                                         <div style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#475569', fontWeight: 500 }}>{row.substationId || '—'}</div>
                                                                         <div style={{ fontSize: '0.75rem', color: '#475569' }}>{row.region}</div>
                                                                         <div style={{ fontSize: '0.78rem', color: '#0f172a', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.feeder}</div>
-                                                                        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{row.oldStageLabel || '—'}</div>
-                                                                        <div style={{ fontSize: '0.72rem', color: row.changeType === 'defeated' ? '#94a3b8' : '#0f172a', fontWeight: row.changeType === 'defeated' ? 400 : 500 }}>{row.changeType === 'defeated' ? '—' : row.stageLabel}</div>
-                                                                        <div><span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap' }}>{meta.label}</span></div>
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                                                            <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap', flexShrink: 0 }}>{meta.label}</span>
+                                                                            <span style={{ fontSize: '0.72rem', color: '#64748b', whiteSpace: 'nowrap' }}>{row.oldStageLabel || '—'} → {row.changeType === 'defeated' ? '—' : row.stageLabel}</span>
+                                                                        </div>
                                                                     </div>
                                                                 );
                                                             })}
