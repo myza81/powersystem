@@ -3249,12 +3249,15 @@ const LoadSheddingDesigner = () => {
 
                                         {/* Table */}
                                         <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                                            {/* Header row */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', alignItems: 'center' }}>
+                                            {/* Sticky header row */}
+                                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', alignItems: 'center', position: 'sticky', top: 0, zIndex: 1 }}>
                                                 {['Substation', 'ID', 'Region', 'Feeder', 'Published Stage', 'Draft Stage', 'Change'].map((h, i) => (
                                                     <div key={i} style={{ fontSize: '0.62rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
                                                 ))}
                                             </div>
+
+                                            {/* Scrollable rows body */}
+                                            <div style={{ overflowY: 'auto', maxHeight: 'calc(88vh - 220px)' }}>
 
                                             {compareGroupBy === 'change-type' ? (
                                                 ['new', 'revised', 'defeated', 'unchanged'].map(ct => {
@@ -3320,7 +3323,8 @@ const LoadSheddingDesigner = () => {
                                                     ));
                                                 })()
                                             )}
-                                        </div>
+                                            </div>{/* end scrollable rows */}
+                                        </div>{/* end table */}
                                     </>
                                 )}
                             </div>
