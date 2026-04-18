@@ -248,7 +248,7 @@ const LoadSheddingDesigner = () => {
     const [editingBayId, setEditingBayId] = useState(null);
     const [editingPocketId, setEditingPocketId] = useState(null);
     const [hoveredPocketId, setHoveredPocketId] = useState(null);
-    const [baySortConfig, setBaySortConfig] = useState({ key: 'substation', direction: 'asc' });
+    const [baySortConfig, setBaySortConfig] = useState({ key: null, direction: 'asc' });
 
     // --- Settings Tab State ---
     const [activeGlobalSettingsTab, setActiveGlobalSettingsTab] = useState('ufls'); // 'ufls' | 'uvls' | 'conflict'
@@ -283,7 +283,18 @@ const LoadSheddingDesigner = () => {
 
     const sortedTransformerBays = useMemo(() => {
         const bays = stages[activeStageIdx]?.transformer_bays || [];
-        if (!baySortConfig.key) return bays;
+        const defaultSort = (a, b) => {
+            const subIdA = a.relay_substation_id || '';
+            const subIdB = b.relay_substation_id || '';
+            const subA = substations.find(s => s.substation_id === subIdA);
+            const subB = substations.find(s => s.substation_id === subIdB);
+            const relayA = relays.find(r => r.id === a.relay);
+            const relayB = relays.find(r => r.id === b.relay);
+            return (subA?.grid || '').localeCompare(subB?.grid || '') ||
+                subIdA.localeCompare(subIdB) ||
+                (relayA?.relay_name || '').localeCompare(relayB?.relay_name || '');
+        };
+        if (!baySortConfig.key) return [...bays].sort(defaultSort);
         return [...bays].sort((a, b) => {
             const subIdA = a.relay_substation_id || '';
             const subIdB = b.relay_substation_id || '';
@@ -323,9 +334,9 @@ const LoadSheddingDesigner = () => {
             }
             if (valA < valB) return baySortConfig.direction === 'asc' ? -1 : 1;
             if (valA > valB) return baySortConfig.direction === 'asc' ? 1 : -1;
-            return 0;
+            return defaultSort(a, b);
         });
-    }, [stages, activeStageIdx, baySortConfig, detailedSubstations]);
+    }, [stages, activeStageIdx, baySortConfig, detailedSubstations, substations, relays]);
 
     // --- Alert Violation Logic ---
     const alertViolations = useMemo(() => {
@@ -2415,7 +2426,13 @@ const LoadSheddingDesigner = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {(stages[activeStageIdx].computed_pockets || []).map((pocket, pIdx) => {
+                                        {[...(stages[activeStageIdx].computed_pockets || [])].sort((a, b) => {
+                                            const subIdA = a.branchGroups?.[0]?.subId || a.branches?.[0] || '';
+                                            const subIdB = b.branchGroups?.[0]?.subId || b.branches?.[0] || '';
+                                            const subA = substations.find(s => s.substation_id === subIdA);
+                                            const subB = substations.find(s => s.substation_id === subIdB);
+                                            return (subA?.grid || '').localeCompare(subB?.grid || '') || subIdA.localeCompare(subIdB);
+                                        }).map((pocket, pIdx) => {
                                             const subItems = (pocket.pocket_substation_details || pocket.pocket_substations || []).map(s => s.substation_id || s);
                                             const groups = (pocket.branchGroups && pocket.branchGroups.length > 0)
                                                 ? pocket.branchGroups
@@ -3121,7 +3138,7 @@ const LoadSheddingDesigner = () => {
                             <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
                                     <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>Assignment Summary</h3>
-                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Workbook-style summary using Stage Label, Grid, Substation, feeder, breaker, and setting columns.</p>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Summary table view</p>
                                 </div>
                                 <button onClick={() => setShowSummaryModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}>
                                     <X size={20} />

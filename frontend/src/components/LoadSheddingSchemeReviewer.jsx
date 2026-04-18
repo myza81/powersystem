@@ -311,19 +311,21 @@ const EXPORT_COLUMNS = [
     { key: 'stage',      label: 'Stage',           defaultOn: true,  getValue: r => r.stageLabel },
     { key: 'substation', label: 'Substation',       defaultOn: true,  getValue: r => r.substationName },
     { key: 'substId',    label: 'Substation ID',    defaultOn: true,  getValue: r => r.substationId },
-    { key: 'type',       label: 'Type',             defaultOn: true,  getValue: r => r.type === 'transformer' ? 'TX Bay' : 'Network Pocket' },
+    { key: 'type',       label: 'Type',             defaultOn: false, getValue: r => r.type === 'transformer' ? 'TX Bay' : 'Network Pocket' },
     { key: 'region',     label: 'Region',           defaultOn: true,  getValue: r => r.region },
     { key: 'grid',       label: 'Grid',             defaultOn: true,  getValue: r => r.grid },
     { key: 'voltage',    label: 'Voltage (kV)',      defaultOn: true,  getValue: r => r.voltage },
     { key: 'feeder',     label: 'Feeder Bay',       defaultOn: true,  getValue: r => r.feeder },
-    { key: 'mw',         label: 'MW',               defaultOn: true,  getValue: r => r.mw != null ? r.mw : '' },
+    { key: 'mw',         label: 'MW',               defaultOn: true,  getValue: r => r.mw != null ? Math.round(r.mw) : '' },
     { key: 'breaker',    label: 'Breaker No.',      defaultOn: true,  getValue: r => r.breakerNumber },
     { key: 'thresh1',    label: 'Threshold 1 (Hz)', defaultOn: true,  getValue: r => r.threshold1 },
     { key: 'delay1',     label: 'Delay 1 (s)',       defaultOn: true,  getValue: r => r.delay1 },
     { key: 'thresh2',    label: 'Threshold 2 (Hz)', defaultOn: false, getValue: r => r.threshold2 },
     { key: 'delay2',     label: 'Delay 2 (s)',       defaultOn: false, getValue: r => r.delay2 },
-    { key: 'critical',   label: 'Critical Subs',     defaultOn: false, getValue: r => r.isCritical ? 'Yes' : '' },
+    { key: 'critical',    label: 'Critical Subs',     defaultOn: false, getValue: r => r.isCritical ? 'Yes' : '' },
+    { key: 'comparison',  label: 'Comparison',        defaultOn: false, getValue: r => r._compRow ? `${CHANGE_META[r._compRow.changeType]?.label || r._compRow.changeType}: ${r._compRow.oldStageLabel || '—'} --> ${r._compRow.changeType === 'defeated' ? '—' : r._compRow.stageLabel}` : '—' },
 ];
+
 
 // Table column definitions
 const COL_TEMPLATE = '2.7fr 0.6fr 0.7fr 0.6fr 0.4fr 2.0fr 1fr 0.5fr';
@@ -342,7 +344,7 @@ const COL_HEADERS = [
 
 const ComparisonRow = ({ row, meta }) => (
     <div
-        style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', borderBottom: '1px solid #f8fafc', alignItems: 'center', transition: 'background 0.1s' }}
+        style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 220px', gap: '0.75rem', padding: '0.6rem 1rem', borderBottom: '1px solid #f8fafc', alignItems: 'center', transition: 'background 0.1s' }}
         onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
     >
@@ -350,13 +352,12 @@ const ComparisonRow = ({ row, meta }) => (
         <div style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#475569', fontWeight: 500 }}>{row.substationId || '—'}</div>
         <div style={{ fontSize: '0.75rem', color: '#475569' }}>{row.region}</div>
         <div style={{ fontSize: '0.78rem', color: '#0f172a', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.feeder}</div>
-        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{row.oldStageLabel || '—'}</div>
-        <div style={{ fontSize: '0.72rem', color: row.changeType === 'defeated' ? '#94a3b8' : '#0f172a', fontWeight: row.changeType === 'defeated' ? 400 : 500 }}>
-            {row.changeType === 'defeated' ? '—' : row.stageLabel}
-        </div>
-        <div>
-            <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap', flexShrink: 0 }}>
                 {meta.label}
+            </span>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', whiteSpace: 'nowrap' }}>
+                {row.oldStageLabel || '—'} → {row.changeType === 'defeated' ? '—' : row.stageLabel}
             </span>
         </div>
     </div>
@@ -383,6 +384,10 @@ const LoadSheddingSchemeReviewer = () => {
     const [compStagesB, setCompStagesB] = useState([]);
     const [loadingComp, setLoadingComp] = useState(false);
     const [compGroupBy, setCompGroupBy] = useState('change-type');
+
+    // Export comparison state (selected scheme vs latest deactivated published version)
+    const [prevSchemeStages, setPrevSchemeStages] = useState([]);
+    const [loadingPrevScheme, setLoadingPrevScheme] = useState(false);
 
     // Filters
     const [search, setSearch] = useState('');
@@ -564,9 +569,47 @@ const LoadSheddingSchemeReviewer = () => {
         [publishedVersions, compSchemeType]
     );
 
+    // Latest deactivated published version of the same scheme type (for export comparison)
+    const prevPublishedScheme = useMemo(() => {
+        if (!selectedScheme) return null;
+        const parseVer = v => {
+            const parts = String(v || '0').split('.').map(Number);
+            return (parts[0] || 0) * 1000 + (parts[1] || 0);
+        };
+        const candidates = publishedVersions.filter(v =>
+            v.scheme_type === selectedScheme.scheme_type &&
+            v.id !== selectedScheme.id &&
+            v.status === 'deactivated'
+        );
+        if (!candidates.length) return null;
+        return candidates.sort((a, b) =>
+            (b.review_year - a.review_year) || (parseVer(b.version) - parseVer(a.version))
+        )[0];
+    }, [selectedScheme, publishedVersions]);
+
+    useEffect(() => {
+        if (!prevPublishedScheme) {
+            setPrevSchemeStages([]);
+            setSelectedExportCols(prev => { const next = new Set(prev); next.delete('comparison'); return next; });
+            return;
+        }
+        setLoadingPrevScheme(true);
+        api.get(`/load-shedding-stages/?version=${prevPublishedScheme.id}&include_bays=true`)
+            .then(res => setPrevSchemeStages(res.data || []))
+            .catch(() => setPrevSchemeStages([]))
+            .finally(() => setLoadingPrevScheme(false));
+    }, [prevPublishedScheme?.id]);
+
     const compRowsA = useMemo(() => buildRows(compStagesA, substations, relays), [compStagesA, substations, relays]);
     const compRowsB = useMemo(() => buildRows(compStagesB, substations, relays), [compStagesB, substations, relays]);
     const comparisonRows = useMemo(() => buildComparisonRows(compRowsA, compRowsB), [compRowsA, compRowsB]);
+
+    // Comparison rows for export: current selected scheme vs latest previous deactivated published
+    const exportCompRows = useMemo(() => {
+        if (!prevPublishedScheme || !prevSchemeStages.length) return [];
+        const prevRows = buildRows(prevSchemeStages, substations, relays);
+        return buildComparisonRows(allRows, prevRows);
+    }, [allRows, prevSchemeStages, substations, relays, prevPublishedScheme]);
 
     const compSummary = useMemo(() => ({
         new:       comparisonRows.filter(r => r.changeType === 'new').length,
@@ -649,14 +692,39 @@ const LoadSheddingSchemeReviewer = () => {
         const schemeType = selectedScheme?.scheme_type || 'LoadShedding';
         const fileName = `${schemeType}_${selectedScheme?.review_year}_v${selectedScheme?.version}_Assignments`;
         const disclaimer = '⚠ UNCONTROLLED COPY — For internal use only. Verify against the published system.';
-        const versionInfo = `${schemeType} ${selectedScheme?.review_year} v${selectedScheme?.version} | Exported: ${new Date().toLocaleString()}`;
+        const compRef = prevPublishedScheme ? ` | Compared to: ${getVersionLabel(prevPublishedScheme)}` : '';
+        const versionInfo = `${schemeType} ${selectedScheme?.review_year} v${selectedScheme?.version}${compRef} | Exported: ${new Date().toLocaleString()}`;
+
+        const compMap = new Map();
+        exportCompRows.forEach(r => {
+            compMap.set(`${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`, r);
+        });
+
         const headers = cols.map(c => c.label);
         const data = filteredRows
             .filter(r => r.type !== 'pocket_header')
-            .map(r => cols.map(c => c.getValue(r)));
-        const ws = XLSX.utils.aoa_to_sheet([[disclaimer], [versionInfo], headers, ...data]);
-        ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
+            .map(r => {
+                const enriched = { ...r, _compRow: compMap.get(`${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`) || null };
+                return cols.map(c => c.getValue(enriched));
+            });
+
+        const includeComp = selectedExportCols.has('comparison');
+        const defeatedRows = includeComp ? exportCompRows.filter(r => r.changeType === 'defeated') : [];
+        if (defeatedRows.length) {
+            data.push(new Array(cols.length).fill(''));
+            data.push([`DEFEATED — Removed in current scheme (${defeatedRows.length} entr${defeatedRows.length === 1 ? 'y' : 'ies'})`]);
+            data.push(headers);
+            defeatedRows.forEach(r => data.push(cols.map(c => c.getValue({ ...r, _compRow: r }))));
+        }
+
         const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet([[disclaimer], [versionInfo], headers, ...data]);
+        const lastCol = Math.max(headers.length - 1, 0);
+        ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } }];
+        if (defeatedRows.length) {
+            const sectionHeaderRow = 2 + filteredRows.filter(r => r.type !== 'pocket_header').length + 2;
+            ws['!merges'].push({ s: { r: sectionHeaderRow, c: 0 }, e: { r: sectionHeaderRow, c: lastCol } });
+        }
         XLSX.utils.book_append_sheet(wb, ws, schemeType);
         XLSX.writeFile(wb, `${fileName}.xlsx`);
         setShowExportModal(false);
@@ -1459,17 +1527,23 @@ const LoadSheddingSchemeReviewer = () => {
                         ) : (
                             <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                                 {/* Table header */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', alignItems: 'center' }}>
-                                    {['Substation', 'ID', 'Region', 'Feeder', 'Old Stage', 'New Stage', 'Change'].map((h, i) => (
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 220px', gap: '0.75rem', padding: '0.6rem 1rem', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', alignItems: 'center', position: 'sticky', top: 0, zIndex: 1 }}>
+                                    {['Substation', 'ID', 'Region', 'Feeder', 'Change'].map((h, i) => (
                                         <div key={i} style={{ fontSize: '0.62rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
                                     ))}
                                 </div>
 
                                 {/* Rows grouped */}
+                                <div style={{ overflowY: 'auto', maxHeight: '520px' }}>
                                 {compGroupBy === 'change-type' ? (
                                     // Group by change type: New → Revised → Defeated → Unchanged
                                     ['new', 'revised', 'defeated', 'unchanged'].map(ct => {
-                                        const rows = comparisonRows.filter(r => r.changeType === ct);
+                                        const rows = comparisonRows
+                                            .filter(r => r.changeType === ct)
+                                            .sort((a, b) =>
+                                                (a.region || '').localeCompare(b.region || '') ||
+                                                (a.substationId || '').localeCompare(b.substationId || '')
+                                            );
                                         if (rows.length === 0) return null;
                                         const meta = CHANGE_META[ct];
                                         return (
@@ -1487,28 +1561,37 @@ const LoadSheddingSchemeReviewer = () => {
                                 ) : (
                                     // Group by newer version's stage
                                     (() => {
+                                        const CT_ORDER = { new: 0, revised: 1, defeated: 2, unchanged: 3 };
                                         const stageGroups = new Map();
                                         comparisonRows.forEach(row => {
                                             const key = row.changeType === 'defeated' ? '__defeated__' : row.stageLabel;
                                             if (!stageGroups.has(key)) stageGroups.set(key, { label: key, color: row.stageColor, rows: [] });
                                             stageGroups.get(key).rows.push(row);
                                         });
-                                        return [...stageGroups.entries()].map(([key, group]) => (
-                                            <div key={key}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', background: '#f8fafc', borderBottom: '1px solid #f1f5f9', borderTop: '1px solid #f1f5f9' }}>
-                                                    {key !== '__defeated__' && <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: group.color, flexShrink: 0 }} />}
-                                                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: key === '__defeated__' ? '#dc2626' : '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                                        {key === '__defeated__' ? 'Defeated (Removed from newer version)' : group.label}
-                                                    </span>
-                                                    <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>{group.rows.length} assignment{group.rows.length !== 1 ? 's' : ''}</span>
+                                        return [...stageGroups.entries()].map(([key, group]) => {
+                                            group.rows.sort((a, b) =>
+                                                (CT_ORDER[a.changeType] ?? 9) - (CT_ORDER[b.changeType] ?? 9) ||
+                                                (a.region || '').localeCompare(b.region || '') ||
+                                                (a.substationId || '').localeCompare(b.substationId || '')
+                                            );
+                                            return (
+                                                <div key={key}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', background: '#f8fafc', borderBottom: '1px solid #f1f5f9', borderTop: '1px solid #f1f5f9' }}>
+                                                        {key !== '__defeated__' && <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: group.color, flexShrink: 0 }} />}
+                                                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: key === '__defeated__' ? '#dc2626' : '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                            {key === '__defeated__' ? 'Defeated (Removed from newer version)' : group.label}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>{group.rows.length} assignment{group.rows.length !== 1 ? 's' : ''}</span>
+                                                    </div>
+                                                    {group.rows.map((row, i) => (
+                                                        <ComparisonRow key={i} row={row} meta={CHANGE_META[row.changeType]} />
+                                                    ))}
                                                 </div>
-                                                {group.rows.map((row, i) => (
-                                                    <ComparisonRow key={i} row={row} meta={CHANGE_META[row.changeType]} />
-                                                ))}
-                                            </div>
-                                        ));
+                                            );
+                                        });
                                     })()
                                 )}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -1522,6 +1605,13 @@ const LoadSheddingSchemeReviewer = () => {
             const activeCols = EXPORT_COLUMNS.filter(c => selectedExportCols.has(c.key));
             const previewRows = filteredRows.filter(r => r.type !== 'pocket_header').slice(0, 5);
             const totalRows = filteredRows.filter(r => r.type !== 'pocket_header').length;
+            const compMap = new Map();
+            exportCompRows.forEach(r => {
+                compMap.set(`${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`, r);
+            });
+            const defeatedPreviewRows = selectedExportCols.has('comparison')
+                ? exportCompRows.filter(r => r.changeType === 'defeated')
+                : [];
 
             return (
                 <div
@@ -1571,7 +1661,7 @@ const LoadSheddingSchemeReviewer = () => {
                                         <button
                                             key={label}
                                             onClick={() => setSelectedExportCols(
-                                                all ? new Set(EXPORT_COLUMNS.map(c => c.key)) : new Set()
+                                                all ? new Set(EXPORT_COLUMNS.filter(c => c.key !== 'comparison' || !!prevPublishedScheme).map(c => c.key)) : new Set()
                                             )}
                                             style={{
                                                 fontSize: '0.7rem', fontWeight: 600, padding: '3px 9px',
@@ -1585,44 +1675,61 @@ const LoadSheddingSchemeReviewer = () => {
                                     ))}
                                 </div>
 
-                                {/* Checkboxes */}
+                                {/* Assignment columns */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                                     {EXPORT_COLUMNS.map(col => {
-                                        const checked = selectedExportCols.has(col.key);
+                                        const isCompCol = col.key === 'comparison';
+                                        const disabled = isCompCol && !prevPublishedScheme;
+                                        const checked = !disabled && selectedExportCols.has(col.key);
                                         return (
                                             <label
                                                 key={col.key}
+                                                title={disabled ? 'No previous published version available' : undefined}
                                                 style={{
                                                     display: 'flex', alignItems: 'center', gap: '8px',
                                                     padding: '0.45rem 0.65rem',
-                                                    borderRadius: '7px', cursor: 'pointer',
-                                                    background: checked ? 'rgba(4, 125, 96, 0.06)' : '#f8fafc',
-                                                    border: `1px solid ${checked ? 'rgba(4, 125, 96, 0.25)' : '#e2e8f0'}`,
+                                                    borderRadius: '7px', cursor: disabled ? 'not-allowed' : 'pointer',
+                                                    background: disabled ? '#f1f5f9' : checked ? 'rgba(4, 125, 96, 0.06)' : '#f8fafc',
+                                                    border: `1px solid ${disabled ? '#e2e8f0' : checked ? 'rgba(4, 125, 96, 0.25)' : '#e2e8f0'}`,
+                                                    opacity: disabled ? 0.5 : 1,
                                                     transition: 'all 0.12s',
                                                 }}
                                             >
                                                 <input
                                                     type="checkbox"
                                                     checked={checked}
+                                                    disabled={disabled}
                                                     onChange={() => {
+                                                        if (disabled) return;
                                                         const next = new Set(selectedExportCols);
                                                         checked ? next.delete(col.key) : next.add(col.key);
                                                         setSelectedExportCols(next);
                                                     }}
-                                                    style={{ accentColor: '#047d60', width: '13px', height: '13px', cursor: 'pointer', flexShrink: 0 }}
+                                                    style={{ accentColor: '#047d60', width: '13px', height: '13px', cursor: disabled ? 'not-allowed' : 'pointer', flexShrink: 0 }}
                                                 />
-                                                <span style={{ fontSize: '0.76rem', fontWeight: 500, color: checked ? '#047d60' : '#64748b' }}>
+                                                <span style={{ fontSize: '0.76rem', fontWeight: 500, color: disabled ? '#94a3b8' : checked ? '#047d60' : '#64748b' }}>
                                                     {col.label}
+                                                    {isCompCol && prevPublishedScheme && (
+                                                        <span style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 400, display: 'block', lineHeight: 1.2 }}>
+                                                            vs {getVersionLabel(prevPublishedScheme)}
+                                                        </span>
+                                                    )}
+                                                    {isCompCol && !prevPublishedScheme && (
+                                                        <span style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 400, display: 'block', lineHeight: 1.2 }}>
+                                                            No prev. version
+                                                        </span>
+                                                    )}
                                                 </span>
                                             </label>
                                         );
                                     })}
                                 </div>
+
                             </div>
 
                             {/* Right panel — live preview */}
                             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '1.25rem', gap: '0.6rem', overflow: 'hidden' }}>
-                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexShrink: 0 }}>
                                     <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8' }}>
                                         Preview
                                     </span>
@@ -1641,42 +1748,36 @@ const LoadSheddingSchemeReviewer = () => {
                                             <thead>
                                                 <tr style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                                                     {activeCols.map(col => (
-                                                        <th key={col.key} style={{
-                                                            padding: '0.5rem 0.75rem',
-                                                            textAlign: 'left', fontWeight: 700,
-                                                            color: '#475569', whiteSpace: 'nowrap',
-                                                            borderBottom: '1px solid #e2e8f0',
-                                                            fontSize: '0.68rem', textTransform: 'uppercase',
-                                                            letterSpacing: '0.05em',
-                                                        }}>
+                                                        <th key={col.key} style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap', borderBottom: '1px solid #e2e8f0', fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                                             {col.label}
                                                         </th>
                                                     ))}
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {previewRows.map((row, i) => (
-                                                    <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
-                                                        {activeCols.map(col => {
-                                                            const val = col.getValue(row);
-                                                            return (
-                                                                <td key={col.key} style={{
-                                                                    padding: '0.45rem 0.75rem',
-                                                                    color: val !== '' && val != null ? '#0f172a' : '#cbd5e1',
-                                                                    borderBottom: '1px solid #f1f5f9',
-                                                                    whiteSpace: 'nowrap',
-                                                                    maxWidth: '180px',
-                                                                    overflow: 'hidden',
-                                                                    textOverflow: 'ellipsis',
-                                                                }}>
-                                                                    {val !== '' && val != null ? String(val) : '—'}
-                                                                </td>
-                                                            );
-                                                        })}
-                                                    </tr>
-                                                ))}
+                                                {previewRows.map((row, i) => {
+                                                    const enriched = { ...row, _compRow: compMap.get(`${row.substationId}||${row.feeder}||${row.type === 'pocket_boundary' ? 'pocket' : row.type}`) || null };
+                                                    return (
+                                                        <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                                                            {activeCols.map(col => {
+                                                                const val = col.getValue(enriched);
+                                                                return (
+                                                                    <td key={col.key} style={{ padding: '0.45rem 0.75rem', color: val !== '' && val != null ? '#0f172a' : '#cbd5e1', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                        {val !== '' && val != null ? String(val) : '—'}
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
+                                    </div>
+                                )}
+                                {defeatedPreviewRows.length > 0 && (
+                                    <div style={{ flexShrink: 0, padding: '0.5rem 0.75rem', borderRadius: '7px', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', fontSize: '0.72rem', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span style={{ fontWeight: 700 }}>{defeatedPreviewRows.length}</span>
+                                        defeated entr{defeatedPreviewRows.length === 1 ? 'y' : 'ies'} (removed from current scheme) will appear at the bottom of the sheet.
                                     </div>
                                 )}
                             </div>
