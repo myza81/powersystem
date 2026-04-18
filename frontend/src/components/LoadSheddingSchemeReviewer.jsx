@@ -172,6 +172,41 @@ const buildRows = (stageDetails, substations, relays) => {
     return rows;
 };
 
+// ─── Comparison helpers ───────────────────────────────────────────────────────
+
+const CHANGE_META = {
+    new:       { label: 'New Assignment', color: '#15803d', bg: '#f0fdf4', border: '#bbf7d0' },
+    revised:   { label: 'Revised',        color: '#b45309', bg: '#fffbeb', border: '#fde68a' },
+    defeated:  { label: 'Defeated',       color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+    unchanged: { label: 'Unchanged',      color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
+};
+
+const buildComparisonRows = (rowsA, rowsB) => {
+    const keyOf = r => `${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`;
+    const mapA = new Map();
+    rowsA.filter(r => r.type !== 'pocket_header').forEach(r => mapA.set(keyOf(r), r));
+    const mapB = new Map();
+    rowsB.filter(r => r.type !== 'pocket_header').forEach(r => mapB.set(keyOf(r), r));
+
+    const results = [];
+    mapA.forEach((rowA, key) => {
+        const rowB = mapB.get(key);
+        if (!rowB) {
+            results.push({ ...rowA, changeType: 'new', oldStageLabel: '—', oldStageColor: null });
+        } else if (rowA.stageLabel !== rowB.stageLabel) {
+            results.push({ ...rowA, changeType: 'revised', oldStageLabel: rowB.stageLabel, oldStageColor: rowB.stageColor });
+        } else {
+            results.push({ ...rowA, changeType: 'unchanged', oldStageLabel: rowB.stageLabel, oldStageColor: rowB.stageColor });
+        }
+    });
+    mapB.forEach((rowB, key) => {
+        if (!mapA.has(key)) {
+            results.push({ ...rowB, changeType: 'defeated', oldStageLabel: rowB.stageLabel, oldStageColor: rowB.stageColor, stageLabel: '—' });
+        }
+    });
+    return results;
+};
+
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 const StatusBadge = ({ scheme }) => {
@@ -305,6 +340,28 @@ const COL_HEADERS = [
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
+const ComparisonRow = ({ row, meta }) => (
+    <div
+        style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', borderBottom: '1px solid #f8fafc', alignItems: 'center', transition: 'background 0.1s' }}
+        onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
+        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.substationName}</div>
+        <div style={{ fontSize: '0.72rem', fontFamily: 'monospace', color: '#475569', fontWeight: 500 }}>{row.substationId || '—'}</div>
+        <div style={{ fontSize: '0.75rem', color: '#475569' }}>{row.region}</div>
+        <div style={{ fontSize: '0.78rem', color: '#0f172a', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.feeder}</div>
+        <div style={{ fontSize: '0.72rem', color: '#64748b' }}>{row.oldStageLabel || '—'}</div>
+        <div style={{ fontSize: '0.72rem', color: row.changeType === 'defeated' ? '#94a3b8' : '#0f172a', fontWeight: row.changeType === 'defeated' ? 400 : 500 }}>
+            {row.changeType === 'defeated' ? '—' : row.stageLabel}
+        </div>
+        <div>
+            <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap' }}>
+                {meta.label}
+            </span>
+        </div>
+    </div>
+);
+
 const LoadSheddingSchemeReviewer = () => {
     const [allVersions, setAllVersions] = useState([]);
     const [selectedScheme, setSelectedScheme] = useState(null);
@@ -317,6 +374,15 @@ const LoadSheddingSchemeReviewer = () => {
     const [activeTab, setActiveTab] = useState('assignments');
     const [complianceReport, setComplianceReport] = useState(null);
     const [loadingCompliance, setLoadingCompliance] = useState(false);
+
+    // Comparison tab state
+    const [compSchemeType, setCompSchemeType] = useState(null);
+    const [compVersionA, setCompVersionA] = useState(null);
+    const [compVersionB, setCompVersionB] = useState(null);
+    const [compStagesA, setCompStagesA] = useState([]);
+    const [compStagesB, setCompStagesB] = useState([]);
+    const [loadingComp, setLoadingComp] = useState(false);
+    const [compGroupBy, setCompGroupBy] = useState('change-type');
 
     // Filters
     const [search, setSearch] = useState('');
@@ -376,6 +442,23 @@ const LoadSheddingSchemeReviewer = () => {
         }
     };
 
+    const fetchComparisonStages = async (vA, vB) => {
+        if (!vA || !vB) return;
+        setLoadingComp(true);
+        try {
+            const [resA, resB] = await Promise.all([
+                api.get(`/load-shedding-stages/?version=${vA.id}&include_bays=true`),
+                api.get(`/load-shedding-stages/?version=${vB.id}&include_bays=true`),
+            ]);
+            setCompStagesA(resA.data || []);
+            setCompStagesB(resB.data || []);
+        } catch (err) {
+            console.error('Failed to fetch comparison stages', err);
+        } finally {
+            setLoadingComp(false);
+        }
+    };
+
     const fetchStages = async (scheme) => {
         setSelectedScheme(scheme);
         if (!scheme) { setStageDetails([]); return; }
@@ -410,6 +493,19 @@ const LoadSheddingSchemeReviewer = () => {
             setComplianceReport(null);
         }
     }, [selectedScheme]);
+
+    useEffect(() => {
+        if (activeTab !== 'comparison') return;
+        const schemeType = compSchemeType || selectedScheme?.scheme_type || availableSchemeTypes[0];
+        if (!schemeType) return;
+        if (compSchemeType !== schemeType) setCompSchemeType(schemeType);
+        const sameType = publishedVersions.filter(v => v.scheme_type === schemeType);
+        if (sameType.length >= 2 && !compVersionA && !compVersionB) {
+            setCompVersionA(sameType[0]);
+            setCompVersionB(sameType[1]);
+            fetchComparisonStages(sameType[0], sameType[1]);
+        }
+    }, [activeTab]);
 
     // ── Computed data ────────────────────────────────────────────────────────
 
@@ -456,6 +552,28 @@ const LoadSheddingSchemeReviewer = () => {
         const grids = [...new Set(allRows.map(r => r.grid).filter(g => g && g !== '—'))].sort();
         return [{ value: 'All', label: 'All Grids' }, ...grids.map(g => ({ value: g, label: g }))];
     }, [allRows]);
+
+    // Comparison computed data
+    const availableSchemeTypes = useMemo(() =>
+        [...new Set(publishedVersions.map(v => v.scheme_type))].sort(),
+        [publishedVersions]
+    );
+
+    const compVersionsForType = useMemo(() =>
+        publishedVersions.filter(v => v.scheme_type === compSchemeType),
+        [publishedVersions, compSchemeType]
+    );
+
+    const compRowsA = useMemo(() => buildRows(compStagesA, substations, relays), [compStagesA, substations, relays]);
+    const compRowsB = useMemo(() => buildRows(compStagesB, substations, relays), [compStagesB, substations, relays]);
+    const comparisonRows = useMemo(() => buildComparisonRows(compRowsA, compRowsB), [compRowsA, compRowsB]);
+
+    const compSummary = useMemo(() => ({
+        new:       comparisonRows.filter(r => r.changeType === 'new').length,
+        revised:   comparisonRows.filter(r => r.changeType === 'revised').length,
+        defeated:  comparisonRows.filter(r => r.changeType === 'defeated').length,
+        unchanged: comparisonRows.filter(r => r.changeType === 'unchanged').length,
+    }), [comparisonRows]);
 
     const typeOptions = [
         { value: 'All', label: 'All Types' },
@@ -562,6 +680,11 @@ const LoadSheddingSchemeReviewer = () => {
             label: 'Alert Report',
             icon: <FaShieldHalved size={15} />,
             badge: complianceReport?.summary?.total,
+        },
+        {
+            id: 'comparison',
+            label: 'Comparison',
+            icon: <FaCodeBranch size={15} />,
         },
     ];
 
@@ -1219,6 +1342,174 @@ const LoadSheddingSchemeReviewer = () => {
                                     )}
                                 </div>
                             </>
+                        )}
+                    </div>
+                )}
+
+                {/* ── COMPARISON TAB ───────────────────────────────────── */}
+                {activeTab === 'comparison' && (
+                    <div style={{ padding: '1.5rem 0', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
+                        {/* Version selector card */}
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8' }}>
+                                Comparison Setup
+                            </div>
+
+                            {/* Scheme type pills */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 500, minWidth: '80px' }}>Scheme Type</span>
+                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                    {availableSchemeTypes.map(type => (
+                                        <button
+                                            key={type}
+                                            onClick={() => {
+                                                setCompSchemeType(type);
+                                                setCompVersionA(null); setCompVersionB(null);
+                                                setCompStagesA([]); setCompStagesB([]);
+                                            }}
+                                            style={{
+                                                padding: '4px 14px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700,
+                                                border: compSchemeType === type ? 'none' : '1px solid #e2e8f0',
+                                                background: compSchemeType === type ? 'linear-gradient(135deg, #047d60, #059669)' : '#fff',
+                                                color: compSchemeType === type ? '#fff' : '#475569',
+                                                cursor: 'pointer', transition: 'all 0.15s',
+                                                fontFamily: "'Poppins', sans-serif",
+                                            }}
+                                        >{type}</button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Version dropdowns */}
+                            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                {[
+                                    { label: 'Newer Version (Subject)', val: compVersionA, setter: setCompVersionA, other: compVersionB },
+                                    { label: 'Compare Against (Baseline)', val: compVersionB, setter: setCompVersionB, other: compVersionA },
+                                ].map(({ label, val, setter, other }) => (
+                                    <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8' }}>{label}</span>
+                                        <select
+                                            value={val?.id || ''}
+                                            onChange={e => {
+                                                const chosen = compVersionsForType.find(v => v.id === e.target.value);
+                                                setter(chosen || null);
+                                                const newA = label.startsWith('Newer') ? chosen : compVersionA;
+                                                const newB = label.startsWith('Compare') ? chosen : compVersionB;
+                                                if (newA && newB && newA.id !== newB.id) fetchComparisonStages(newA, newB);
+                                            }}
+                                            style={{
+                                                height: '36px', padding: '0 32px 0 10px', fontSize: '0.82rem',
+                                                fontFamily: "'Poppins', sans-serif", fontWeight: 600, color: '#0f172a',
+                                                background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px',
+                                                cursor: 'pointer', outline: 'none', minWidth: '200px', appearance: 'none',
+                                                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                                backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
+                                            }}
+                                        >
+                                            <option value="">— Select version —</option>
+                                            {compVersionsForType.map(v => (
+                                                <option key={v.id} value={v.id} disabled={v.id === other?.id}>
+                                                    {getVersionLabel(v)} {v.is_active ? '(Active)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Summary + view toggle */}
+                        {comparisonRows.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                {Object.entries(CHANGE_META).map(([type, meta]) => (
+                                    <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '8px', background: meta.bg, border: `1px solid ${meta.border}` }}>
+                                        <span style={{ fontSize: '1rem', fontWeight: 700, color: meta.color, lineHeight: 1 }}>{compSummary[type]}</span>
+                                        <span style={{ fontSize: '0.65rem', fontWeight: 600, color: meta.color, whiteSpace: 'nowrap' }}>{meta.label}</span>
+                                    </div>
+                                ))}
+                                <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                                    {[{ id: 'change-type', label: 'By Change Type' }, { id: 'stage', label: 'By Stage' }].map(opt => (
+                                        <button key={opt.id} onClick={() => setCompGroupBy(opt.id)} style={{
+                                            padding: '6px 14px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600,
+                                            fontFamily: "'Poppins', sans-serif", cursor: 'pointer', transition: 'all 0.15s',
+                                            background: compGroupBy === opt.id ? '#0f172a' : '#f8fafc',
+                                            color: compGroupBy === opt.id ? '#fff' : '#64748b',
+                                            border: compGroupBy === opt.id ? 'none' : '1px solid #e2e8f0',
+                                        }}>{opt.label}</button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Table */}
+                        {loadingComp ? (
+                            <div style={{ display: 'flex', height: '12rem', alignItems: 'center', justifyContent: 'center' }}>
+                                <RefreshCw size={24} style={{ color: '#94a3b8' }} className="animate-spin" />
+                            </div>
+                        ) : !compVersionA || !compVersionB ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '10rem', gap: '0.75rem' }}>
+                                <FaCodeBranch size={36} style={{ color: '#e2e8f0' }} />
+                                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#94a3b8' }}>Select two versions to compare</div>
+                            </div>
+                        ) : comparisonRows.length === 0 ? (
+                            <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '0.85rem' }}>
+                                No data to compare. Ensure both versions have bay assignments.
+                            </div>
+                        ) : (
+                            <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                {/* Table header */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 100px 100px 1fr 140px 140px 120px', gap: '0.75rem', padding: '0.6rem 1rem', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', alignItems: 'center' }}>
+                                    {['Substation', 'ID', 'Region', 'Feeder', 'Old Stage', 'New Stage', 'Change'].map((h, i) => (
+                                        <div key={i} style={{ fontSize: '0.62rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</div>
+                                    ))}
+                                </div>
+
+                                {/* Rows grouped */}
+                                {compGroupBy === 'change-type' ? (
+                                    // Group by change type: New → Revised → Defeated → Unchanged
+                                    ['new', 'revised', 'defeated', 'unchanged'].map(ct => {
+                                        const rows = comparisonRows.filter(r => r.changeType === ct);
+                                        if (rows.length === 0) return null;
+                                        const meta = CHANGE_META[ct];
+                                        return (
+                                            <div key={ct}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', background: meta.bg, borderBottom: `1px solid ${meta.border}`, borderTop: '1px solid #f1f5f9' }}>
+                                                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: meta.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{meta.label}</span>
+                                                    <span style={{ fontSize: '0.62rem', color: meta.color, opacity: 0.7 }}>{rows.length} assignment{rows.length !== 1 ? 's' : ''}</span>
+                                                </div>
+                                                {rows.map((row, i) => (
+                                                    <ComparisonRow key={i} row={row} meta={meta} />
+                                                ))}
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    // Group by newer version's stage
+                                    (() => {
+                                        const stageGroups = new Map();
+                                        comparisonRows.forEach(row => {
+                                            const key = row.changeType === 'defeated' ? '__defeated__' : row.stageLabel;
+                                            if (!stageGroups.has(key)) stageGroups.set(key, { label: key, color: row.stageColor, rows: [] });
+                                            stageGroups.get(key).rows.push(row);
+                                        });
+                                        return [...stageGroups.entries()].map(([key, group]) => (
+                                            <div key={key}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', background: '#f8fafc', borderBottom: '1px solid #f1f5f9', borderTop: '1px solid #f1f5f9' }}>
+                                                    {key !== '__defeated__' && <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: group.color, flexShrink: 0 }} />}
+                                                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: key === '__defeated__' ? '#dc2626' : '#334155', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                        {key === '__defeated__' ? 'Defeated (Removed from newer version)' : group.label}
+                                                    </span>
+                                                    <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>{group.rows.length} assignment{group.rows.length !== 1 ? 's' : ''}</span>
+                                                </div>
+                                                {group.rows.map((row, i) => (
+                                                    <ComparisonRow key={i} row={row} meta={CHANGE_META[row.changeType]} />
+                                                ))}
+                                            </div>
+                                        ));
+                                    })()
+                                )}
+                            </div>
                         )}
                     </div>
                 )}
