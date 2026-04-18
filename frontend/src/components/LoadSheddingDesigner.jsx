@@ -129,6 +129,12 @@ const LoadSheddingDesigner = () => {
     const [newSettingThreshold, setNewSettingThreshold] = useState('');
     const [newSettingTimeDelay, setNewSettingTimeDelay] = useState('');
 
+    // --- Alert Rule Config State ---
+    const [alertConfigs, setAlertConfigs] = useState([]); // [{id, scheme_type, ufls_protected_stages, critical_restricted_stages, rule1_enforcement, rule2_enforcement}]
+    const [alertConfigLoading, setAlertConfigLoading] = useState(false);
+    const [protectedBaysData, setProtectedBaysData] = useState(null); // {protected_substation_ids, protected_stage_numbers, stage_bay_map}
+    const [showAlertConfigModal, setShowAlertConfigModal] = useState(false);
+
     const getSortedSettings = (settingsList) => {
         return [...settingsList].sort((a, b) => {
             if (b.threshold !== a.threshold) {
@@ -193,6 +199,93 @@ const LoadSheddingDesigner = () => {
         });
     }, [stages, activeStageIdx, baySortConfig, detailedSubstations]);
 
+    // --- Alert Violation Logic ---
+    const alertViolations = useMemo(() => {
+        const violations = [];
+        const currentConfig = alertConfigs.find(c => c.scheme_type === schemeType);
+        if (!currentConfig) return violations;
+
+        const criticalSubIds = new Set(
+            (criticalAssets || []).map(ca => ca.substation_id || ca.substation).filter(Boolean)
+        );
+
+        // Rule 1: Bidirectional cross-scheme overlap check.
+        // protectedBaysData.conflict_substation_ids is already scoped correctly by the backend:
+        //   designing=UFLS  → conflict set = published UVLS + EMLS bays (any stage)
+        //   designing=UVLS/EMLS → conflict set = published UFLS protected stage bays
+        if (protectedBaysData && protectedBaysData.conflict_substation_ids?.length > 0) {
+            const conflictSet = new Set(protectedBaysData.conflict_substation_ids);
+
+            // Build subId → [scheme, ...] map from conflict_info (only populated when designing=UFLS)
+            const subToSchemes = {};
+            if (protectedBaysData.conflict_info) {
+                Object.entries(protectedBaysData.conflict_info).forEach(([scheme, info]) => {
+                    (info.substation_ids || []).forEach(subId => {
+                        if (!subToSchemes[subId]) subToSchemes[subId] = [];
+                        subToSchemes[subId].push(scheme);
+                    });
+                });
+            }
+
+            const stagesToCheck = schemeType === 'UFLS'
+                ? stages.filter(s => (currentConfig.ufls_protected_stages || []).includes(s.stage_number))
+                : stages;
+
+            stagesToCheck.forEach(stage => {
+                (stage.transformer_bays || []).forEach(bay => {
+                    const subId = bay.relay_substation_id;
+                    if (conflictSet.has(subId)) {
+                        let context;
+                        if (schemeType === 'UFLS') {
+                            const schemes = subToSchemes[subId]?.join(' and ') || 'UVLS/EMLS';
+                            context = `already exists in the active published ${schemes}.`;
+                        } else {
+                            context = `already exists in the active published UFLS protected stages (${protectedBaysData.protected_stage_numbers?.join(', ')}).`;
+                        }
+                        violations.push({
+                            rule: 1,
+                            severity: 'error',
+                            substation_id: subId,
+                            stage_label: stage.label,
+                            message: `${subId} is assigned to ${stage.label} but ${context}`,
+                        });
+                    }
+                });
+            });
+        }
+
+        // Rule 2: Critical substations in restricted stages
+        const restrictedStages = new Set(currentConfig.critical_restricted_stages || []);
+        if (restrictedStages.size > 0) {
+            stages.forEach(stage => {
+                if (!restrictedStages.has(stage.stage_number)) return;
+                (stage.transformer_bays || []).forEach(bay => {
+                    const subId = bay.relay_substation_id;
+                    if (criticalSubIds.has(subId)) {
+                        violations.push({
+                            rule: 2,
+                            severity: 'warning',
+                            substation_id: subId,
+                            stage_label: stage.label,
+                            message: `${subId} is a critical substation assigned to ${stage.label}, which is a restricted stage for ${schemeType}.`,
+                        });
+                    }
+                });
+            });
+        }
+
+        return violations;
+    }, [stages, schemeType, alertConfigs, criticalAssets, protectedBaysData]);
+
+    // Derive per-rule enforcement modes for the current scheme type
+    const currentRule1Enforcement = useMemo(() => {
+        return alertConfigs.find(c => c.scheme_type === schemeType)?.rule1_enforcement || 'warn';
+    }, [alertConfigs, schemeType]);
+
+    const currentRule2Enforcement = useMemo(() => {
+        return alertConfigs.find(c => c.scheme_type === schemeType)?.rule2_enforcement || 'warn';
+    }, [alertConfigs, schemeType]);
+
     // --- Create Stage Modal State ---
     const [showCreateStageModal, setShowCreateStageModal] = useState(false);
     const [editingStageIdx, setEditingStageIdx] = useState(null);
@@ -238,6 +331,49 @@ const LoadSheddingDesigner = () => {
     useEffect(() => {
         fetchMasterData();
     }, [view]); // Refresh when going back to manager
+
+    const fetchAlertConfigs = async () => {
+        setAlertConfigLoading(true);
+        try {
+            const res = await api.get('/load-shedding-alert-configs/');
+            setAlertConfigs(res.data);
+        } catch (err) {
+            console.error('Failed to fetch alert configs', err);
+        } finally {
+            setAlertConfigLoading(false);
+        }
+    };
+
+    const fetchProtectedBays = async (designing) => {
+        try {
+            const res = await api.get(`/load-shedding-versions/active-protected-bays/?designing=${designing}`);
+            setProtectedBaysData(res.data);
+        } catch (err) {
+            console.error('Failed to fetch protected bays', err);
+        }
+    };
+
+    useEffect(() => {
+        fetchAlertConfigs();
+    }, []);
+
+    // Re-fetch conflict set whenever the scheme being designed changes
+    useEffect(() => {
+        fetchProtectedBays(schemeType);
+    }, [schemeType]);
+
+    const saveAlertConfig = async (configId, patch) => {
+        try {
+            const res = await api.patch(`/load-shedding-alert-configs/${configId}/`, patch);
+            setAlertConfigs(prev => prev.map(c => c.id === configId ? res.data : c));
+            // Re-fetch conflict bays if protected stages config changed
+            if (patch.ufls_protected_stages !== undefined) {
+                fetchProtectedBays(schemeType);
+            }
+        } catch (err) {
+            console.error('Failed to save alert config', err);
+        }
+    };
 
     // --- Session Storage Auto-Save ---
     useEffect(() => {
@@ -609,6 +745,49 @@ const LoadSheddingDesigner = () => {
         if (active.transformer_bays.find(tb => tb.relay === relay.id)) {
             alert("This relay is already added to this stage.");
             return;
+        }
+
+        // Alert rule enforcement — each rule checked independently per its own enforcement mode
+        {
+            const subId = relay.substation_id || relay.substation;
+            const currentConfig = alertConfigs.find(c => c.scheme_type === schemeType);
+
+            // Rule 1: bidirectional cross-scheme overlap check (block if rule1_enforcement === 'block')
+            if (currentRule1Enforcement === 'block') {
+                const conflictIds = protectedBaysData?.conflict_substation_ids || [];
+                const isProtectedStageForUfls =
+                    schemeType === 'UFLS' &&
+                    (currentConfig?.ufls_protected_stages || []).includes(active.stage_number);
+                const isAnyStageForOthers = schemeType !== 'UFLS';
+                if ((isProtectedStageForUfls || isAnyStageForOthers) && conflictIds.includes(subId)) {
+                    let context;
+                    if (schemeType === 'UFLS') {
+                        const subToSchemes = {};
+                        Object.entries(protectedBaysData?.conflict_info || {}).forEach(([scheme, info]) => {
+                            (info.substation_ids || []).forEach(id => {
+                                if (!subToSchemes[id]) subToSchemes[id] = [];
+                                subToSchemes[id].push(scheme);
+                            });
+                        });
+                        const schemes = subToSchemes[subId]?.join(' and ') || 'UVLS/EMLS';
+                        context = `already exists in the active published ${schemes}`;
+                    } else {
+                        context = `already exists in the active published UFLS protected stages (${protectedBaysData?.protected_stage_numbers?.join(', ')})`;
+                    }
+                    alert(`Blocked: ${subId} ${context}. Rule 1 prevents this overlap.`);
+                    return;
+                }
+            }
+
+            // Rule 2: critical substation in restricted stage (block if rule2_enforcement === 'block')
+            if (currentRule2Enforcement === 'block') {
+                const restrictedStages = new Set(currentConfig?.critical_restricted_stages || []);
+                const isCritical = (criticalAssets || []).some(ca => (ca.substation_id || ca.substation) === subId);
+                if (restrictedStages.has(active.stage_number) && isCritical) {
+                    alert(`Blocked: ${subId} is a critical substation and Stage ${active.stage_number} is a restricted stage for ${schemeType}. Rule 2 prevents this assignment.`);
+                    return;
+                }
+            }
         }
 
         const activeBays = [...active.transformer_bays, {
@@ -2162,8 +2341,17 @@ const LoadSheddingDesigner = () => {
                 <div style={{ width: '280px', flexShrink: 0, borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
                     <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
                         {['library', 'alerts'].map(tab => (
-                            <button key={tab} onClick={() => setAssetLibraryTab(tab)} style={{ flex: 1, padding: '0.5rem', fontSize: '0.63rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: assetLibraryTab === tab ? '#0f172a' : '#94a3b8', background: 'none', border: 'none', borderBottom: `2px solid ${assetLibraryTab === tab ? '#0f172a' : 'transparent'}`, cursor: 'pointer' }}>
-                                {tab === 'library' ? 'Asset Library' : 'Alert Message'}
+                            <button key={tab} onClick={() => setAssetLibraryTab(tab)} style={{ flex: 1, padding: '0.5rem', fontSize: '0.63rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: assetLibraryTab === tab ? '#0f172a' : '#94a3b8', background: 'none', border: 'none', borderBottom: `2px solid ${assetLibraryTab === tab ? '#0f172a' : 'transparent'}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                                {tab === 'library' ? 'Asset Library' : (
+                                    <>
+                                        Alert Message
+                                        {alertViolations.length > 0 && (
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '16px', height: '16px', padding: '0 4px', borderRadius: '999px', background: '#ef4444', color: '#fff', fontSize: '0.52rem', fontWeight: 700, lineHeight: 1 }}>
+                                                {alertViolations.length}
+                                            </span>
+                                        )}
+                                    </>
+                                )}
                             </button>
                         ))}
                     </div>
@@ -2358,14 +2546,221 @@ const LoadSheddingDesigner = () => {
                             </div>
                         </>
                     ) : (
-                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', color: '#94a3b8', fontSize: '0.72rem', textAlign: 'center' }}>
-                            <div><Shield size={20} style={{ color: '#e2e8f0', marginBottom: '0.5rem', display: 'block', margin: '0 auto 0.5rem' }} /><div>Alert Message Content area</div></div>
+                        /* ── ALERT MESSAGE TAB ── */
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                            {/* Header bar */}
+                            <div style={{ padding: '0.6rem 0.75rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <ShieldAlert size={13} color={alertViolations.length > 0 ? '#ef4444' : '#22c55e'} />
+                                    <span style={{ fontSize: '0.63rem', fontWeight: 600, color: '#0f172a' }}>
+                                        {alertViolations.length === 0 ? 'No Violations' : `${alertViolations.length} Violation${alertViolations.length > 1 ? 's' : ''}`}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => setShowAlertConfigModal(true)}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.6rem', fontSize: '0.6rem', fontWeight: 600, color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', fontFamily: "'Poppins',sans-serif" }}
+                                >
+                                    <FaGear size={9} /> Rules
+                                </button>
+                            </div>
+                            {/* Enforcement badges — one per rule */}
+                            <div style={{ padding: '0.4rem 0.75rem', borderBottom: '1px solid #f1f5f9', flexShrink: 0, display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                                {[['R1', currentRule1Enforcement], ['R2', currentRule2Enforcement]].map(([label, mode]) => (
+                                    <span key={label} style={{ fontSize: '0.55rem', padding: '0.15rem 0.5rem', borderRadius: '999px', background: mode === 'block' ? '#fee2e2' : '#fef9c3', color: mode === 'block' ? '#b91c1c' : '#92400e', fontWeight: 700 }}>
+                                        {label}: {mode === 'block' ? 'BLOCK' : 'WARN'}
+                                    </span>
+                                ))}
+                            </div>
+                            {/* Violation list */}
+                            <div style={{ flex: 1, overflowY: 'auto', padding: '0.4rem 0' }}>
+                                {alertViolations.length === 0 ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem', color: '#94a3b8', textAlign: 'center' }}>
+                                        <CheckCircle2 size={24} color="#22c55e" style={{ marginBottom: '0.5rem' }} />
+                                        <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0f172a', marginBottom: '0.25rem' }}>All rules satisfied</div>
+                                        <div style={{ fontSize: '0.6rem', lineHeight: 1.5 }}>No design rule violations detected for the current {schemeType} workspace.</div>
+                                    </div>
+                                ) : (
+                                    alertViolations.map((v, i) => (
+                                        <div key={i} style={{ margin: '0.4rem 0.6rem', padding: '0.5rem 0.65rem', borderRadius: '8px', background: v.severity === 'error' ? '#fef2f2' : '#fffbeb', border: `1px solid ${v.severity === 'error' ? '#fecaca' : '#fde68a'}` }}>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                                                <TriangleAlert size={11} color={v.severity === 'error' ? '#ef4444' : '#f59e0b'} style={{ marginTop: '1px', flexShrink: 0 }} />
+                                                <div>
+                                                    <div style={{ fontSize: '0.58rem', fontWeight: 700, color: v.severity === 'error' ? '#b91c1c' : '#92400e', marginBottom: '0.2rem' }}>
+                                                        Rule {v.rule} — {v.stage_label}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.6rem', color: '#374151', lineHeight: 1.5 }}>{v.message}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
             )}
 
             </div> {/* end 3-column body */}
+
+            {/* ── ALERT CONFIG MODAL ───────────────────────────── */}
+            {showAlertConfigModal && (() => {
+                const SCHEME_LABELS = { UFLS: 'UFLS', UVLS: 'UVLS', EMLS: 'EMLS' };
+
+                const getStageOptions = (schemeKey) => {
+                    // Build stage number options from all stages of the current workspace if same scheme,
+                    // else offer numbers 1–13 as the full range
+                    if (schemeKey === schemeType) {
+                        const nums = stages.map(s => s.stage_number).sort((a, b) => a - b);
+                        return [...new Set([...nums, ...Array.from({ length: 13 }, (_, i) => i + 1)])].sort((a, b) => a - b);
+                    }
+                    return Array.from({ length: 13 }, (_, i) => i + 1);
+                };
+
+                const renderSchemeSection = (cfg) => {
+                    if (!cfg) return null;
+                    const stageOptions = getStageOptions(cfg.scheme_type);
+
+                    const toggleProtectedStage = (num) => {
+                        const current = cfg.ufls_protected_stages || [];
+                        const next = current.includes(num) ? current.filter(n => n !== num) : [...current, num].sort((a, b) => a - b);
+                        saveAlertConfig(cfg.id, { ufls_protected_stages: next });
+                    };
+
+                    const toggleRestrictedStage = (num) => {
+                        const current = cfg.critical_restricted_stages || [];
+                        const next = current.includes(num) ? current.filter(n => n !== num) : [...current, num].sort((a, b) => a - b);
+                        saveAlertConfig(cfg.id, { critical_restricted_stages: next });
+                    };
+
+                    const toggleRule1Enforcement = () => {
+                        saveAlertConfig(cfg.id, { rule1_enforcement: cfg.rule1_enforcement === 'block' ? 'warn' : 'block' });
+                    };
+
+                    const toggleRule2Enforcement = () => {
+                        saveAlertConfig(cfg.id, { rule2_enforcement: cfg.rule2_enforcement === 'block' ? 'warn' : 'block' });
+                    };
+
+                    const EnforcementToggle = ({ label, mode, onToggle }) => (
+                        <button
+                            onClick={onToggle}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem', borderRadius: '999px', border: 'none', cursor: 'pointer', fontFamily: "'Poppins',sans-serif", fontSize: '0.58rem', fontWeight: 700, background: mode === 'block' ? '#fee2e2' : '#fef9c3', color: mode === 'block' ? '#b91c1c' : '#92400e' }}
+                        >
+                            {mode === 'block' ? <Lock size={8} /> : <FiAlertCircle size={8} />}
+                            {label}: {mode === 'block' ? 'Block' : 'Warn'}
+                        </button>
+                    );
+
+                    return (
+                        <div key={cfg.scheme_type} style={{ marginBottom: '1.5rem', padding: '1rem 1.25rem', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#fafafa' }}>
+                            <div style={{ marginBottom: '0.75rem' }}>
+                                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0f172a' }}>{SCHEME_LABELS[cfg.scheme_type]}</span>
+                            </div>
+
+                            {/* Rule 1: UFLS Protected Stages — only shown on UFLS row; toggle for all schemes */}
+                            {cfg.scheme_type === 'UFLS' && (
+                                <div style={{ marginBottom: '0.75rem', paddingBottom: '0.75rem', borderBottom: '1px dashed #e2e8f0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                                        <div style={{ fontSize: '0.63rem', fontWeight: 600, color: '#374151' }}>Rule 1 — UFLS Protected Stages</div>
+                                        <EnforcementToggle label="Rule 1" mode={cfg.rule1_enforcement} onToggle={toggleRule1Enforcement} />
+                                    </div>
+                                    <div style={{ fontSize: '0.6rem', color: '#64748b', marginBottom: '0.45rem', lineHeight: 1.5 }}>
+                                        Substations in these UFLS stages (active published version) may not be reused in any other load shedding scheme.
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                                        {stageOptions.slice(0, 13).map(num => {
+                                            const active = (cfg.ufls_protected_stages || []).includes(num);
+                                            return (
+                                                <button key={num} onClick={() => toggleProtectedStage(num)} style={{ padding: '0.2rem 0.55rem', borderRadius: '6px', border: `1px solid ${active ? '#7c3aed' : '#e2e8f0'}`, background: active ? '#7c3aed' : '#fff', color: active ? '#fff' : '#64748b', fontSize: '0.6rem', fontWeight: 600, cursor: 'pointer', fontFamily: "'Poppins',sans-serif" }}>
+                                                    S{num}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                            {cfg.scheme_type !== 'UFLS' && (
+                                <div style={{ marginBottom: '0.75rem', paddingBottom: '0.75rem', borderBottom: '1px dashed #e2e8f0' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div style={{ fontSize: '0.63rem', fontWeight: 600, color: '#374151' }}>Rule 1 — No Overlap with UFLS Protected Stages</div>
+                                        <EnforcementToggle label="Rule 1" mode={cfg.rule1_enforcement} onToggle={toggleRule1Enforcement} />
+                                    </div>
+                                    <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '0.3rem', lineHeight: 1.5 }}>
+                                        Bays already in active published UFLS protected stages must not be assigned here.
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Rule 2: Critical Substation Restricted Stages */}
+                            <div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                                    <div style={{ fontSize: '0.63rem', fontWeight: 600, color: '#374151' }}>Rule 2 — Critical Substation Restricted Stages</div>
+                                    <EnforcementToggle label="Rule 2" mode={cfg.rule2_enforcement} onToggle={toggleRule2Enforcement} />
+                                </div>
+                                <div style={{ fontSize: '0.6rem', color: '#64748b', marginBottom: '0.45rem', lineHeight: 1.5 }}>
+                                    Critical substations will not be allowed (or flagged) when assigned to these stages.
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                                    {stageOptions.slice(0, 13).map(num => {
+                                        const active = (cfg.critical_restricted_stages || []).includes(num);
+                                        return (
+                                            <button key={num} onClick={() => toggleRestrictedStage(num)} style={{ padding: '0.2rem 0.55rem', borderRadius: '6px', border: `1px solid ${active ? '#0f172a' : '#e2e8f0'}`, background: active ? '#0f172a' : '#fff', color: active ? '#fff' : '#64748b', fontSize: '0.6rem', fontWeight: 600, cursor: 'pointer', fontFamily: "'Poppins',sans-serif" }}>
+                                                S{num}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                };
+
+                return (
+                    <>
+                        <div onClick={() => setShowAlertConfigModal(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', zIndex: 200 }} />
+                        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: '560px', maxWidth: '95vw', maxHeight: '90vh', background: '#fff', borderRadius: '14px', boxShadow: '0 24px 60px rgba(0,0,0,0.18)', zIndex: 201, display: 'flex', flexDirection: 'column', fontFamily: "'Poppins',sans-serif" }}>
+                            {/* Modal header */}
+                            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                                <div>
+                                    <div style={{ fontSize: '0.52rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: '2px' }}>Design Philosophy</div>
+                                    <h2 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>Alert Rules & Configuration</h2>
+                                </div>
+                                <button onClick={() => setShowAlertConfigModal(false)} style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', cursor: 'pointer', color: '#64748b' }}><X size={13} /></button>
+                            </div>
+
+                            <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem' }}>
+                                {/* Rules reference */}
+                                <div style={{ marginBottom: '1.5rem', padding: '0.85rem 1rem', borderRadius: '10px', background: '#f0f9ff', border: '1px solid #bae6fd' }}>
+                                    <div style={{ fontSize: '0.63rem', fontWeight: 700, color: '#0369a1', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                        <FaShieldHalved size={11} /> Design Rules Reference
+                                    </div>
+                                    <div style={{ fontSize: '0.62rem', color: '#0c4a6e', lineHeight: 1.6 }}>
+                                        <div style={{ marginBottom: '0.45rem' }}>
+                                            <strong>Rule 1 — No Cross-Scheme Overlap:</strong> Substations assigned to UFLS protected stages (active published version) must not appear in any other load shedding scheme (UVLS or EMLS), in any stage. Default protected stages: 1, 2, 3.
+                                        </div>
+                                        <div>
+                                            <strong>Rule 2 — Critical Substation Protection:</strong> Critical substations must not be assigned to designated restricted stages per scheme type. This ensures critical infrastructure remains available during early-stage load shedding. Default: UFLS stages 1–3 restricted; UVLS and EMLS unrestricted.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Per-scheme config */}
+                                <div style={{ fontSize: '0.63rem', fontWeight: 700, color: '#374151', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Per-Scheme Configuration</div>
+                                {alertConfigLoading ? (
+                                    <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8', fontSize: '0.68rem' }}>Loading…</div>
+                                ) : (
+                                    ['UFLS', 'UVLS', 'EMLS'].map(s => renderSchemeSection(alertConfigs.find(c => c.scheme_type === s)))
+                                )}
+                            </div>
+
+                            <div style={{ padding: '0.85rem 1.5rem', borderTop: '1px solid #e2e8f0', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+                                <button onClick={() => setShowAlertConfigModal(false)} style={{ padding: '0.45rem 1.1rem', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer', fontFamily: "'Poppins',sans-serif" }}>
+                                    Done
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                );
+            })()}
 
             {/* ── SETTINGS DRAWER ─────────────────────────────── */}
             {showSettingsDrawer && (

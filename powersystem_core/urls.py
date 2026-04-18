@@ -37,6 +37,7 @@ from api.v1.views.shedding import (
     LoadSheddingTransformerBayViewSet,
     LoadSheddingPocketBayViewSet,
     LoadSheddingPocketBoundaryViewSet,
+    LoadSheddingAlertConfigViewSet,
 )
 from api.v1.views.topology import TopologyViewSet
 from api.v1.views.users import CurrentUserView, LoginView, LogoutView, RegisterView
@@ -59,6 +60,7 @@ router.register(r'load-shedding-settings', LoadSheddingSettingViewSet)
 router.register(r'load-shedding-transformer-bays', LoadSheddingTransformerBayViewSet)
 router.register(r'load-shedding-pocket-bays', LoadSheddingPocketBayViewSet)
 router.register(r'load-shedding-pocket-boundaries', LoadSheddingPocketBoundaryViewSet)
+router.register(r'load-shedding-alert-configs', LoadSheddingAlertConfigViewSet, basename='load-shedding-alert-configs')
 
 
 urlpatterns = [

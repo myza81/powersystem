@@ -867,3 +867,73 @@ class LoadSheddingPocketBoundary(models.Model):
     def __str__(self):
         sub_id = self.relay.substation.substation_id if self.relay else self.frozen_substation_id
         return f"Boundary @ {sub_id} for Pocket ({self.pocket})"
+
+
+class LoadSheddingAlertConfig(models.Model):
+    """
+    Global per-scheme-type configuration for the Alert Message system.
+    One row per scheme type, shared across all users.
+    """
+    ENFORCEMENT_CHOICES = [
+        ('warn', 'Warn only'),
+        ('block', 'Block assignment'),
+    ]
+
+    scheme_type = models.CharField(
+        max_length=10,
+        choices=LoadSheddingSchemeType.choices,
+        unique=True,
+    )
+    # Rule 1: which UFLS stage numbers are "protected" (only relevant for the UFLS row)
+    ufls_protected_stages = models.JSONField(
+        default=list,
+        help_text="Stage numbers in the active UFLS version that may not overlap with other scheme types.",
+    )
+    # Rule 2: which stage numbers forbid critical substations for this scheme type
+    critical_restricted_stages = models.JSONField(
+        default=list,
+        help_text="Stage numbers where critical substations must not be assigned.",
+    )
+    rule1_enforcement = models.CharField(
+        max_length=10,
+        choices=ENFORCEMENT_CHOICES,
+        default='warn',
+        help_text="Enforcement mode for Rule 1 (no cross-scheme overlap).",
+    )
+    rule2_enforcement = models.CharField(
+        max_length=10,
+        choices=ENFORCEMENT_CHOICES,
+        default='warn',
+        help_text="Enforcement mode for Rule 2 (critical substation in restricted stages).",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='alert_config_updates',
+    )
+
+    class Meta:
+        verbose_name = "Load Shedding Alert Config"
+        verbose_name_plural = "Load Shedding Alert Configs"
+
+    def __str__(self):
+        return f"AlertConfig [{self.scheme_type}] R1:{self.rule1_enforcement} R2:{self.rule2_enforcement}"
+
+    @classmethod
+    def get_or_create_defaults(cls):
+        """Ensure all three scheme types have a config row with sane defaults."""
+        defaults = {
+            'UFLS': {'ufls_protected_stages': [1, 2, 3], 'critical_restricted_stages': [1, 2, 3]},
+            'UVLS': {'ufls_protected_stages': [], 'critical_restricted_stages': []},
+            'EMLS': {'ufls_protected_stages': [], 'critical_restricted_stages': []},
+        }
+        results = {}
+        for scheme, vals in defaults.items():
+            obj, _ = cls.objects.get_or_create(
+                scheme_type=scheme,
+                defaults={**vals, 'rule1_enforcement': 'warn', 'rule2_enforcement': 'warn'},
+            )
+            results[scheme] = obj
+        return results

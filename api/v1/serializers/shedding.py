@@ -7,6 +7,7 @@ from core.models import (
     LoadSheddingTransformerBay,
     LoadSheddingPocketBay,
     LoadSheddingPocketBoundary,
+    LoadSheddingAlertConfig,
     NetworkSnapshot
 )
 
@@ -263,5 +264,23 @@ class LoadSheddingVersionSerializer(serializers.ModelSerializer):
             else:
                 validated_data['created_by'] = user
         return super().create(validated_data)
+
+
+class LoadSheddingAlertConfigSerializer(serializers.ModelSerializer):
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LoadSheddingAlertConfig
+        fields = [
+            'id', 'scheme_type',
+            'ufls_protected_stages', 'critical_restricted_stages',
+            'rule1_enforcement', 'rule2_enforcement', 'updated_at', 'updated_by', 'updated_by_name',
+        ]
+        read_only_fields = ['updated_at', 'updated_by', 'updated_by_name']
+
+    def get_updated_by_name(self, obj):
+        if obj.updated_by:
+            return obj.updated_by.get_full_name() or obj.updated_by.username
+        return None
 
 

@@ -19,12 +19,14 @@ const DEFAULT_FILTERS = {
     transformerYear: 'All'
 };
 
-const InfoTip = ({ text, direction = 'up' }) => {
+const InfoTip = ({ text, direction = 'up', align = 'center' }) => {
     const [visible, setVisible] = React.useState(false);
     const isDown = direction === 'down';
+    const isLeft = align === 'left';
+    const isRight = align === 'right';
     return (
         <span
-            style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: '4px', verticalAlign: 'middle' }}
+            style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: isLeft ? '0' : '4px', marginRight: isRight ? '0' : '4px', verticalAlign: 'middle' }}
             onMouseEnter={() => setVisible(true)}
             onMouseLeave={() => setVisible(false)}
         >
@@ -33,8 +35,7 @@ const InfoTip = ({ text, direction = 'up' }) => {
                 <span style={{
                     position: 'absolute',
                     ...(isDown ? { top: 'calc(100% + 6px)' } : { bottom: 'calc(100% + 6px)' }),
-                    left: '50%',
-                    transform: 'translateX(-50%)',
+                    ...(isLeft ? { left: 0 } : isRight ? { right: 0 } : { left: '50%', transform: 'translateX(-50%)' }),
                     background: '#1e293b',
                     color: '#f1f5f9',
                     fontSize: '0.72rem',
@@ -54,9 +55,10 @@ const InfoTip = ({ text, direction = 'up' }) => {
                     {text}
                     <span style={{
                         position: 'absolute',
-                        ...(isDown ? { bottom: '100%', borderColor: 'transparent transparent #1e293b transparent' } : { top: '100%', borderColor: '#1e293b transparent transparent transparent' }),
-                        left: '50%',
-                        transform: 'translateX(-50%)',
+                        ...(isDown 
+                            ? { bottom: '100%', borderColor: 'transparent transparent #1e293b transparent' }
+                            : { top: '100%', borderColor: '#1e293b transparent transparent transparent' }),
+                        ...(isLeft ? { left: '12px' } : isRight ? { right: '12px' } : { left: '50%', transform: 'translateX(-50%)' }),
                         borderWidth: '5px',
                         borderStyle: 'solid',
                     }} />
@@ -81,7 +83,7 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
         try {
             const [tagRes, subRes, catRes] = await Promise.all([
                 api.get('/critical-assets/'),
-                api.get('/substations/?is_critical=true'),
+                api.get('/substations/'),
                 api.get('/critical-categories/'),
             ]);
             setTags(tagRes.data || []);
@@ -195,7 +197,12 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
             }
         });
 
-        return map;
+        // Sort by substation_id
+        const sortedKeys = Object.keys(map).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        const sortedMap = {};
+        sortedKeys.forEach(key => { sortedMap[key] = map[key]; });
+        
+        return sortedMap;
     }, [grouped, filteredSubstations]);
 
     // Filter substations for the map (only those with critical assets)
@@ -475,11 +482,32 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
                                 {statCard('Critical Substations', criticalSubIds.size, `of ${totalSubs} total`)}
                                 {statCard('Critical Customers', tags.length, `across ${criticalSubIds.size} substations`)}
                                 {statCard('Relay Coverage', relayCount, 'with active relay', '#8b5cf6', 'Count of substations where has_active_relay is true.', 'down')}
-                                {statCard('Coverage Rate', `${Math.round((criticalSubIds.size / (totalSubs || 1)) * 100)}%`, 'substations tagged critical', '#0ea5e9', 'Critical substations ÷ total substations × 100.', 'down')}
+                                {statCard('% Network Tagged', `${Math.round((criticalSubIds.size / (totalSubs || 1)) * 100)}%`, 'of total substations', '#0ea5e9', 'Critical substations ÷ total substations × 100.', 'down')}
                             </div>
 
                             {/* Charts row */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '0.75rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 220px', gap: '0.75rem' }}>
+
+                                {/* Category breakdown */}
+                                <div style={panelStyle}>
+                                    {panelTitle('Critical Customers by Category')}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                                        {catEntries.length === 0 && <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic' }}>No categories assigned.</div>}
+                                        {catEntries.map(([cat, count]) => (
+                                            <div key={cat} style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: '0.75rem' }}>
+                                                <div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                                                        <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 500 }}>{cat}</span>
+                                                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0f172a' }}>{count}</span>
+                                                    </div>
+                                                    <div style={{ height: '5px', background: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
+                                                        <div style={{ height: '100%', width: `${(count / catMax) * 100}%`, background: '#ff9f43', borderRadius: '99px', transition: 'width 0.4s ease' }} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
 
                                 {/* Regional coverage */}
                                 <div style={panelStyle}>
@@ -547,32 +575,6 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
                                 </div>
                             </div>
 
-                            {/* Bottom row */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-
-                                {/* Category breakdown */}
-                                <div style={panelStyle}>
-                                    {panelTitle('Critical Customers by Category')}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
-                                        {catEntries.length === 0 && <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic' }}>No categories assigned.</div>}
-                                        {catEntries.map(([cat, count]) => (
-                                            <div key={cat} style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: '0.75rem' }}>
-                                                <div>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                                                        <span style={{ fontSize: '0.72rem', color: '#475569', fontWeight: 500 }}>{cat}</span>
-                                                        <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0f172a' }}>{count}</span>
-                                                    </div>
-                                                    <div style={{ height: '5px', background: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
-                                                        <div style={{ height: '100%', width: `${(count / catMax) * 100}%`, background: '#ff9f43', borderRadius: '99px', transition: 'width 0.4s ease' }} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                            </div>
-
                             {/* Load Shedding Scheme Design — Available Relay Substations */}
                             {(() => {
                                 const lsRegionMap = {};
@@ -598,7 +600,10 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
                                             <div>
                                                 {panelTitle('Load Shedding Scheme — Available Relay Substations by Region')}
                                                 <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '-0.5rem', marginBottom: '0.85rem' }}>
-                                                    Relay-installed substations minus those identified as critical — available headroom for load shedding design
+                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        Relay-installed substations minus those identified as critical — available headroom for load shedding design
+                                                        <InfoTip text="This metric only counts substations with an ACTIVE RELAY installed. It differs from 'Regional Coverage - Critical vs Total Substations' which counts ALL critical substations (with or without relay)." direction="down" />
+                                                    </span>
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
@@ -615,10 +620,35 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
                                             </div>
                                         </div>
 
+                                        {/* Bar legend */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginTop: '0.5rem', marginBottom: '0.25rem', padding: '0 0.25rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <div style={{ width: '12px', height: '8px', background: '#e2e8f0', borderRadius: '2px' }} />
+                                                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Total Relay</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <div style={{ width: '12px', height: '8px', background: '#047d60', borderRadius: '2px' }} />
+                                                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Available</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <div style={{ width: '12px', height: '8px', background: 'rgba(239,68,68,0.35)', borderRadius: '2px' }} />
+                                                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Critical (excluded)</span>
+                                            </div>
+                                        </div>
+
                                         {/* Table header */}
                                         <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 60px 70px 70px 80px', gap: '0.75rem', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid #e2e8f0', marginBottom: '0.5rem' }}>
-                                            {['Region', 'Relay substations', 'Relay', 'Critical', 'Available', 'Headroom'].map((h, i) => (
-                                                <div key={h} style={{ fontSize: '0.62rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: i >= 2 ? 'center' : 'left' }}>{h}</div>
+                                            {[
+                                                { h: 'Region', i: 0 },
+                                                { h: 'Relay substations', i: 1, hint: null },
+                                                { h: 'Relay', i: 2, hint: 'Total substations in region with an active relay installed.' },
+                                                { h: 'Critical', i: 3, hint: 'Critical substations that also have an active relay. Differs from "Regional Coverage" which counts ALL critical subs (with or without relay).' },
+                                                { h: 'Available', i: 4, hint: 'Relay substations minus critical ones = available for load shedding design.' },
+                                                { h: 'Headroom', i: 5, hint: 'Percentage of relay capacity available for load shedding (Available ÷ Relay × 100).' },
+                                            ].map(({ h, i, hint }) => (
+                                                <div key={h} style={{ fontSize: '0.62rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: i >= 2 ? 'center' : 'left', display: 'flex', alignItems: 'center', justifyContent: i >= 2 ? 'center' : 'flex-start' }}>
+                                                    {h}{hint && <InfoTip text={hint} />}
+                                                </div>
                                             ))}
                                         </div>
 
@@ -692,17 +722,37 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
                                             </div>
                                             <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
                                                 {[
-                                                    { label: 'Total Grid MW', value: fmw(totalGridMw), color: '#0f172a' },
-                                                    { label: 'Total Relay MW', value: fmw(totalRelayMw), color: '#475569' },
-                                                    { label: 'Critical (excl.)', value: fmw(totalCritMw), color: '#ef4444' },
-                                                    { label: 'Available MW', value: fmw(totalAvailMw), color: '#047d60' },
-                                                    { label: '% of Grid', value: gridPct(totalAvailMw), color: '#0ea5e9' },
-                                                ].map(({ label, value, color }) => (
-                                                    <div key={label} style={{ textAlign: 'center', padding: '0.5rem 0.9rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', minWidth: '80px' }}>
+                                                    { label: 'Total Grid MW', value: fmw(totalGridMw), color: '#0f172a', hint: 'Total load (MW) of all substations in the network from the current network snapshot.' },
+                                                    { label: 'Total Relay MW', value: fmw(totalRelayMw), color: '#475569', hint: 'Total load (MW) of all substations that have an active relay installed.' },
+                                                    { label: 'Critical (excl.)', value: fmw(totalCritMw), color: '#ef4444', hint: 'Load (MW) on substations that are both critical AND have an active relay — these are protected and excluded from load shedding.' },
+                                                    { label: 'Available MW', value: fmw(totalAvailMw), color: '#047d60', hint: 'Total load that can be shed: Total Relay MW minus Critical (excluded) MW.' },
+                                                    { label: '% of Grid', value: gridPct(totalAvailMw), color: '#0ea5e9', hint: 'What percentage of the entire grid load is available for load shedding.' },
+                                                ].map(({ label, value, color, hint }) => (
+                                                    <div key={label} style={{ textAlign: 'center', padding: '0.5rem 0.9rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', minWidth: '80px', position: 'relative' }}>
                                                         <div style={{ fontSize: '1.05rem', fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-                                                        <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '3px', whiteSpace: 'nowrap' }}>{label}</div>
+                                                        <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '3px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                                                            {label}
+                                                            {hint && label === '% of Grid' && <InfoTip text={hint} align="right" />}
+                                                            {hint && label !== '% of Grid' && <InfoTip text={hint} />}
+                                                        </div>
                                                     </div>
                                                 ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Bar legend */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginTop: '0.5rem', marginBottom: '0.25rem', padding: '0 0.25rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <div style={{ width: '12px', height: '8px', background: '#e2e8f0', borderRadius: '2px' }} />
+                                                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Total Relay MW</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <div style={{ width: '12px', height: '8px', background: '#047d60', borderRadius: '2px' }} />
+                                                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Available MW</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <div style={{ width: '12px', height: '8px', background: 'rgba(239,68,68,0.35)', borderRadius: '2px' }} />
+                                                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Critical (excluded)</span>
                                             </div>
                                         </div>
 

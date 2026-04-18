@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Search, X, Download, RefreshCw, BarChart2, Filter, RotateCcw, AlertCircle
+    Search, X, Download, RefreshCw, BarChart2, Filter, RotateCcw, AlertCircle, TriangleAlert, CheckCircle2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { FaBolt, FaLayerGroup, FaCircleNodes, FaCodeBranch, FaTableList } from 'react-icons/fa6';
+import { FaBolt, FaLayerGroup, FaCircleNodes, FaCodeBranch, FaTableList, FaShieldHalved } from 'react-icons/fa6';
 import { normalisePocketBay, computeSchemeMetrics } from '../utils/loadSheddingUtils';
 import SchemeAnalytics from './SchemeAnalytics';
 import api from '../api';
@@ -315,6 +315,8 @@ const LoadSheddingSchemeReviewer = () => {
     const [loading, setLoading] = useState(true);
     const [loadingStages, setLoadingStages] = useState(false);
     const [activeTab, setActiveTab] = useState('assignments');
+    const [complianceReport, setComplianceReport] = useState(null);
+    const [loadingCompliance, setLoadingCompliance] = useState(false);
 
     // Filters
     const [search, setSearch] = useState('');
@@ -360,6 +362,20 @@ const LoadSheddingSchemeReviewer = () => {
         }
     };
 
+    const fetchComplianceReport = async (schemeType) => {
+        const type = schemeType || selectedScheme?.scheme_type;
+        if (!type) return;
+        setLoadingCompliance(true);
+        try {
+            const res = await api.get(`/load-shedding-versions/compliance-report/?scheme_type=${type}`);
+            setComplianceReport(res.data);
+        } catch (err) {
+            console.error('Failed to fetch compliance report', err);
+        } finally {
+            setLoadingCompliance(false);
+        }
+    };
+
     const fetchStages = async (scheme) => {
         setSelectedScheme(scheme);
         if (!scheme) { setStageDetails([]); return; }
@@ -382,6 +398,18 @@ const LoadSheddingSchemeReviewer = () => {
         window.addEventListener('load-shedding-published', handler);
         return () => window.removeEventListener('load-shedding-published', handler);
     }, []);
+
+    useEffect(() => {
+        if (activeTab === 'alert-report' && !complianceReport) fetchComplianceReport();
+    }, [activeTab]);
+
+    useEffect(() => {
+        if (activeTab === 'alert-report' && selectedScheme) {
+            fetchComplianceReport(selectedScheme.scheme_type);
+        } else {
+            setComplianceReport(null);
+        }
+    }, [selectedScheme]);
 
     // ── Computed data ────────────────────────────────────────────────────────
 
@@ -529,6 +557,12 @@ const LoadSheddingSchemeReviewer = () => {
             label: 'Analytics',
             icon: <BarChart2 size={16} />,
         },
+        {
+            id: 'alert-report',
+            label: 'Alert Report',
+            icon: <FaShieldHalved size={15} />,
+            badge: complianceReport?.summary?.total,
+        },
     ];
 
     const tabButtonStyle = (isActive) => ({
@@ -595,6 +629,11 @@ const LoadSheddingSchemeReviewer = () => {
                     >
                         {tab.icon}
                         {tab.label}
+                        {tab.badge > 0 && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '18px', height: '18px', padding: '0 4px', borderRadius: '999px', background: '#ef4444', color: '#fff', fontSize: '0.58rem', fontWeight: 700, marginLeft: '2px' }}>
+                                {tab.badge}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -1036,6 +1075,152 @@ const LoadSheddingSchemeReviewer = () => {
                         schemeMetrics={schemeMetrics}
                         stageDetails={stageDetails}
                     />
+                )}
+
+                {/* ── ALERT REPORT TAB ─────────────────────────────────── */}
+                {activeTab === 'alert-report' && (
+                    <div style={{ padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        {/* Context bar */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                                Subject:{' '}
+                                <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                    {complianceReport?.active_versions?.[complianceReport.subject]?.label || selectedScheme?.scheme_type || '—'}
+                                </span>
+                                {complianceReport && Object.keys(complianceReport.active_versions || {}).length > 1 && (
+                                    <>
+                                        {' · Compared against: '}
+                                        <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                            {Object.entries(complianceReport.active_versions)
+                                                .filter(([s]) => s !== complianceReport.subject)
+                                                .map(([, v]) => v.label).join(' · ')}
+                                        </span>
+                                    </>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => fetchComplianceReport()}
+                                style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#64748b', borderRadius: '8px', padding: '5px 12px', fontSize: '0.75rem', cursor: 'pointer', fontFamily: "'Poppins', sans-serif" }}
+                            >
+                                <RefreshCw size={12} className={loadingCompliance ? 'animate-spin' : ''} /> Refresh
+                            </button>
+                        </div>
+
+                        {loadingCompliance ? (
+                            <div style={{ display: 'flex', height: '10rem', alignItems: 'center', justifyContent: 'center' }}>
+                                <RefreshCw size={24} style={{ color: '#94a3b8' }} className="animate-spin" />
+                            </div>
+                        ) : !complianceReport ? (
+                            <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                                No report available. Click Refresh to load.
+                            </div>
+                        ) : (
+                            <>
+                                {/* Summary cards */}
+                                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                    {[
+                                        { label: 'Rule 1 Violations', desc: 'Cross-scheme overlap', count: complianceReport.summary.rule1_count, color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
+                                        { label: 'Rule 2 Violations', desc: 'Critical in restricted stage', count: complianceReport.summary.rule2_count, color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
+                                        { label: 'Total Violations', desc: 'All rules combined', count: complianceReport.summary.total, color: complianceReport.summary.total === 0 ? '#22c55e' : '#ef4444', bg: complianceReport.summary.total === 0 ? '#f0fdf4' : '#fef2f2', border: complianceReport.summary.total === 0 ? '#bbf7d0' : '#fecaca' },
+                                    ].map(({ label, desc, count, color, bg, border }) => (
+                                        <div key={label} style={{ flex: '1 1 160px', padding: '1rem 1.25rem', borderRadius: '10px', background: bg, border: `1px solid ${border}` }}>
+                                            <div style={{ fontSize: '0.62rem', color: '#64748b', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{desc}</div>
+                                            <div style={{ fontSize: '1.6rem', fontWeight: 700, color, lineHeight: 1 }}>{count}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>{label}</div>
+                                        </div>
+                                    ))}
+                                    {complianceReport.summary.total === 0 && (
+                                        <div style={{ flex: '1 1 260px', padding: '1rem 1.25rem', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            <CheckCircle2 size={22} color="#22c55e" />
+                                            <div>
+                                                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#15803d' }}>All rules satisfied</div>
+                                                <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '2px' }}>No design rule violations across active published schemes.</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Rule 1 table */}
+                                <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                    <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '0.6rem', background: '#f8fafc' }}>
+                                        <FaShieldHalved size={13} color="#ef4444" />
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Rule 1 — Cross-Scheme Overlap</span>
+                                        <span style={{ marginLeft: 'auto', fontSize: '0.65rem', color: '#64748b' }}>
+                                            UFLS protected stages: {complianceReport.protected_stage_numbers?.map(n => `S${n}`).join(', ') || '—'}
+                                        </span>
+                                    </div>
+                                    {complianceReport.rule1_violations.length === 0 ? (
+                                        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.78rem' }}>No violations</div>
+                                    ) : (
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                                            <thead>
+                                                <tr style={{ background: '#f8fafc' }}>
+                                                    {['Substation', `${complianceReport.subject} Stage(s)`, 'Conflicting Scheme', 'Conflicting Stage(s)'].map(h => (
+                                                        <th key={h} style={{ padding: '0.6rem 1rem', textAlign: 'left', color: '#64748b', fontWeight: 600, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {complianceReport.rule1_violations.flatMap(v =>
+                                                    Object.entries(v.conflicting_schemes).map(([scheme, schemeInfo], si) => (
+                                                        <tr key={`${v.substation_id}-${scheme}`} style={{ borderBottom: '1px solid #f1f5f9' }}
+                                                            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                        >
+                                                            {si === 0 && (
+                                                                <td rowSpan={Object.keys(v.conflicting_schemes).length} style={{ padding: '0.65rem 1rem', fontWeight: 600, color: '#0f172a', verticalAlign: 'middle' }}>{v.substation_id}</td>
+                                                            )}
+                                                            {si === 0 && (
+                                                                <td rowSpan={Object.keys(v.conflicting_schemes).length} style={{ padding: '0.65rem 1rem', color: '#0369a1', verticalAlign: 'middle' }}>{(v.subject_stages || []).map(s => s.stage_label).join(', ')}</td>
+                                                            )}
+                                                            <td style={{ padding: '0.65rem 1rem' }}>
+                                                                <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 700, background: scheme === 'UVLS' ? 'rgba(139,92,246,0.1)' : scheme === 'EMLS' ? 'rgba(249,115,22,0.1)' : '#eff6ff', color: scheme === 'UVLS' ? '#7c3aed' : scheme === 'EMLS' ? '#ea580c' : '#1d4ed8', border: `1px solid ${scheme === 'UVLS' ? 'rgba(139,92,246,0.25)' : scheme === 'EMLS' ? 'rgba(249,115,22,0.25)' : '#bfdbfe'}` }}>
+                                                                    {scheme}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ padding: '0.65rem 1rem', color: '#475569' }}>{(schemeInfo.stages || []).map(s => s.stage_label).join(', ')}</td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </div>
+
+                                {/* Rule 2 table */}
+                                <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                    <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '0.6rem', background: '#f8fafc' }}>
+                                        <FaShieldHalved size={13} color="#f59e0b" />
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Rule 2 — Critical Substations in Restricted Stages</span>
+                                    </div>
+                                    {complianceReport.rule2_violations.length === 0 ? (
+                                        <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.78rem' }}>No violations</div>
+                                    ) : (
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                                            <thead>
+                                                <tr style={{ background: '#f8fafc' }}>
+                                                    {['Substation', 'Restricted Stage(s)'].map(h => (
+                                                        <th key={h} style={{ padding: '0.6rem 1rem', textAlign: 'left', color: '#64748b', fontWeight: 600, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {complianceReport.rule2_violations.map((v, i) => (
+                                                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                    >
+                                                        <td style={{ padding: '0.65rem 1rem', fontWeight: 600, color: '#0f172a' }}>{v.substation_id}</td>
+                                                        <td style={{ padding: '0.65rem 1rem', color: '#b45309' }}>{v.stages.map(s => s.stage_label).join(', ')}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
                 )}
 
             </div>

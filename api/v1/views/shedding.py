@@ -12,6 +12,7 @@ from core.models import (
     LoadSheddingTransformerBay,
     LoadSheddingPocketBay,
     LoadSheddingPocketBoundary,
+    LoadSheddingAlertConfig,
 )
 from api.v1.serializers.shedding import (
     LoadSheddingSettingSerializer,
@@ -21,6 +22,7 @@ from api.v1.serializers.shedding import (
     LoadSheddingTransformerBaySerializer,
     LoadSheddingPocketBaySerializer,
     LoadSheddingPocketBoundarySerializer,
+    LoadSheddingAlertConfigSerializer,
 )
 
 class BaseSheddingViewSet(viewsets.ModelViewSet):
@@ -242,6 +244,228 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
 
         return Response(self.get_serializer(new_version).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['get'], url_path='active-protected-bays')
+    def active_protected_bays(self, request):
+        """
+        GET /api/v1/load-shedding-versions/active-protected-bays/?designing=<UFLS|UVLS|EMLS>
+
+        Rule 1 is bidirectional:
+          - designing=UFLS  → returns bays from published UVLS + EMLS (any stage)
+          - designing=UVLS/EMLS → returns bays from published UFLS protected stages only
+        """
+        designing = request.query_params.get('designing', 'UVLS').upper()
+
+        if designing == 'UFLS':
+            # Designing UFLS: conflict set = all bays in published UVLS + EMLS
+            conflict_ids = set()
+            conflict_info = {}
+            for scheme in ['UVLS', 'EMLS']:
+                version = LoadSheddingVersion.objects.filter(
+                    scheme_type=scheme, is_active=True, status='active'
+                ).first()
+                if version:
+                    subs = list(
+                        LoadSheddingTransformerBay.objects
+                        .filter(stage__version=version)
+                        .values_list('relay__substation__substation_id', flat=True)
+                        .distinct()
+                    )
+                    conflict_ids.update(subs)
+                    conflict_info[scheme] = {'version_id': str(version.id), 'substation_ids': subs}
+
+            return Response({
+                'designing': designing,
+                'conflict_substation_ids': list(conflict_ids),
+                'conflict_info': conflict_info,
+                # Keep naming consistent with UVLS/EMLS path so frontend can use same field
+                'protected_stage_numbers': None,
+            })
+
+        else:
+            # Designing UVLS or EMLS: conflict set = UFLS published protected stages
+            ufls_version = LoadSheddingVersion.objects.filter(
+                scheme_type='UFLS', is_active=True, status='active'
+            ).first()
+
+            if not ufls_version:
+                return Response({
+                    'designing': designing,
+                    'conflict_substation_ids': [],
+                    'protected_stage_numbers': [],
+                    'version_id': None,
+                })
+
+            try:
+                config = LoadSheddingAlertConfig.objects.get(scheme_type='UFLS')
+                protected_stage_numbers = config.ufls_protected_stages or []
+            except LoadSheddingAlertConfig.DoesNotExist:
+                protected_stage_numbers = [1, 2, 3]
+
+            protected_stages = ufls_version.stages.filter(stage_number__in=protected_stage_numbers)
+
+            conflict_ids = set()
+            stage_bay_map = {}
+            for stage in protected_stages:
+                subs = list(
+                    stage.transformer_bays
+                    .values_list('relay__substation__substation_id', flat=True)
+                    .distinct()
+                )
+                conflict_ids.update(subs)
+                stage_bay_map[stage.stage_number] = subs
+
+            return Response({
+                'designing': designing,
+                'version_id': str(ufls_version.id),
+                'protected_stage_numbers': protected_stage_numbers,
+                'conflict_substation_ids': list(conflict_ids),
+                'stage_bay_map': stage_bay_map,
+            })
+
+    @action(detail=False, methods=['get'], url_path='compliance-report')
+    def compliance_report(self, request):
+        """
+        GET /api/v1/load-shedding-versions/compliance-report/?scheme_type=UFLS|UVLS|EMLS
+        Scheme-scoped compliance report for the Alert Report tab.
+
+        The subject scheme is the one passed via ?scheme_type.
+        Rule 1:
+          - Subject=UFLS → check UFLS protected stages vs published UVLS/EMLS (any stage)
+          - Subject=UVLS/EMLS → check subject's bays (any stage) vs published UFLS protected stages
+        Rule 2:
+          - Check subject scheme only: critical substations in its restricted stages
+        """
+        from core.models import CriticalAsset
+
+        subject = request.query_params.get('scheme_type', '').upper()
+        if subject not in ('UFLS', 'UVLS', 'EMLS'):
+            return Response({'error': 'scheme_type must be UFLS, UVLS, or EMLS'}, status=400)
+
+        # Fetch all active published versions
+        active_versions = {
+            v.scheme_type: v
+            for v in LoadSheddingVersion.objects.filter(is_active=True, status='active')
+        }
+
+        subject_version = active_versions.get(subject)
+        if not subject_version:
+            return Response({
+                'subject': subject,
+                'active_versions': {},
+                'protected_stage_numbers': [],
+                'rule1_violations': [],
+                'rule2_violations': [],
+                'summary': {'rule1_count': 0, 'rule2_count': 0, 'total': 0},
+            })
+
+        # Fetch alert configs
+        LoadSheddingAlertConfig.get_or_create_defaults()
+        configs = {c.scheme_type: c for c in LoadSheddingAlertConfig.objects.all()}
+
+        # Fetch critical asset substation IDs
+        critical_sub_ids = set(
+            CriticalAsset.objects.values_list('substation__substation_id', flat=True).distinct()
+        )
+
+        def get_sub_stage_map(version):
+            mapping = {}
+            for stage in version.stages.prefetch_related('transformer_bays__relay__substation').all():
+                for bay in stage.transformer_bays.all():
+                    sub_id = bay.relay.substation.substation_id if bay.relay and bay.relay.substation else None
+                    if sub_id:
+                        mapping.setdefault(sub_id, []).append({
+                            'stage_number': stage.stage_number,
+                            'stage_label': stage.label,
+                        })
+            return mapping
+
+        ufls_config = configs.get('UFLS')
+        protected_stage_numbers = set(ufls_config.ufls_protected_stages or []) if ufls_config else {1, 2, 3}
+
+        # --- Rule 1 ---
+        rule1_violations = []
+
+        if subject == 'UFLS':
+            # Subject is UFLS: check UFLS protected stages vs UVLS/EMLS
+            subject_map = get_sub_stage_map(subject_version)
+            for sub_id, stages in subject_map.items():
+                protected = [s for s in stages if s['stage_number'] in protected_stage_numbers]
+                if not protected:
+                    continue
+                conflicting_schemes = {}
+                for other in ['UVLS', 'EMLS']:
+                    if other in active_versions:
+                        other_map = get_sub_stage_map(active_versions[other])
+                        if sub_id in other_map:
+                            conflicting_schemes[other] = {
+                                'version_label': f"{active_versions[other].scheme_type} {active_versions[other].review_year} v{active_versions[other].version}",
+                                'stages': other_map[sub_id],
+                            }
+                if conflicting_schemes:
+                    rule1_violations.append({
+                        'substation_id': sub_id,
+                        'subject_stages': protected,
+                        'conflicting_schemes': conflicting_schemes,
+                    })
+        else:
+            # Subject is UVLS or EMLS: check subject's bays vs UFLS protected stages
+            if 'UFLS' in active_versions:
+                ufls_map = get_sub_stage_map(active_versions['UFLS'])
+                protected_subs = {
+                    sub_id: [s for s in stages if s['stage_number'] in protected_stage_numbers]
+                    for sub_id, stages in ufls_map.items()
+                    if any(s['stage_number'] in protected_stage_numbers for s in stages)
+                }
+                subject_map = get_sub_stage_map(subject_version)
+                for sub_id, stages in subject_map.items():
+                    if sub_id in protected_subs:
+                        rule1_violations.append({
+                            'substation_id': sub_id,
+                            'subject_stages': stages,
+                            'conflicting_schemes': {
+                                'UFLS': {
+                                    'version_label': f"UFLS {active_versions['UFLS'].review_year} v{active_versions['UFLS'].version}",
+                                    'stages': protected_subs[sub_id],
+                                }
+                            },
+                        })
+
+        # --- Rule 2: subject scheme only ---
+        rule2_violations = []
+        cfg = configs.get(subject)
+        restricted = set(cfg.critical_restricted_stages or []) if cfg else set()
+        subject_map = get_sub_stage_map(subject_version)
+        for sub_id, stages in subject_map.items():
+            if sub_id not in critical_sub_ids:
+                continue
+            violating = [s for s in stages if s['stage_number'] in restricted]
+            if violating:
+                rule2_violations.append({
+                    'substation_id': sub_id,
+                    'stages': violating,
+                })
+
+        active_version_info = {
+            scheme: {
+                'version_id': str(v.id),
+                'label': f"{v.scheme_type} {v.review_year} v{v.version}",
+            }
+            for scheme, v in active_versions.items()
+        }
+
+        return Response({
+            'subject': subject,
+            'active_versions': active_version_info,
+            'protected_stage_numbers': sorted(protected_stage_numbers),
+            'rule1_violations': rule1_violations,
+            'rule2_violations': rule2_violations,
+            'summary': {
+                'rule1_count': len(rule1_violations),
+                'rule2_count': len(rule2_violations),
+                'total': len(rule1_violations) + len(rule2_violations),
+            },
+        })
+
 
 class LoadSheddingStageViewSet(BaseSheddingViewSet):
     queryset = LoadSheddingStage.objects.all()
@@ -369,3 +593,38 @@ class LoadSheddingPocketBayViewSet(BaseSheddingViewSet):
 class LoadSheddingPocketBoundaryViewSet(BaseSheddingViewSet):
     queryset = LoadSheddingPocketBoundary.objects.all()
     serializer_class = LoadSheddingPocketBoundarySerializer
+
+
+class LoadSheddingAlertConfigViewSet(BaseSheddingViewSet):
+    """
+    CRUD for per-scheme alert rule configuration.
+    GET  /api/v1/load-shedding-alert-configs/           → list all (auto-creates defaults)
+    GET  /api/v1/load-shedding-alert-configs/{id}/      → single config
+    PATCH /api/v1/load-shedding-alert-configs/{id}/     → update config
+    """
+    serializer_class = LoadSheddingAlertConfigSerializer
+    http_method_names = ['get', 'patch', 'head', 'options']
+
+    def get_queryset(self):
+        # Ensure all three scheme-type rows exist before returning
+        LoadSheddingAlertConfig.get_or_create_defaults()
+        return LoadSheddingAlertConfig.objects.all().order_by('scheme_type')
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        user = self._get_effective_user(request)
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=user if getattr(user, 'is_authenticated', False) else None)
+        return Response(serializer.data)
+
+    def _get_effective_user(self, request):
+        if settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}:
+            from django.contrib.auth.models import AnonymousUser
+            if isinstance(request.user, AnonymousUser) or not request.user.is_authenticated:
+                class FakeAdminUser:
+                    is_staff = True
+                    is_authenticated = True
+                    id = 0
+                return FakeAdminUser()
+        return request.user
