@@ -3206,7 +3206,7 @@ const LoadSheddingDesigner = () => {
                             </div>
 
                             {/* Body */}
-                            <div style={{ padding: '1.25rem 1.5rem 1.5rem', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div style={{ padding: '1.25rem 1.5rem 1.5rem', overflow: 'auto', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                 {compareLoading ? (
                                     <div style={{ display: 'flex', height: '12rem', alignItems: 'center', justifyContent: 'center' }}>
                                         <RefreshCw size={24} style={{ color: '#94a3b8' }} className="animate-spin" />
