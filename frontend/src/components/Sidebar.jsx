@@ -22,13 +22,15 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ── Navigation structure ────────────────────────────────────────────────────
+// requiresStaff: visible to is_staff or is_superuser
+// requiresAdmin: visible to is_superuser only
 const NAV_GROUPS = [
     {
         id: 'grid',
         label: 'Grid',
         icon: Radar,
         items: [
-            { id: 'snapshots',  label: 'Snapshot',       icon: Activity },
+            { id: 'snapshots',  label: 'Snapshot',       icon: Activity,    requiresStaff: true },
             { id: 'dashboard',  label: 'Load Analytics', icon: LayoutGrid },
         ],
     },
@@ -37,7 +39,7 @@ const NAV_GROUPS = [
         label: 'Asset Management',
         icon: Boxes,
         items: [
-            { id: 'list',                  label: 'Substation',        icon: Building2 },
+            { id: 'list',                  label: 'Substation',           icon: Building2 },
             { id: 'critical-substations',  label: 'Critical Substations', icon: ShieldAlert },
         ],
     },
@@ -47,18 +49,27 @@ const NAV_GROUPS = [
         icon: Unplug,
         items: [
             { id: 'load-shedding-viewer',   label: 'Viewer',   icon: MonitorPlay },
-            { id: 'load-shedding-designer', label: 'Designer', icon: PencilRuler },
+            { id: 'load-shedding-designer', label: 'Designer', icon: PencilRuler, requiresStaff: true },
         ],
     },
 ];
 
 const SYSTEM_ITEMS = [
-    { id: 'dev-tools', label: 'Developer Tools', icon: Terminal },
+    { id: 'dev-tools', label: 'Developer Tools', icon: Terminal, requiresAdmin: true },
 ];
 
 // ── Component ───────────────────────────────────────────────────────────────
 const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin }) => {
     const [collapsed, setCollapsed] = useState(false);
+
+    const isStaff = currentUser?.is_staff || currentUser?.is_superuser || false;
+    const isAdmin = currentUser?.is_superuser || false;
+
+    const canSeeItem = (item) => {
+        if (item.requiresAdmin) return isAdmin;
+        if (item.requiresStaff) return isStaff;
+        return true;
+    };
 
     // Track which groups are open — all open by default
     const [openGroups, setOpenGroups] = useState(() =>
@@ -70,8 +81,16 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
 
     const navigate = (view) => onViewChange(view);
 
-    // Returns true if any item in a group matches currentView
-    const groupIsActive = (group) => group.items.some(i => i.id === currentView);
+    // Returns true if any visible item in a group matches currentView
+    const groupIsActive = (group) =>
+        group.items.filter(canSeeItem).some(i => i.id === currentView);
+
+    const userRoleLabel = () => {
+        if (currentUser?.is_anonymous) return 'Guest Access';
+        if (currentUser?.is_superuser) return 'Administrator';
+        if (currentUser?.is_staff) return 'Staff';
+        return 'User';
+    };
 
     return (
         <motion.div
@@ -130,7 +149,7 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                                     transition={{ duration: 0.18 }}
                                     style={{ overflow: 'hidden' }}
                                 >
-                                    {group.items.map(item => (
+                                    {group.items.filter(canSeeItem).map(item => (
                                         <a
                                             key={item.id}
                                             href={`?view=${item.id}`}
@@ -152,31 +171,33 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                     </div>
                 ))}
 
-                {/* System — pinned to bottom, always visible */}
-                <div className="nav-group system-section">
-                    <div className={`nav-group-header ${collapsed ? 'collapsed' : ''}`} style={{ cursor: 'default', pointerEvents: 'none' }}>
-                        <div className="nav-group-title">
-                            <Sliders size={20} className="nav-icon" />
-                            {!collapsed && <span>System</span>}
+                {/* System — pinned to bottom, only shown if user has access to any item */}
+                {SYSTEM_ITEMS.some(canSeeItem) && (
+                    <div className="nav-group system-section">
+                        <div className={`nav-group-header ${collapsed ? 'collapsed' : ''}`} style={{ cursor: 'default', pointerEvents: 'none' }}>
+                            <div className="nav-group-title">
+                                <Sliders size={20} className="nav-icon" />
+                                {!collapsed && <span>System</span>}
+                            </div>
                         </div>
+                        {SYSTEM_ITEMS.filter(canSeeItem).map(item => (
+                            <a
+                                key={item.id}
+                                href={`?view=${item.id}`}
+                                className={[
+                                    'nav-item sub-item',
+                                    collapsed ? 'collapsed' : '',
+                                    currentView === item.id ? 'active' : '',
+                                ].filter(Boolean).join(' ')}
+                                onClick={(e) => { e.preventDefault(); navigate(item.id); }}
+                                title={collapsed ? item.label : ''}
+                            >
+                                <item.icon size={16} />
+                                {!collapsed && <span className="nav-label">{item.label}</span>}
+                            </a>
+                        ))}
                     </div>
-                    {SYSTEM_ITEMS.map(item => (
-                        <a
-                            key={item.id}
-                            href={`?view=${item.id}`}
-                            className={[
-                                'nav-item sub-item',
-                                collapsed ? 'collapsed' : '',
-                                currentView === item.id ? 'active' : '',
-                            ].filter(Boolean).join(' ')}
-                            onClick={(e) => { e.preventDefault(); navigate(item.id); }}
-                            title={collapsed ? item.label : ''}
-                        >
-                            <item.icon size={16} />
-                            {!collapsed && <span className="nav-label">{item.label}</span>}
-                        </a>
-                    ))}
-                </div>
+                )}
 
             </nav>
 
@@ -194,7 +215,7 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
                                 {currentUser?.is_anonymous ? 'Anonymous' : (currentUser?.username || 'Guest')}
                             </div>
                             <div className="user-role" style={currentUser?.is_anonymous ? { color: 'rgba(75, 85, 99, 0.7)' } : {}}>
-                                {currentUser?.is_anonymous ? 'Guest Access' : (currentUser?.is_staff ? 'Administrator' : 'User')}
+                                {userRoleLabel()}
                             </div>
                         </div>
                     )}

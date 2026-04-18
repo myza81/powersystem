@@ -2,10 +2,8 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
 from services.island_detection_service import IslandDetectionService
-from django.conf import settings
-import os
+from api.v1.permissions import IsStaffOrSuperuser
 import logging
 
 from core.models import NetworkSnapshot
@@ -18,9 +16,7 @@ class TopologyViewSet(viewsets.ViewSet):
     API for Network Topology Analysis.
     """
     def get_permissions(self):
-        if settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}:
-            return [AllowAny()]
-        return [IsAuthenticated()]
+        return [IsStaffOrSuperuser()]
     
     @action(detail=False, methods=['get'], url_path='islands')
     def get_islands(self, request):
@@ -267,15 +263,14 @@ class TopologyViewSet(viewsets.ViewSet):
     def _get_snapshot(self, request, snapshot_id=None):
         """Helper to get snapshot with user isolation"""
         from django.db.models import Q
-        
-        # Base query: Created by user OR Public (null)
-        if request.user.is_authenticated:
+
+        if request.user.is_superuser:
+            qs = NetworkSnapshot.objects.all()
+        else:
             qs = NetworkSnapshot.objects.filter(
                 Q(created_by=request.user) | Q(created_by__isnull=True)
             )
-        else:
-            qs = NetworkSnapshot.objects.filter(created_by__isnull=True)
-            
+
         if snapshot_id:
             return qs.filter(id=snapshot_id).first()
         active = qs.filter(is_active=True).order_by('-activated_at').first()

@@ -68,7 +68,7 @@ const InfoTip = ({ text, direction = 'up', align = 'center' }) => {
     );
 };
 
-const CriticalSubstationManager = ({ onEditSubstation }) => {
+const CriticalSubstationManager = ({ isStaff, onEditSubstation }) => {
     const [tags, setTags] = useState([]);
     const [substations, setSubstations] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -373,8 +373,8 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
                                             key={subId}
                                             substation={substationLookup[subId] || { substation_id: subId, name: subId }}
                                             tags={filteredGrouped[subId]}
-                                            onEditAsset={(tag) => onEditSubstation && onEditSubstation(tag.substation, tag.id)}
-                                            onAddAsset={() => onEditSubstation && onEditSubstation(subId, 'new')}
+                                            onEditAsset={isStaff ? (tag) => onEditSubstation && onEditSubstation(tag.substation, tag.id) : null}
+                                            onAddAsset={isStaff ? () => onEditSubstation && onEditSubstation(subId, 'new') : null}
                                         />
                                     ))}
                                 </AnimatePresence>
@@ -404,8 +404,8 @@ const CriticalSubstationManager = ({ onEditSubstation }) => {
                                             key={subId}
                                             substation={substationLookup[subId] || { substation_id: subId, name: subId }}
                                             tags={filteredGrouped[subId]}
-                                            onEditAsset={(tag) => onEditSubstation && onEditSubstation(tag.substation, tag.id)}
-                                            onAddAsset={() => onEditSubstation && onEditSubstation(subId, 'new')}
+                                            onEditAsset={isStaff ? (tag) => onEditSubstation && onEditSubstation(tag.substation, tag.id) : null}
+                                            onAddAsset={isStaff ? () => onEditSubstation && onEditSubstation(subId, 'new') : null}
                                         />
                                     ))}
                                 </AnimatePresence>

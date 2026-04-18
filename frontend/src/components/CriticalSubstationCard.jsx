@@ -203,9 +203,10 @@ const getGaugeColors = (sensitivity) => {
                 {groupedAssets.slice(0, 4).map((item, idx) => (
                     <div
                         key={item.id}
-                        onClick={() => onEditAsset(item.originalAsset)}
+                        onClick={onEditAsset ? () => onEditAsset(item.originalAsset) : undefined}
                         style={{
                             ...cardStyle,
+                            cursor: onEditAsset ? 'pointer' : 'default',
                             background: hoveredRow === idx ? '#f8fafc' : 'transparent',
                             borderBottom: idx === Math.min(groupedAssets.length - 1, 3) ? 'none' : '1px solid #f1f5f9'
                         }}
@@ -293,34 +294,36 @@ const getGaugeColors = (sensitivity) => {
                     </div>
                 )}
 
-                <div style={{
-                    display: 'flex',
-                    gap: '8px',
-                    padding: '10px 16px',
-                    borderTop: '1px solid #f1f5f9',
-                    background: '#fafafa'
-                }}>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (onAddAsset) onAddAsset();
-                        }}
-                        style={actionBtnStyle}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#f1f5f9';
-                            e.currentTarget.style.borderColor = '#ff9f43';
-                            e.currentTarget.style.color = '#ff9f43';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent';
-                            e.currentTarget.style.borderColor = '#e2e8f0';
-                            e.currentTarget.style.color = '#64748b';
-                        }}
-                    >
-                        <Plus size={14} />
-                        Add Asset
-                    </button>
-                </div>
+                {onAddAsset && (
+                    <div style={{
+                        display: 'flex',
+                        gap: '8px',
+                        padding: '10px 16px',
+                        borderTop: '1px solid #f1f5f9',
+                        background: '#fafafa'
+                    }}>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onAddAsset();
+                            }}
+                            style={actionBtnStyle}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#f1f5f9';
+                                e.currentTarget.style.borderColor = '#ff9f43';
+                                e.currentTarget.style.color = '#ff9f43';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'transparent';
+                                e.currentTarget.style.borderColor = '#e2e8f0';
+                                e.currentTarget.style.color = '#64748b';
+                            }}
+                        >
+                            <Plus size={14} />
+                            Add Asset
+                        </button>
+                    </div>
+                )}
             </div>
         </motion.div>
     );

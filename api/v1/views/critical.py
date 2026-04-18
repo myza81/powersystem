@@ -1,6 +1,4 @@
 from rest_framework import viewsets, permissions, filters
-from django.conf import settings
-import os
 
 from core.models import CriticalCategory, CriticalSource, CriticalAsset
 from api.v1.serializers.critical import (
@@ -8,15 +6,16 @@ from api.v1.serializers.critical import (
     CriticalSourceSerializer,
     CriticalAssetSerializer,
 )
+from api.v1.permissions import IsStaffOrSuperuser
 
 
 class BaseCriticalViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
 
     def get_permissions(self):
-        if settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}:
+        if self.request.method in permissions.SAFE_METHODS:
             return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
+        return [IsStaffOrSuperuser()]
 
 
 class CriticalCategoryViewSet(BaseCriticalViewSet):

@@ -252,16 +252,9 @@ class LoadSheddingVersionSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        from django.conf import settings
-        import os
-        is_dev_mode = settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}
-        
-        if 'request' in self.context and self.context['request'].user:
+        if 'request' in self.context:
             user = self.context['request'].user
-            # Skip assigning AnonymousUser in dev mode
-            if is_dev_mode and (user.is_anonymous or not user.is_authenticated):
-                validated_data.pop('created_by', None)
-            else:
+            if user and user.is_authenticated:
                 validated_data['created_by'] = user
         return super().create(validated_data)
 

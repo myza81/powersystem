@@ -1,9 +1,8 @@
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.conf import settings
 from django.utils import timezone
-import os
+from api.v1.permissions import IsStaffOrSuperuser, IsSuperuser
 
 from core.models import (
     LoadSheddingSetting,
@@ -29,22 +28,16 @@ class BaseSheddingViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
 
     def get_permissions(self):
-        if settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}:
+        if self.request.method in permissions.SAFE_METHODS:
             return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
+        return [IsStaffOrSuperuser()]
 
 class LoadSheddingSettingViewSet(BaseSheddingViewSet):
     queryset = LoadSheddingSetting.objects.all()
     serializer_class = LoadSheddingSettingSerializer
 
     def get_permissions(self):
-        # Allow creating for all authenticated (or Any in debug)
-        # But restrict delete/update to staff
-        if self.action in ['destroy', 'update', 'partial_update']:
-            if settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}:
-                return [permissions.AllowAny()]
-            return [permissions.IsAdminUser()]
-        return super().get_permissions()
+        return [IsStaffOrSuperuser()]
 
     def _check_in_use(self, instance):
         from core.models import LoadSheddingStageSetting
@@ -83,60 +76,50 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
     serializer_class = LoadSheddingVersionSerializer
     search_fields = ['review_year']
 
+    def get_permissions(self):
+        # Public read: viewer and compliance endpoints are accessible to all
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.AllowAny()]
+        return [IsStaffOrSuperuser()]
+
     def get_queryset(self):
         user = self.request.user
-        
-        # For development with DJANGO_PUBLIC_API, act as staff
-        is_dev_admin = settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}
 
-        if (not user or user.is_anonymous) and not is_dev_admin:
-            return LoadSheddingVersion.objects.none()
-        
-        # Admins can see everything
-        if getattr(user, 'is_staff', False) or is_dev_admin:
+        # Superuser sees everything (all drafts + published)
+        if user and user.is_authenticated and user.is_superuser:
             return LoadSheddingVersion.objects.all()
-        
-        # Global scope for active/deactivated, user scope for drafts
-        from django.db.models import Q
-        return LoadSheddingVersion.objects.filter(
-            Q(status__in=['active', 'deactivated']) | Q(status='draft', created_by=user)
-        )
+
+        # Staff sees own drafts + all published versions
+        if user and user.is_authenticated and user.is_staff:
+            from django.db.models import Q
+            return LoadSheddingVersion.objects.filter(
+                Q(status__in=['active', 'deactivated']) | Q(status='draft', created_by=user)
+            )
+
+        # Guest / anonymous: published versions only
+        return LoadSheddingVersion.objects.filter(status__in=['active', 'deactivated'])
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        # Deleting active/deactivated only allowed via admin panel
-        if instance.status in ['active', 'deactivated'] and not request.user.is_staff:
+        # Published versions can only be deleted by superusers
+        if instance.status in ['active', 'deactivated'] and not request.user.is_superuser:
             return Response(
-                {"error": "Deleting active or deactivated versions is only allowed via the admin panel."}, 
+                {"error": "Deleting published versions is only allowed for administrators."},
                 status=status.HTTP_403_FORBIDDEN
             )
-        # Drafts can be deleted by owner
-        if instance.status == 'draft' and instance.created_by != request.user and not request.user.is_staff:
+        # Drafts can be deleted by the owner (staff) or any superuser
+        if instance.status == 'draft' and instance.created_by != request.user and not request.user.is_superuser:
             return Response(
-                {"error": "You can only delete your own drafts."}, 
+                {"error": "You can only delete your own drafts."},
                 status=status.HTTP_403_FORBIDDEN
             )
         return super().destroy(request, *args, **kwargs)
 
-    def _get_effective_user(self, request):
-        """In DEBUG mode, return a fake admin user for permission checks."""
-        if settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}:
-            from django.contrib.auth.models import AnonymousUser
-            if isinstance(request.user, AnonymousUser) or not request.user.is_authenticated:
-                class FakeAdminUser:
-                    is_staff = True
-                    is_superuser = True
-                    is_authenticated = True
-                    id = 0
-                    username = "dev_admin"
-                return FakeAdminUser()
-        return request.user
-
     @action(detail=True, methods=['post'])
     def publish(self, request, pk=None):
         version = self.get_object()
-        user = self._get_effective_user(request)
-        if not user.is_staff and version.created_by != user:
+        user = request.user
+        if not user.is_superuser and version.created_by != user:
             return Response({"error": "You are not authorized to publish this draft."}, status=status.HTTP_403_FORBIDDEN)
 
         # Compute MW cache for all transformer bays before publishing
@@ -164,8 +147,8 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
     @action(detail=True, methods=['post'])
     def unpublish(self, request, pk=None):
         version = self.get_object()
-        user = self._get_effective_user(request)
-        if not user.is_staff and version.created_by != user:
+        user = request.user
+        if not user.is_superuser and version.created_by != user:
             return Response({"error": "You are not authorized to unpublish this version."}, status=status.HTTP_403_FORBIDDEN)
 
         if version.status != 'active' or not version.is_active:
@@ -190,7 +173,7 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
             scheme_type=original.scheme_type,
             review_year=original.review_year,
             status='draft',
-            created_by=request.user,
+            created_by=request.user if request.user.is_authenticated else None,
             notes=f"Cloned from v{original.version}"
         )
         
@@ -605,26 +588,16 @@ class LoadSheddingAlertConfigViewSet(BaseSheddingViewSet):
     serializer_class = LoadSheddingAlertConfigSerializer
     http_method_names = ['get', 'patch', 'head', 'options']
 
+    def get_permissions(self):
+        return [IsStaffOrSuperuser()]
+
     def get_queryset(self):
-        # Ensure all three scheme-type rows exist before returning
         LoadSheddingAlertConfig.get_or_create_defaults()
         return LoadSheddingAlertConfig.objects.all().order_by('scheme_type')
 
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
-        user = self._get_effective_user(request)
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save(updated_by=user if getattr(user, 'is_authenticated', False) else None)
+        serializer.save(updated_by=request.user)
         return Response(serializer.data)
-
-    def _get_effective_user(self, request):
-        if settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}:
-            from django.contrib.auth.models import AnonymousUser
-            if isinstance(request.user, AnonymousUser) or not request.user.is_authenticated:
-                class FakeAdminUser:
-                    is_staff = True
-                    is_authenticated = True
-                    id = 0
-                return FakeAdminUser()
-        return request.user

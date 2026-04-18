@@ -1,9 +1,9 @@
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.conf import settings
 from core.models import Substation
 from api.v1.serializers.substation import SubstationSerializer, SubstationDetailSerializer
+from api.v1.permissions import IsStaffOrSuperuser
 import os
 
 class SubstationViewSet(viewsets.ModelViewSet):
@@ -52,9 +52,9 @@ class SubstationViewSet(viewsets.ModelViewSet):
         return SubstationSerializer
 
     def get_permissions(self):
-        if settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}:
+        if self.request.method in permissions.SAFE_METHODS:
             return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
+        return [IsStaffOrSuperuser()]
 
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'mnemonic', 'substation_id']

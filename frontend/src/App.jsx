@@ -404,10 +404,22 @@ const App = () => {
         );
     }
 
+    const isStaff = currentUser?.is_staff || currentUser?.is_superuser || false;
+    const isAdmin = currentUser?.is_superuser || false;
+
+    // Redirect to safe view if user navigates to a restricted view without permission
+    const STAFF_VIEWS = ['snapshots', 'load-shedding-designer', 'create', 'edit', 'config'];
+    const ADMIN_VIEWS = ['dev-tools'];
+    const effectiveView = (() => {
+        if (ADMIN_VIEWS.includes(view) && !isAdmin) return 'list';
+        if (STAFF_VIEWS.includes(view) && !isStaff) return 'list';
+        return view;
+    })();
+
     return (
         <>
             <GlobalLoader show={loading} message="Processing..." />
-            <MainLayout currentView={view} onViewChange={setView} currentUser={currentUser} onLogout={handleLogout} onShowLogin={handleShowLogin}>
+            <MainLayout currentView={effectiveView} onViewChange={setView} currentUser={currentUser} onLogout={handleLogout} onShowLogin={handleShowLogin}>
                 <div className="dashboard-container">
                     {status && (
                         <motion.div
@@ -426,22 +438,20 @@ const App = () => {
                         </motion.div>
                     )}
 
-                    {view !== 'critical-substations' && view !== 'load-shedding-designer' && view !== 'dashboard' && view !== 'list' && view !== 'snapshots' && view !== 'load-shedding-viewer' && (
+                    {effectiveView !== 'critical-substations' && effectiveView !== 'load-shedding-designer' && effectiveView !== 'dashboard' && effectiveView !== 'list' && effectiveView !== 'snapshots' && effectiveView !== 'load-shedding-viewer' && (
                         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                                 <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
-                                    {view === 'dashboard' && 'Load Analytics'}
-                                    {view === 'create' && 'Register New Entry'}
-                                    {view === 'edit' && 'Edit Substation'}
-                                    {view === 'config' && 'Configuration Editor'}
-                                    {view === 'dev-tools' && 'Developer Tools'}
-                                    {view === 'load-shedding-viewer' && 'Load Shedding Viewer'}
+                                    {effectiveView === 'create' && 'Register New Entry'}
+                                    {effectiveView === 'edit' && 'Edit Substation'}
+                                    {effectiveView === 'config' && 'Configuration Editor'}
+                                    {effectiveView === 'dev-tools' && 'Developer Tools'}
                                 </h2>
                             </div>
                         </header>
                     )}
 
-                    {view === 'list' && (
+                    {effectiveView === 'list' && (
                     <div style={{
                         display: 'flex',
                         flexDirection: 'column',
@@ -466,7 +476,7 @@ const App = () => {
                                 substations={substations}
                                 currentFilters={filterCriteria}
                                 onUpdateFilters={setFilterCriteria}
-                                onRegister={() => { setSelectedSub(null); setView('create'); }}
+                                onRegister={isStaff ? () => { setSelectedSub(null); setView('create'); } : null}
                                 viewMode={listDisplayMode}
                                 onViewModeChange={setListDisplayMode}
                             />
@@ -481,6 +491,7 @@ const App = () => {
                                             <SubstationCard
                                                 key={sub.substation_id}
                                                 substation={sub}
+                                                isStaff={isStaff}
                                                 onEdit={() => setProfileSub(sub)}
                                                 onSLDUpload={handleSLDUpload}
                                                 onProcess={handleProcessSLD}
@@ -526,6 +537,7 @@ const App = () => {
                                                 <SubstationListRow
                                                     key={sub.substation_id}
                                                     substation={sub}
+                                                    isStaff={isStaff}
                                                     onEdit={() => { setSelectedSub(sub); setView('edit'); }}
                                                     onSLDUpload={handleSLDUpload}
                                                     onProcess={handleProcessSLD}
@@ -631,7 +643,7 @@ const App = () => {
                     )}
                 </AnimatePresence>
 
-                {view === 'create' || view === 'edit' ? (
+                {effectiveView === 'create' || effectiveView === 'edit' ? (
                     <SubstationForm
                         substation={selectedSub}
                         initialAssetId={initialAssetId}
@@ -645,7 +657,7 @@ const App = () => {
                     />
                 ) : null}
 
-                {view === 'config' && (
+                {effectiveView === 'config' && (
                     <ConfigurationEditor
                         substation={selectedSub}
                         onSave={handleSave}
@@ -656,12 +668,12 @@ const App = () => {
                     />
                 )}
 
-                {view === 'dashboard' && (
+                {effectiveView === 'dashboard' && (
                     <LoadDashboard substations={substations} />
                 )}
 
 
-                {/* {view === 'topology' && (
+                {/* {effectiveView === 'topology' && (
                     <TopologyValidation
                         onEditSubstation={(substationId) => {
                             const sub = substations.find(s => s.substation_id === substationId);
@@ -673,31 +685,32 @@ const App = () => {
                     />
                 )} */}
 
-                {view === 'dev-tools' && (
+                {effectiveView === 'dev-tools' && (
                     <DevTools onBack={() => setView('list')} />
                 )}
 
-                {view === 'snapshots' && (
+                {effectiveView === 'snapshots' && (
                     <SnapshotManager />
                 )}
 
 
-                {view === 'load-shedding-viewer' && (
+                {effectiveView === 'load-shedding-viewer' && (
                     <LoadSheddingSchemeReviewer />
                 )}
 
-                {view === 'load-shedding-designer' && (
+                {effectiveView === 'load-shedding-designer' && (
                     <LoadSheddingDesigner />
                 )}
 
-                {view === 'critical-substations' && (
+                {effectiveView === 'critical-substations' && (
                     <CriticalSubstationManager
+                        isStaff={isStaff}
                         onEditSubstation={(substationId, assetId) => {
                             const sub = substations.find(s => s.substation_id === substationId);
-                            if (sub) { 
-                                setSelectedSub(sub); 
+                            if (sub) {
+                                setSelectedSub(sub);
                                 setInitialAssetId(assetId);
-                                setView('edit'); 
+                                setView('edit');
                             }
                         }}
                     />

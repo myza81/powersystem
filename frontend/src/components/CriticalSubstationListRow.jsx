@@ -142,26 +142,28 @@ const CriticalSubstationListRow = ({ substation, tags, onEditAsset, onAddAsset }
 
             {/* Actions */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', alignItems: 'center' }}>
-                <button
-                    onClick={e => { e.stopPropagation(); tags[0] && onEditAsset && onEditAsset(tags[0]); }}
-                    title="Edit Critical Asset"
-                    style={{
-                        background: 'transparent',
-                        border: '1px solid #e2e8f0',
-                        color: '#64748b',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '6px',
-                        borderRadius: '6px',
-                        transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#ff9f43'; e.currentTarget.style.color = '#ff9f43'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}
-                >
-                    <Edit2 size={14} />
-                </button>
+                {onEditAsset && (
+                    <button
+                        onClick={e => { e.stopPropagation(); tags[0] && onEditAsset(tags[0]); }}
+                        title="Edit Critical Asset"
+                        style={{
+                            background: 'transparent',
+                            border: '1px solid #e2e8f0',
+                            color: '#64748b',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '6px',
+                            borderRadius: '6px',
+                            transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#ff9f43'; e.currentTarget.style.color = '#ff9f43'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}
+                    >
+                        <Edit2 size={14} />
+                    </button>
+                )}
             </div>
         </motion.div>
     );

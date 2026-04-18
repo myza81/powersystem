@@ -1,7 +1,6 @@
 from rest_framework import viewsets, status, parsers, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.conf import settings
 from django.db import models
 from django.core.files.storage import default_storage
 from django.core.files import File
@@ -10,6 +9,7 @@ from services.import_service_v2 import ImportServiceV2
 from services.island_detection_service import IslandDetectionService
 from core.models import NetworkSnapshot, TopologyBus, SnapshotBusState
 from api.v1.serializers.snapshot import SnapshotSerializer
+from api.v1.permissions import IsStaffOrSuperuser
 import os
 import uuid
 import logging
@@ -21,19 +21,17 @@ class SnapshotViewSet(viewsets.ModelViewSet):
     parser_classes = (parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser)
 
     def get_permissions(self):
-        if settings.DEBUG or os.getenv("DJANGO_PUBLIC_API", "False").lower() in {"1", "true", "yes"}:
-            return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
+        return [IsStaffOrSuperuser()]
 
     def get_queryset(self):
-        if self.request.user.is_authenticated:
-            # Users can see their own snapshots AND public/legacy ones (NULL owner)
-            return NetworkSnapshot.objects.filter(
-                models.Q(created_by=self.request.user) | 
-                models.Q(created_by__isnull=True)
-            )
-        # Unauthenticated users see only public/legacy snapshots (or none, depending on policy)
-        return NetworkSnapshot.objects.filter(created_by__isnull=True)
+        user = self.request.user
+        # Superuser sees all snapshots
+        if user.is_superuser:
+            return NetworkSnapshot.objects.all()
+        # Staff sees own snapshots + public/legacy ones (NULL owner)
+        return NetworkSnapshot.objects.filter(
+            models.Q(created_by=user) | models.Q(created_by__isnull=True)
+        )
 
     @action(detail=False, methods=['post'])
     def upload(self, request):

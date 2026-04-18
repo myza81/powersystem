@@ -4,7 +4,7 @@ import { MapPin, FileText, Zap } from 'lucide-react';
 import { LuCircuitBoard } from 'react-icons/lu';
 import { FiAlertCircle } from 'react-icons/fi';
 
-const SubstationListRow = ({ substation, onEdit, onViewSld, onLocate, onCriticalClick }) => {
+const SubstationListRow = ({ substation, isStaff, onEdit, onViewSld, onLocate, onCriticalClick }) => {
     return (
         <motion.div
             layout
@@ -17,16 +17,16 @@ const SubstationListRow = ({ substation, onEdit, onViewSld, onLocate, onCritical
                 gap: '1rem',
                 alignItems: 'center',
                 padding: '0.85rem 1.25rem',
-                cursor: 'pointer',
+                cursor: isStaff ? 'pointer' : 'default',
                 transition: 'all 0.2s ease',
                 borderBottom: '1px solid rgba(4, 125, 96, 0.1)',
                 background: 'rgba(255, 255, 255, 0.4)',
             }}
-            whileHover={{ 
+            whileHover={isStaff ? {
                 background: 'rgba(4, 125, 96, 0.08)',
                 borderLeft: '3px solid #047d60',
-            }}
-            onClick={onEdit}
+            } : {}}
+            onClick={isStaff ? onEdit : undefined}
         >
             {/* Substation Name & ID */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
