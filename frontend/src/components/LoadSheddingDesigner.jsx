@@ -3297,7 +3297,14 @@ const LoadSheddingDesigner = () => {
                                                         if (!stageGroups.has(key)) stageGroups.set(key, { label: key, color: row.stageColor, rows: [] });
                                                         stageGroups.get(key).rows.push(row);
                                                     });
-                                                    return [...stageGroups.entries()].map(([key, group]) => (
+                                                    const CT_ORDER = { new: 0, revised: 1, defeated: 2, unchanged: 3 };
+                                                    return [...stageGroups.entries()].map(([key, group]) => {
+                                                        group.rows.sort((a, b) =>
+                                                            (CT_ORDER[a.changeType] ?? 9) - (CT_ORDER[b.changeType] ?? 9) ||
+                                                            (a.region || '').localeCompare(b.region || '') ||
+                                                            (a.substationId || '').localeCompare(b.substationId || '')
+                                                        );
+                                                        return (
                                                         <div key={key}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1rem', background: '#f8fafc', borderBottom: '1px solid #f1f5f9', borderTop: '1px solid #f1f5f9' }}>
                                                                 {key !== '__defeated__' && <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: group.color, flexShrink: 0 }} />}
@@ -3324,7 +3331,8 @@ const LoadSheddingDesigner = () => {
                                                                 );
                                                             })}
                                                         </div>
-                                                    ));
+                                                        );
+                                                    });
                                                 })()
                                             )}
                                             </div>{/* end scrollable rows */}
