@@ -98,7 +98,8 @@ const LoadDashboard = ({ substations = [] }) => {
             {/* Layer 2: Interactive Modals & Sidebar */}
             <div style={{ position: 'relative', zIndex: 10, height: '100vh', pointerEvents: 'none', overflow: 'hidden' }}>
                 {/* Substation Selection Panel — bottom-center of map */}
-                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 20, pointerEvents: 'auto' }}>
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 20, pointerEvents: 'none' }}>
+                    <div style={{ pointerEvents: 'auto' }}>
                     <SubstationSelectionPanel
                         substations={substations}
                         selectedIds={selectedSubstationIds}
@@ -108,6 +109,7 @@ const LoadDashboard = ({ substations = [] }) => {
                         circuitDisplayMode={circuitDisplayMode}
                         onChangeCircuitDisplayMode={setCircuitDisplayMode}
                     />
+                    </div>
                 </div>
                 <AnimatePresence>
                     {viewingSld && (
