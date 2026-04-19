@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap, useMapEvents, LayersControl, LayerGroup, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Circle, Marker, Tooltip, useMap, useMapEvents, LayersControl, LayerGroup, Polyline } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import 'leaflet.heat';
@@ -140,7 +140,27 @@ const BayBreakdown = ({ bays, transformers, incoming_bays, color = '#333' }) => 
     );
 };
 
-const SubstationMap = ({ data, focusLocation, fuiMode = false, networkLinks = [], showNetworkLines = false, circuitDisplayMode = 'thickness' }) => {
+const RADIUS_COLORS = ['#00e5ff', '#f97316', '#a855f7', '#22c55e', '#eab308', '#f43f5e'];
+
+// Geographic destination point given distance (km) and bearing (degrees from North)
+const destinationPoint = (lat, lng, distKm, bearingDeg) => {
+    const R = 6371;
+    const d = distKm / R;
+    const φ1 = lat * Math.PI / 180;
+    const λ1 = lng * Math.PI / 180;
+    const θ = bearingDeg * Math.PI / 180;
+    const φ2 = Math.asin(Math.sin(φ1) * Math.cos(d) + Math.cos(φ1) * Math.sin(d) * Math.cos(θ));
+    const λ2 = λ1 + Math.atan2(Math.sin(θ) * Math.sin(d) * Math.cos(φ1), Math.cos(d) - Math.sin(φ1) * Math.sin(φ2));
+    return [φ2 * 180 / Math.PI, λ2 * 180 / Math.PI];
+};
+
+// Linear interpolation between two lat/lng points
+const lerpPoint = (p1, p2, t) => [
+    p1[0] + (p2[0] - p1[0]) * t,
+    p1[1] + (p2[1] - p1[1]) * t,
+];
+
+const SubstationMap = ({ data, focusLocation, fuiMode = false, networkLinks = [], showNetworkLines = false, circuitDisplayMode = 'thickness', radiusConfig = null }) => {
     const defaultCenter = [4.2105, 101.9758];
     const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
     const [showSettings, setShowSettings] = useState(false);
@@ -725,6 +745,83 @@ const SubstationMap = ({ data, focusLocation, fuiMode = false, networkLinks = []
                         })}
                     </LayerGroup>
                 )}
+
+                {/* ── RADIUS CIRCLES LAYER ── */}
+                {radiusConfig?.anchor && (() => {
+                    const anchorLat = parseFloat(radiusConfig.anchor.latitude);
+                    const anchorLng = parseFloat(radiusConfig.anchor.longitude);
+                    if (isNaN(anchorLat) || isNaN(anchorLng)) return null;
+
+                    return (
+                        <LayerGroup>
+                            {(radiusConfig.layers || []).map((layer, idx) => {
+                                const km = layer.km ?? layer;
+                                const angle = layer.angle ?? 45;
+                                const labelPos = layer.labelPos ?? 0.5;
+                                const color = layer.color ?? RADIUS_COLORS[idx % RADIUS_COLORS.length];
+                                if (!km) return null;
+
+                                const endpoint = destinationPoint(anchorLat, anchorLng, km, angle);
+                                const labelPoint = lerpPoint([anchorLat, anchorLng], endpoint, labelPos);
+
+                                // Arrowhead: two wings from the endpoint angled back
+                                const wingLen = Math.min(km * 0.14, 1.2);
+                                const reversedAngle = (angle + 180) % 360;
+                                const wing1 = destinationPoint(endpoint[0], endpoint[1], wingLen, (reversedAngle + 28) % 360);
+                                const wing2 = destinationPoint(endpoint[0], endpoint[1], wingLen, (reversedAngle - 28 + 360) % 360);
+
+                                const labelIcon = L.divIcon({
+                                    html: `<div style="display:inline-block;background:rgba(255,255,255,0.82);color:${color};padding:2px 8px;border-radius:4px;font-size:0.68rem;font-weight:800;white-space:nowrap;transform:translate(-50%,-50%);font-family:monospace;">${km} km</div>`,
+                                    className: '',
+                                    iconSize: [0, 0],
+                                    iconAnchor: [0, 0],
+                                });
+
+                                return (
+                                    <React.Fragment key={idx}>
+                                        {/* Circle */}
+                                        <Circle
+                                            center={[anchorLat, anchorLng]}
+                                            radius={km * 1000}
+                                            pathOptions={{
+                                                color,
+                                                fillColor: color,
+                                                fillOpacity: 0.04,
+                                                weight: 1.5,
+                                                dashArray: '6 4',
+                                                opacity: 0.8,
+                                            }}
+                                        />
+                                        {/* Arrow shaft */}
+                                        <Polyline
+                                            positions={[[anchorLat, anchorLng], endpoint]}
+                                            pathOptions={{ color, weight: 1.8, opacity: 0.9 }}
+                                        />
+                                        {/* Arrowhead */}
+                                        <Polyline
+                                            positions={[wing1, endpoint, wing2]}
+                                            pathOptions={{ color, weight: 2, opacity: 0.9 }}
+                                        />
+                                        {/* Distance label */}
+                                        <Marker position={labelPoint} icon={labelIcon} interactive={false} />
+                                    </React.Fragment>
+                                );
+                            })}
+                            {/* Anchor pin */}
+                            <CircleMarker
+                                center={[anchorLat, anchorLng]}
+                                radius={7}
+                                pathOptions={{ color: '#fff', weight: 2, fillColor: '#00e5ff', fillOpacity: 1 }}
+                            >
+                                <Tooltip direction="top" offset={[0, -10]} opacity={1}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>
+                                        {radiusConfig.anchor.name || radiusConfig.anchor.substation_id} (anchor)
+                                    </span>
+                                </Tooltip>
+                            </CircleMarker>
+                        </LayerGroup>
+                    );
+                })()}
 
                 {/* Map Controller for programmatic zoom/pan */}
                 <MapController center={mapCenter} zoom={mapZoom} />

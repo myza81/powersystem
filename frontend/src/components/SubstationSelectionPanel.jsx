@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ListFilter, X, Check, Search, ChevronDown } from 'lucide-react';
+import { ListFilter, X, Check, Search, ChevronDown, Plus, Minus, MapPin } from 'lucide-react';
 
 /**
  * SubstationSelectionPanel
@@ -17,17 +17,70 @@ import { ListFilter, X, Check, Search, ChevronDown } from 'lucide-react';
  *   circuitDisplayMode - 'thickness' | 'multiple'
  *   onChangeCircuitDisplayMode - (val: string) => void
  */
-const SubstationSelectionPanel = ({ 
-    substations = [], 
-    selectedIds, 
+const RADIUS_COLORS = ['#00e5ff', '#f97316', '#a855f7', '#22c55e', '#eab308', '#f43f5e'];
+
+const SubstationSelectionPanel = ({
+    substations = [],
+    selectedIds,
     onChangeIds,
     showNetworkLines = false,
     onToggleNetworkLines,
     circuitDisplayMode = 'thickness',
-    onChangeCircuitDisplayMode
+    onChangeCircuitDisplayMode,
+    radiusConfig = { anchor: null, layers: [3] },
+    onChangeRadiusConfig,
 }) => {
     const [open, setOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('categories');
+
+    // Radius tab state
+    const [anchorSearch, setAnchorSearch] = useState('');
+    const [showAnchorDropdown, setShowAnchorDropdown] = useState(false);
+    const anchorDropdownRef = useRef(null);
+
+    useEffect(() => {
+        if (radiusConfig?.anchor) {
+            setAnchorSearch(radiusConfig.anchor.name || radiusConfig.anchor.substation_id || '');
+        }
+    }, []); // eslint-disable-line
+
+    const filteredAnchorOptions = useMemo(() => {
+        if (!anchorSearch.trim()) return [];
+        const q = anchorSearch.toLowerCase();
+        return substations
+            .filter(s => s.latitude && s.longitude &&
+                ((s.name || '').toLowerCase().includes(q) || (s.substation_id || '').toLowerCase().includes(q)))
+            .slice(0, 8);
+    }, [substations, anchorSearch]);
+
+    const setAnchor = (sub) => {
+        onChangeRadiusConfig?.({ ...radiusConfig, anchor: sub });
+        setAnchorSearch(sub.name || sub.substation_id);
+        setShowAnchorDropdown(false);
+    };
+
+    const clearAnchor = () => {
+        onChangeRadiusConfig?.({ ...radiusConfig, anchor: null });
+        setAnchorSearch('');
+    };
+
+    const updateLayer = (idx, field, val) => {
+        const newLayers = radiusConfig.layers.map((l, i) => i === idx ? { ...l, [field]: val } : l);
+        onChangeRadiusConfig?.({ ...radiusConfig, layers: newLayers });
+    };
+
+    const removeLayer = (idx) => {
+        const newLayers = radiusConfig.layers.filter((_, i) => i !== idx);
+        onChangeRadiusConfig?.({ ...radiusConfig, layers: newLayers });
+    };
+
+    const addLayer = () => {
+        const nextColor = RADIUS_COLORS[radiusConfig.layers.length % RADIUS_COLORS.length];
+        onChangeRadiusConfig?.({
+            ...radiusConfig,
+            layers: [...radiusConfig.layers, { km: 3, angle: 45, labelPos: 0.5, color: nextColor }],
+        });
+    };
 
     // Category filter state (local to the panel)
     const [catRegion, setCatRegion] = useState('All');
@@ -226,6 +279,7 @@ const SubstationSelectionPanel = ({
                                 <button style={tabBtn(activeTab === 'categories')} onClick={() => setActiveTab('categories')}>Categories</button>
                                 <button style={tabBtn(activeTab === 'individual')} onClick={() => setActiveTab('individual')}>Individual</button>
                                 <button style={tabBtn(activeTab === 'network')} onClick={() => setActiveTab('network')}>Network</button>
+                                <button style={tabBtn(activeTab === 'radius')} onClick={() => setActiveTab('radius')}>Radius</button>
                             </div>
                             <X size={15} style={{ cursor: 'pointer', color: '#aaa' }} onClick={() => setOpen(false)} />
                         </div>
@@ -481,8 +535,187 @@ const SubstationSelectionPanel = ({
                             </div>
                         )}
 
+                        {/* ── RADIUS TAB ── */}
+                        {activeTab === 'radius' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '4px' }}>
+
+                                {/* Anchor input */}
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', marginBottom: '6px', letterSpacing: '0.05em' }}>ANCHOR SUBSTATION</label>
+                                    <div style={{ position: 'relative' }} ref={anchorDropdownRef}>
+                                        <MapPin size={13} style={{ position: 'absolute', left: '9px', top: '50%', transform: 'translateY(-50%)', color: radiusConfig.anchor ? '#00e5ff' : '#aaa', pointerEvents: 'none' }} />
+                                        <input
+                                            type="text"
+                                            placeholder="Search substation…"
+                                            value={anchorSearch}
+                                            onChange={e => { setAnchorSearch(e.target.value); setShowAnchorDropdown(true); }}
+                                            onFocus={() => setShowAnchorDropdown(true)}
+                                            onBlur={() => setTimeout(() => setShowAnchorDropdown(false), 150)}
+                                            style={{
+                                                width: '100%',
+                                                paddingLeft: '28px',
+                                                paddingRight: radiusConfig.anchor ? '28px' : '8px',
+                                                height: '32px',
+                                                background: radiusConfig.anchor ? 'rgba(0,229,255,0.08)' : 'rgba(255,255,255,0.06)',
+                                                border: `1px solid ${radiusConfig.anchor ? 'rgba(0,229,255,0.4)' : 'rgba(255,255,255,0.12)'}`,
+                                                borderRadius: '6px',
+                                                color: '#fff',
+                                                fontSize: '0.75rem',
+                                                outline: 'none',
+                                                boxSizing: 'border-box',
+                                                fontFamily: 'Poppins, sans-serif',
+                                            }}
+                                        />
+                                        {radiusConfig.anchor && (
+                                            <X size={11} style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', color: '#aaa', cursor: 'pointer' }} onClick={clearAnchor} />
+                                        )}
+                                        {showAnchorDropdown && filteredAnchorOptions.length > 0 && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '36px',
+                                                left: 0,
+                                                right: 0,
+                                                background: 'rgba(15,23,42,0.98)',
+                                                border: '1px solid rgba(0,229,255,0.3)',
+                                                borderRadius: '6px',
+                                                zIndex: 100,
+                                                maxHeight: '160px',
+                                                overflowY: 'auto',
+                                                boxShadow: '0 8px 20px rgba(0,0,0,0.5)',
+                                            }}>
+                                                {filteredAnchorOptions.map(s => (
+                                                    <div
+                                                        key={s.substation_id}
+                                                        onMouseDown={() => setAnchor(s)}
+                                                        style={{
+                                                            padding: '7px 10px',
+                                                            cursor: 'pointer',
+                                                            borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                            transition: 'background 0.1s',
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,229,255,0.1)'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                    >
+                                                        <div style={{ fontSize: '0.73rem', color: '#fff', fontWeight: 500 }}>{s.name || s.substation_id}</div>
+                                                        <div style={{ fontSize: '0.62rem', color: '#aaa' }}>{s.substation_id} · {s.state}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {radiusConfig.anchor && (
+                                        <div style={{ fontSize: '0.62rem', color: 'rgba(0,229,255,0.6)', marginTop: '4px' }}>
+                                            {radiusConfig.anchor.substation_id} · {parseFloat(radiusConfig.anchor.latitude).toFixed(4)}°, {parseFloat(radiusConfig.anchor.longitude).toFixed(4)}°
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Radius layers */}
+                                <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                        <label style={{ fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', letterSpacing: '0.05em' }}>RADIUS LAYERS</label>
+                                        <button
+                                            onClick={addLayer}
+                                            style={{
+                                                background: 'rgba(0,229,255,0.1)',
+                                                border: '1px solid rgba(0,229,255,0.3)',
+                                                borderRadius: '4px',
+                                                color: '#00e5ff',
+                                                cursor: 'pointer',
+                                                padding: '2px 8px',
+                                                fontSize: '0.65rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                fontFamily: 'Poppins, sans-serif',
+                                            }}
+                                        >
+                                            <Plus size={10} /> Add
+                                        </button>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                        {radiusConfig.layers.map((layer, idx) => {
+                                            const km = layer.km ?? layer;
+                                            const angle = layer.angle ?? 45;
+                                            const labelPos = layer.labelPos ?? 0.5;
+                                            const color = layer.color ?? RADIUS_COLORS[idx % RADIUS_COLORS.length];
+                                            return (
+                                                <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${color}33`, borderRadius: '8px', padding: '10px' }}>
+                                                    {/* Row 1: color + km + remove */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                                        <input
+                                                            type="color"
+                                                            value={color}
+                                                            onChange={e => updateLayer(idx, 'color', e.target.value)}
+                                                            style={{ width: '22px', height: '22px', border: 'none', background: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}
+                                                            title="Line colour"
+                                                        />
+                                                        <input
+                                                            type="number"
+                                                            min="0.1"
+                                                            step="0.5"
+                                                            value={km}
+                                                            onChange={e => updateLayer(idx, 'km', parseFloat(e.target.value) || 1)}
+                                                            style={{ width: '56px', height: '26px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '5px', color: '#fff', fontSize: '0.75rem', padding: '0 6px', outline: 'none', fontFamily: 'Poppins, sans-serif' }}
+                                                        />
+                                                        <span style={{ fontSize: '0.7rem', color: '#aaa', flexShrink: 0 }}>km</span>
+                                                        <div style={{ flex: 1 }} />
+                                                        <button
+                                                            onClick={() => removeLayer(idx)}
+                                                            disabled={radiusConfig.layers.length === 1}
+                                                            style={{ background: 'none', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '4px', color: radiusConfig.layers.length === 1 ? '#444' : '#f87171', cursor: radiusConfig.layers.length === 1 ? 'not-allowed' : 'pointer', padding: '3px 5px', display: 'flex', alignItems: 'center' }}
+                                                        >
+                                                            <Minus size={10} />
+                                                        </button>
+                                                    </div>
+                                                    {/* Row 2: bearing */}
+                                                    <div style={{ marginBottom: '6px' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                                                            <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em' }}>BEARING</span>
+                                                            <span style={{ fontSize: '0.65rem', color, fontFamily: 'monospace', fontWeight: 600 }}>{angle}°</span>
+                                                        </div>
+                                                        <input
+                                                            type="range"
+                                                            min="0"
+                                                            max="359"
+                                                            step="1"
+                                                            value={angle}
+                                                            onChange={e => updateLayer(idx, 'angle', parseInt(e.target.value))}
+                                                            style={{ width: '100%', accentColor: color, cursor: 'pointer' }}
+                                                        />
+                                                    </div>
+                                                    {/* Row 3: label position */}
+                                                    <div>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                                                            <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em' }}>LABEL POSITION</span>
+                                                            <span style={{ fontSize: '0.65rem', color, fontFamily: 'monospace', fontWeight: 600 }}>{Math.round(labelPos * 100)}%</span>
+                                                        </div>
+                                                        <input
+                                                            type="range"
+                                                            min="0"
+                                                            max="100"
+                                                            step="1"
+                                                            value={Math.round(labelPos * 100)}
+                                                            onChange={e => updateLayer(idx, 'labelPos', parseInt(e.target.value) / 100)}
+                                                            style={{ width: '100%', accentColor: color, cursor: 'pointer' }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {!radiusConfig.anchor && (
+                                    <div style={{ fontSize: '0.65rem', color: '#aaa', fontStyle: 'italic', textAlign: 'center', padding: '4px 0' }}>
+                                        Select an anchor substation to draw radius circles on the map.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Footer */}
-                        {activeTab !== 'network' && (
+                        {activeTab !== 'network' && activeTab !== 'radius' && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                                 <button
                                     onClick={selectAll}

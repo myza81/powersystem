@@ -20,6 +20,7 @@ const LoadDashboard = ({ substations = [] }) => {
     const [selectedSubstationIds, setSelectedSubstationIds] = useState(null); // null = show all; Set = active filter
     const [showNetworkLines, setShowNetworkLines] = useState(false);
     const [circuitDisplayMode, setCircuitDisplayMode] = useState('thickness');
+    const [radiusConfig, setRadiusConfig] = useState({ anchor: null, layers: [{ km: 3, angle: 45, labelPos: 0.5, color: '#00e5ff' }] });
 
     // Fetch network links if viewing the dashboard
     const { links: networkLinks } = useNetworkLinks();
@@ -85,12 +86,13 @@ const LoadDashboard = ({ substations = [] }) => {
             
             {/* Layer 0: Geospatial Backdrop */}
             <div className="fui-backdrop-map">
-                <SubstationMap 
-                    data={filteredMapPoints} 
-                    fuiMode={true} 
+                <SubstationMap
+                    data={filteredMapPoints}
+                    fuiMode={true}
                     networkLinks={networkLinks}
                     showNetworkLines={showNetworkLines}
                     circuitDisplayMode={circuitDisplayMode}
+                    radiusConfig={radiusConfig}
                 />
             </div>
 
@@ -108,6 +110,8 @@ const LoadDashboard = ({ substations = [] }) => {
                         onToggleNetworkLines={setShowNetworkLines}
                         circuitDisplayMode={circuitDisplayMode}
                         onChangeCircuitDisplayMode={setCircuitDisplayMode}
+                        radiusConfig={radiusConfig}
+                        onChangeRadiusConfig={setRadiusConfig}
                     />
                     </div>
                 </div>
