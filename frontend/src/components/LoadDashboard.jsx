@@ -21,6 +21,7 @@ const LoadDashboard = ({ substations = [] }) => {
     const [showNetworkLines, setShowNetworkLines] = useState(false);
     const [circuitDisplayMode, setCircuitDisplayMode] = useState('thickness');
     const [radiusConfig, setRadiusConfig] = useState({ anchor: null, layers: [{ km: 3, angle: 45, labelPos: 0.5, color: '#00e5ff' }] });
+    const [networkColors, setNetworkColors] = useState({ kv500: '#facc15', kv275: '#22d3ee', kv132: '#4ade80', other: '#ffffff' });
 
     // Fetch network links if viewing the dashboard
     const { links: networkLinks } = useNetworkLinks();
@@ -93,6 +94,7 @@ const LoadDashboard = ({ substations = [] }) => {
                     showNetworkLines={showNetworkLines}
                     circuitDisplayMode={circuitDisplayMode}
                     radiusConfig={radiusConfig}
+                    networkColors={networkColors}
                 />
             </div>
 
@@ -112,6 +114,8 @@ const LoadDashboard = ({ substations = [] }) => {
                         onChangeCircuitDisplayMode={setCircuitDisplayMode}
                         radiusConfig={radiusConfig}
                         onChangeRadiusConfig={setRadiusConfig}
+                        networkColors={networkColors}
+                        onChangeNetworkColors={setNetworkColors}
                     />
                     </div>
                 </div>

@@ -29,6 +29,8 @@ const SubstationSelectionPanel = ({
     onChangeCircuitDisplayMode,
     radiusConfig = { anchor: null, layers: [3] },
     onChangeRadiusConfig,
+    networkColors = {},
+    onChangeNetworkColors,
 }) => {
     const [open, setOpen] = useState(false);
     const [activeTab, setActiveTab] = useState('categories');
@@ -184,6 +186,9 @@ const SubstationSelectionPanel = ({
         transform: 'translateX(-50%)',
         zIndex: 1001,
         width: '360px',
+        height: '460px',
+        display: 'flex',
+        flexDirection: 'column',
         background: 'rgba(15, 23, 42, 0.97)',
         backdropFilter: 'blur(20px)',
         border: '1px solid rgba(0,229,255,0.3)',
@@ -246,9 +251,9 @@ const SubstationSelectionPanel = ({
                 {/* Badge */}
                 <span style={{
                     position: 'absolute',
-                    top: '-6px',
-                    right: '-8px',
-                    background: isFiltered ? '#00e5ff' : 'rgba(255,255,255,0.2)',
+                    top: '-15px',
+                    right: '-5px',
+                    background: isFiltered ? '#00e5ff' : 'rgba(15, 23, 42, 0.85)',
                     color: isFiltered ? '#000' : '#fff',
                     borderRadius: '10px',
                     fontSize: '0.55rem',
@@ -274,7 +279,7 @@ const SubstationSelectionPanel = ({
                         style={panelBase}
                     >
                         {/* Header */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexShrink: 0 }}>
                             <div style={{ display: 'flex', gap: '16px' }}>
                                 <button style={tabBtn(activeTab === 'categories')} onClick={() => setActiveTab('categories')}>Categories</button>
                                 <button style={tabBtn(activeTab === 'individual')} onClick={() => setActiveTab('individual')}>Individual</button>
@@ -286,30 +291,30 @@ const SubstationSelectionPanel = ({
 
                         {/* ── CATEGORIES TAB ── */}
                         {activeTab === 'categories' && (
-                            <div>
+                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', marginBottom: '4px', letterSpacing: '0.05em' }}>REGION</label>
                                         <select value={catRegion} onChange={e => setCatRegion(e.target.value)} style={dropdownStyle}>
-                                            {uniqueRegions.map(o => <option key={o} value={o}>{o}</option>)}
+                                            {uniqueRegions.map(o => <option key={o} value={o} style={{ background: '#0f172a', color: '#fff' }}>{o}</option>)}
                                         </select>
                                     </div>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', marginBottom: '4px', letterSpacing: '0.05em' }}>STATE</label>
                                         <select value={catState} onChange={e => setCatState(e.target.value)} style={dropdownStyle}>
-                                            {uniqueStates.map(o => <option key={o} value={o}>{o}</option>)}
+                                            {uniqueStates.map(o => <option key={o} value={o} style={{ background: '#0f172a', color: '#fff' }}>{o}</option>)}
                                         </select>
                                     </div>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', marginBottom: '4px', letterSpacing: '0.05em' }}>GRID</label>
                                         <select value={catGrid} onChange={e => setCatGrid(e.target.value)} style={dropdownStyle}>
-                                            {uniqueGrids.map(o => <option key={o} value={o}>{o}</option>)}
+                                            {uniqueGrids.map(o => <option key={o} value={o} style={{ background: '#0f172a', color: '#fff' }}>{o}</option>)}
                                         </select>
                                     </div>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', marginBottom: '4px', letterSpacing: '0.05em' }}>OWNERSHIP</label>
                                         <select value={catOwnership} onChange={e => setCatOwnership(e.target.value)} style={dropdownStyle}>
-                                            {uniqueOwnerships.map(o => <option key={o} value={o}>{o}</option>)}
+                                            {uniqueOwnerships.map(o => <option key={o} value={o} style={{ background: '#0f172a', color: '#fff' }}>{o}</option>)}
                                         </select>
                                     </div>
                                     <div style={{ gridColumn: '1 / -1', marginTop: '4px' }}>
@@ -379,7 +384,7 @@ const SubstationSelectionPanel = ({
 
                         {/* ── INDIVIDUAL TAB ── */}
                         {activeTab === 'individual' && (
-                            <div>
+                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                                 {/* Search box */}
                                 <div style={{ position: 'relative', marginBottom: '10px' }}>
                                     <Search size={13} style={{ position: 'absolute', left: '9px', top: '50%', transform: 'translateY(-50%)', color: '#aaa' }} />
@@ -409,7 +414,7 @@ const SubstationSelectionPanel = ({
                                 </div>
 
                                 {/* Checkbox list */}
-                                <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '12px' }}>
+                                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '12px', paddingRight: '4px' }}>
                                     {individualFiltered.length === 0 && (
                                         <div style={{ color: '#aaa', fontSize: '0.75rem', textAlign: 'center', padding: '20px 0' }}>No substations match "{indSearch}"</div>
                                     )}
@@ -465,7 +470,7 @@ const SubstationSelectionPanel = ({
 
                         {/* ── NETWORK TAB ── */}
                         {activeTab === 'network' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '8px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '8px', flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
                                 
                                 {/* Toggle Switch */}
                                 <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
@@ -528,6 +533,34 @@ const SubstationSelectionPanel = ({
                                         </div>
                                     </label>
                                 </div>
+
+                                {/* Network Line Colors */}
+                                <div style={{ 
+                                    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+                                    borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px',
+                                    opacity: showNetworkLines ? 1 : 0.5, pointerEvents: showNetworkLines ? 'auto' : 'none',
+                                    transition: 'opacity 0.2s'
+                                }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'rgba(0,229,255,0.8)', fontWeight: 600, letterSpacing: '0.05em' }}>LINE COLORS (BY VOLTAGE)</div>
+                                    
+                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer' }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#facc15', fontWeight: 600 }}>500 kV</span>
+                                        <input type="color" value={networkColors?.kv500 || '#facc15'} onChange={(e) => onChangeNetworkColors?.({...networkColors, kv500: e.target.value})} style={{ width: '24px', height: '24px', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }} />
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer' }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#22d3ee', fontWeight: 600 }}>275 kV</span>
+                                        <input type="color" value={networkColors?.kv275 || '#22d3ee'} onChange={(e) => onChangeNetworkColors?.({...networkColors, kv275: e.target.value})} style={{ width: '24px', height: '24px', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }} />
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer' }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#4ade80', fontWeight: 600 }}>132 kV</span>
+                                        <input type="color" value={networkColors?.kv132 || '#4ade80'} onChange={(e) => onChangeNetworkColors?.({...networkColors, kv132: e.target.value})} style={{ width: '24px', height: '24px', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }} />
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer' }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#ffffff', fontWeight: 600 }}>&lt; 132 kV</span>
+                                        <input type="color" value={networkColors?.other || '#ffffff'} onChange={(e) => onChangeNetworkColors?.({...networkColors, other: e.target.value})} style={{ width: '24px', height: '24px', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }} />
+                                    </label>
+                                </div>
+
                                 <div style={{ fontSize: '0.65rem', color: '#facc15', marginTop: '-4px', fontStyle: 'italic', display: showNetworkLines ? 'block' : 'none' }}>
                                     Note: Enabling the network diagram hides the thermal heatmap.
                                 </div>
@@ -537,10 +570,10 @@ const SubstationSelectionPanel = ({
 
                         {/* ── RADIUS TAB ── */}
                         {activeTab === 'radius' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '4px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '4px', flex: 1, overflow: 'hidden' }}>
 
                                 {/* Anchor input */}
-                                <div>
+                                <div style={{ flexShrink: 0 }}>
                                     <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', marginBottom: '6px', letterSpacing: '0.05em' }}>ANCHOR SUBSTATION</label>
                                     <div style={{ position: 'relative' }} ref={anchorDropdownRef}>
                                         <MapPin size={13} style={{ position: 'absolute', left: '9px', top: '50%', transform: 'translateY(-50%)', color: radiusConfig.anchor ? '#00e5ff' : '#aaa', pointerEvents: 'none' }} />
@@ -611,8 +644,8 @@ const SubstationSelectionPanel = ({
                                 </div>
 
                                 {/* Radius layers */}
-                                <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexShrink: 0 }}>
                                         <label style={{ fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', letterSpacing: '0.05em' }}>RADIUS LAYERS</label>
                                         <button
                                             onClick={addLayer}
@@ -633,7 +666,7 @@ const SubstationSelectionPanel = ({
                                             <Plus size={10} /> Add
                                         </button>
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
                                         {radiusConfig.layers.map((layer, idx) => {
                                             const km = layer.km ?? layer;
                                             const angle = layer.angle ?? 45;
@@ -716,7 +749,7 @@ const SubstationSelectionPanel = ({
 
                         {/* Footer */}
                         {activeTab !== 'network' && activeTab !== 'radius' && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
                                 <button
                                     onClick={selectAll}
                                     style={{ background: 'none', border: 'none', color: '#00e5ff', fontSize: '0.72rem', cursor: 'pointer', padding: 0, fontFamily: 'Poppins, sans-serif' }}
