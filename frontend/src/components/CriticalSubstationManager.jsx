@@ -600,21 +600,22 @@ const CriticalSubstationManager = ({ isStaff, onEditSubstation }) => {
                                             <div>
                                                 {panelTitle('Load Shedding Scheme — Available Relay Substations by Region')}
                                                 <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '-0.5rem', marginBottom: '0.85rem' }}>
-                                                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                        Relay-installed substations minus those identified as critical — available headroom for load shedding design
-                                                        <InfoTip text="This metric only counts substations with an ACTIVE RELAY installed. It differs from 'Regional Coverage - Critical vs Total Substations' which counts ALL critical substations (with or without relay)." direction="down" />
-                                                    </span>
+                                                    Relay-installed substations minus those identified as critical — available headroom for load shedding design
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
                                                 {[
-                                                    { label: 'Total Relay Subs', value: totalRelay, color: '#0f172a' },
-                                                    { label: 'Critical (excluded)', value: totalCritRelay, color: '#ef4444' },
-                                                    { label: 'Available', value: totalAvailable, color: '#047d60' },
-                                                ].map(({ label, value, color }) => (
-                                                    <div key={label} style={{ textAlign: 'center', padding: '0.5rem 0.9rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', minWidth: '80px' }}>
+                                                    { label: 'Total Relay Subs', value: totalRelay, color: '#0f172a', hint: 'Total number of substations that have an active relay installed in the network.' },
+                                                    { label: 'Critical (excluded)', value: totalCritRelay, color: '#ef4444', hint: "This metric only counts substations with an ACTIVE RELAY installed. It differs from 'Regional Coverage - Critical vs Total Substations' which counts ALL critical substations (with or without relay)." },
+                                                    { label: 'Available', value: totalAvailable, color: '#047d60', hint: 'Total relay substations minus those that are critical.' },
+                                                ].map(({ label, value, color, hint }) => (
+                                                    <div key={label} style={{ textAlign: 'center', padding: '0.5rem 0.9rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', minWidth: '80px', position: 'relative' }}>
                                                         <div style={{ fontSize: '1.3rem', fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-                                                        <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '3px', whiteSpace: 'nowrap' }}>{label}</div>
+                                                        <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '3px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                                                            {label}
+                                                            {hint && label === 'Available' && <InfoTip text={hint} align="right" direction="down" />}
+                                                            {hint && label !== 'Available' && <InfoTip text={hint} direction="down" />}
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
