@@ -220,6 +220,6 @@ class DatabaseImportView(APIView):
         except Exception as e:
             logger.exception("Import failed")
             return Response(
-                {"error": "Import failed"},
+                {"error": f"Import failed: {e}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

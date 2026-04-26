@@ -11,7 +11,7 @@ const DevTools = ({ onBack }) => {
     const [loading, setLoading] = useState(false);
     const [syncStatus, setSyncStatus] = useState(null); // { type: 'success'|'error', msg: '' }
     const [expandedRows, setExpandedRows] = useState({});
-    const [resetMaster, setResetMaster] = useState(false);
+    const [resetMaster, setResetMaster] = useState(true);
     const [forceImport, setForceImport] = useState(false);
 
     const fetchDiff = async () => {
