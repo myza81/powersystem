@@ -95,14 +95,63 @@ const InfoTip = ({ text }) => {
     );
 };
 
+// ─── Pie chart palette ────────────────────────────────────────────────────────
+const PIE_COLORS = [
+    '#10b981', '#3b82f6', '#f97316', '#8b5cf6',
+    '#ef4444', '#eab308', '#06b6d4', '#ec4899',
+    '#14b8a6', '#a78bfa',
+];
+
+const PieChart = ({ data, size = 120 }) => {
+    const total = data.reduce((s, d) => s + d.mw, 0);
+    if (!total) return null;
+    const cx = size / 2, cy = size / 2, r = size * 0.42;
+    if (data.length === 1) {
+        return (
+            <svg width={size} height={size} style={{ flexShrink: 0 }}>
+                <circle cx={cx} cy={cy} r={r} fill={data[0].color} />
+            </svg>
+        );
+    }
+    const slices = [];
+    let cum = -Math.PI / 2;
+    data.forEach((d) => {
+        const sweep = (d.mw / total) * 2 * Math.PI;
+        const start = cum;
+        cum += sweep;
+        slices.push({
+            path: `M${cx},${cy}L${cx + r * Math.cos(start)},${cy + r * Math.sin(start)}A${r},${r},0,${sweep > Math.PI ? 1 : 0},1,${cx + r * Math.cos(cum)},${cy + r * Math.sin(cum)}Z`,
+            fill: d.color,
+        });
+    });
+    return (
+        <svg width={size} height={size} style={{ flexShrink: 0 }}>
+            {slices.map((s, i) => (
+                <path key={i} d={s.path} fill={s.fill} stroke="#fff" strokeWidth="1.5" />
+            ))}
+        </svg>
+    );
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [] }) => {
+
+    const [activeRegStageIdx, setActiveRegStageIdx] = useState(0);
 
     const subLookup = useMemo(() => {
         const m = {};
         substations.forEach(s => { m[s.substation_id] = s; });
         return m;
+    }, [substations]);
+
+    const regionTotalMWMap = useMemo(() => {
+        const map = {};
+        substations.forEach(s => {
+            if (!s.region || s.region === '—') return;
+            map[s.region] = (map[s.region] || 0) + (parseFloat(s.total_pload_mw) || 0);
+        });
+        return map;
     }, [substations]);
 
     const A = useMemo(() => {
@@ -237,6 +286,28 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
         });
         duplicates.sort((a, b) => a.substationName.localeCompare(b.substationName));
 
+        // ── Region color map (consistent color per region name across all stages) ──
+        const regionColorMap = {};
+        regions.forEach((r, i) => { regionColorMap[r.name] = PIE_COLORS[i % PIE_COLORS.length]; });
+
+        // ── Per-stage regional distribution ────────────────────────────────────────
+        const stageRegionData = stages.map(stage => {
+            const rMap = new Map();
+            dataRows.filter(r => r.stageId === stage.id).forEach(r => {
+                if (!r.region || r.region === '—') return;
+                if (!rMap.has(r.region)) rMap.set(r.region, { mw: 0, count: 0 });
+                const d = rMap.get(r.region);
+                d.mw += r.mw != null ? Number(r.mw) : 0;
+                d.count++;
+            });
+            return {
+                stage,
+                data: [...rMap.entries()]
+                    .map(([name, d]) => ({ name, ...d, color: regionColorMap[name] || '#94a3b8' }))
+                    .sort((a, b) => b.mw - a.mw),
+            };
+        });
+
         return {
             stages, maxStageMW,
             txRows, pocketRows, txMW, pocketMW,
@@ -246,6 +317,7 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
             voltages, maxVoltMW,
             critRows, critMW, critByStage,
             duplicates,
+            stageRegionData,
         };
     }, [allRows, subLookup]);
 
@@ -257,6 +329,7 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
         voltages, maxVoltMW,
         critRows, critMW, critByStage,
         duplicates,
+        stageRegionData,
     } = A;
 
     const totalGridMW = useMemo(
@@ -493,7 +566,7 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
                 </SectionCard>
             </div>
 
-            {/* ── Panel 4: Regional & Grid Distribution ────────────────── */}
+            {/* ── Panel 4: Regional Distribution + Regional by Stage ───── */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
 
                 <SectionCard title="Regional Distribution" desc="Total MW assigned per region, highlighting how shedding load is spread geographically across the grid.">
@@ -525,6 +598,113 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
                     )}
                 </SectionCard>
 
+                <SectionCard
+                    title="Regional Distribution by Stage"
+                    desc="MW share per region for each stage — select a stage to see how shedding load is distributed geographically within that frequency threshold."
+                >
+                    {stages.length === 0 || !stageRegionData.some(s => s.data.length > 0) ? (
+                        <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.78rem', padding: '1rem' }}>No data</div>
+                    ) : (
+                        <>
+                            {/* Stage selector buttons */}
+                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+                                {stages.map((stage, i) => {
+                                    const isActive = i === activeRegStageIdx;
+                                    return (
+                                        <button
+                                            key={stage.id}
+                                            onClick={() => setActiveRegStageIdx(i)}
+                                            style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                                padding: '4px 10px',
+                                                border: `1.5px solid ${isActive ? stage.color : '#e2e8f0'}`,
+                                                borderRadius: '6px',
+                                                background: isActive ? `${stage.color}18` : '#f8fafc',
+                                                cursor: 'pointer',
+                                                fontSize: '0.65rem',
+                                                fontWeight: isActive ? 700 : 500,
+                                                color: isActive ? stage.color : '#64748b',
+                                                transition: 'all 0.15s ease',
+                                                fontFamily: "'Poppins', sans-serif",
+                                            }}
+                                        >
+                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: stage.color, display: 'inline-block', flexShrink: 0 }} />
+                                            {stage.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Pie chart + legend for the active stage */}
+                            {(() => {
+                                const { data } = stageRegionData[activeRegStageIdx] || { data: [] };
+                                if (!data.length) return (
+                                    <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.78rem', padding: '1rem' }}>
+                                        No regional data for this stage
+                                    </div>
+                                );
+                                const total = data.reduce((s, d) => s + d.mw, 0);
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+
+                                        {/* Metric legend header */}
+                                        <div style={{ display: 'flex', gap: '1.25rem', paddingBottom: '0.5rem', borderBottom: '1px solid #f1f5f9' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <div style={{ width: 16, height: 4, borderRadius: '2px', background: '#3b82f6', flexShrink: 0 }} />
+                                                <span style={{ fontSize: '0.6rem', fontWeight: 600, color: '#64748b' }}>Stage share</span>
+                                                <InfoTip text={`% = Region MW ÷ Stage Total MW × 100\n\nHow much of this stage's total shed load comes from this region.`} />
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <div style={{ width: 16, height: 4, borderRadius: '2px', background: '#f97316', flexShrink: 0 }} />
+                                                <span style={{ fontSize: '0.6rem', fontWeight: 600, color: '#64748b' }}>Grid coverage</span>
+                                                <InfoTip text={`% = Region MW (shed) ÷ Region Total Grid MW × 100\n\nWhat fraction of this region's total grid load is shed by this stage.`} />
+                                            </div>
+                                        </div>
+
+                                        {/* Region rows */}
+                                        {data.map(r => {
+                                            const stagePct = total > 0 ? (r.mw / total) * 100 : 0;
+                                            const regionTotal = regionTotalMWMap[r.name] || 0;
+                                            const coveragePct = regionTotal > 0 ? (r.mw / regionTotal) * 100 : null;
+                                            return (
+                                                <div key={r.name} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                                                            <div style={{ width: 8, height: 8, borderRadius: '2px', background: r.color, flexShrink: 0 }} />
+                                                            <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {r.name}
+                                                            </span>
+                                                        </div>
+                                                        <span style={{ fontSize: '0.66rem', fontWeight: 600, color: '#10b981', flexShrink: 0 }}>
+                                                            {fmt(r.mw)} MW
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '66px 1fr 36px', gap: '5px', alignItems: 'center' }}>
+                                                        <span style={{ fontSize: '0.57rem', color: '#94a3b8' }}>Stage share</span>
+                                                        <HBar value={stagePct} max={100} color="#3b82f6" height={5} />
+                                                        <span style={{ fontSize: '0.6rem', fontWeight: 600, color: '#3b82f6', textAlign: 'right' }}>{stagePct.toFixed(1)}%</span>
+                                                    </div>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: '66px 1fr 36px', gap: '5px', alignItems: 'center' }}>
+                                                        <span style={{ fontSize: '0.57rem', color: '#94a3b8' }}>Grid cover</span>
+                                                        <HBar value={coveragePct || 0} max={100} color="#f97316" height={5} />
+                                                        <span style={{ fontSize: '0.6rem', fontWeight: 600, color: coveragePct != null ? '#f97316' : '#94a3b8', textAlign: 'right' }}>
+                                                            {coveragePct != null ? `${coveragePct.toFixed(1)}%` : '—'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                        </>
+                    )}
+                </SectionCard>
+            </div>
+
+            {/* ── Panel 5a: Grid Distribution + Critical MW per Stage ───── */}
+            <div style={{ display: 'grid', gridTemplateColumns: critByStage.length > 0 ? '1fr 1fr' : '1fr', gap: '1.25rem' }}>
+
                 <SectionCard title="Grid Distribution" desc="Total MW assigned per grid zone, showing the shedding load contribution from each transmission grid.">
                     {grids.length === 0 ? (
                         <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.78rem', padding: '1rem' }}>No data</div>
@@ -545,45 +725,44 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
                         </div>
                     )}
                 </SectionCard>
-            </div>
 
-            {/* ── Panel 5a: Critical MW per Stage ──────────────────────── */}
-            {critByStage.length > 0 && (
-                <SectionCard title="Critical Substation MW by Stage" desc="For each stage, the portion of its assigned MW that belongs to critical substations — indicates the risk exposure if that stage is triggered.">
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                        {critByStage
-                            .slice()
-                            .sort((a, b) => b.mw - a.mw)
-                            .map((s, i) => {
-                                const stageTotalMW = stages.find(st => st.id === s.stageId)?.mw || 0;
-                                const pct = stageTotalMW > 0 ? ((s.mw / stageTotalMW) * 100).toFixed(1) : '0.0';
-                                return (
-                                    <div key={i}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '5px' }}>
-                                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#334155', flex: 1 }}>
-                                                {s.label}
-                                            </span>
-                                            <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>
-                                                {s.count} sub{s.count !== 1 ? 's' : ''}
-                                            </span>
-                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#ef4444', minWidth: '70px', textAlign: 'right' }}>
-                                                {fmt(s.mw)} MW
-                                            </span>
+                {critByStage.length > 0 && (
+                    <SectionCard title="Critical Substation MW by Stage" desc="For each stage, the portion of its assigned MW that belongs to critical substations — indicates the risk exposure if that stage is triggered.">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                            {critByStage
+                                .slice()
+                                .sort((a, b) => b.mw - a.mw)
+                                .map((s, i) => {
+                                    const stageTotalMW = stages.find(st => st.id === s.stageId)?.mw || 0;
+                                    const pct = stageTotalMW > 0 ? ((s.mw / stageTotalMW) * 100).toFixed(1) : '0.0';
+                                    return (
+                                        <div key={i}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '5px' }}>
+                                                <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#334155', flex: 1 }}>
+                                                    {s.label}
+                                                </span>
+                                                <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>
+                                                    {s.count} sub{s.count !== 1 ? 's' : ''}
+                                                </span>
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#ef4444', minWidth: '70px', textAlign: 'right' }}>
+                                                    {fmt(s.mw)} MW
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <HBar value={s.mw} max={stageTotalMW} color={s.color} height={8} />
+                                                <span style={{ fontSize: '0.58rem', color: '#cbd5e1', flexShrink: 0, minWidth: '36px', textAlign: 'right' }}>
+                                                    {pct}%
+                                                </span>
+                                                <InfoTip text={`Critical MW ÷ Stage total MW × 100\n${fmt(s.mw)} ÷ ${fmt(stageTotalMW)} MW = ${pct}%`} />
+                                            </div>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <HBar value={s.mw} max={stageTotalMW} color={s.color} height={8} />
-                                            <span style={{ fontSize: '0.58rem', color: '#cbd5e1', flexShrink: 0, minWidth: '36px', textAlign: 'right' }}>
-                                                {pct}%
-                                            </span>
-                                            <InfoTip text={`Critical MW ÷ Stage total MW × 100\n${fmt(s.mw)} ÷ ${fmt(stageTotalMW)} MW = ${pct}%`} />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                    </div>
-                </SectionCard>
-            )}
+                                    );
+                                })}
+                        </div>
+                    </SectionCard>
+                )}
+            </div>
 
             {/* ── Panel 5: Critical Substation Exposure ────────────────── */}
             <SectionCard title="Critical Substation Exposure" desc="Lists all critical substations included in this scheme, showing which stage they are assigned to and the MW quantum involved.">

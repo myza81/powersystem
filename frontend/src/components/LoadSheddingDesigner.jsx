@@ -22,7 +22,7 @@ import {
     RefreshCw,
     BarChart,
     TriangleAlert,
-    ShieldAlert, Cpu, CheckCircle2, Loader2, ArrowLeft, ZoomIn, ZoomOut, Network, Maximize2, Minimize2, MapPin, Eye, Filter, EyeOff, List, Layers, Unlock, Database, Building2, TrendingUp, Download, Settings2, ListChecks, Pause, ArrowUpRight, Check, Activity, BarChart2, CheckCircle, Navigation, Anchor, MousePointerClick, Move
+    ShieldAlert, Cpu, CheckCircle2, Loader2, ArrowLeft, ZoomIn, ZoomOut, Network, Maximize2, Minimize2, MapPin, Eye, Filter, EyeOff, List, Layers, Unlock, Database, Building2, TrendingUp, Download, Settings2, ListChecks, Pause, ArrowUpRight, Check, Activity, BarChart2, CheckCircle, Navigation, Anchor, MousePointerClick, Move, Info
 } from 'lucide-react';
 import CompactRegionalMetrics from './CompactRegionalMetrics';
 import { FaWandMagicSparkles, FaFolderTree, FaShieldHalved, FaLayerGroup, FaBolt, FaCircleNodes, FaCodeBranch, FaLock, FaBullseye, FaGaugeHigh, FaTableList, FaGear } from 'react-icons/fa6';
@@ -52,6 +52,49 @@ const COMP_CHANGE_META = {
 };
 
 const compactMnemonicComp = (subId) => String(subId || '').replace(/\d+$/, '');
+
+const DrawerInfoTip = ({ text }) => {
+    const [hovered, setHovered] = useState(false);
+    return (
+        <div
+            style={{ position: 'relative', display: 'inline-flex', flexShrink: 0, cursor: 'default' }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+        >
+            <Info size={10} style={{ color: '#475569' }} />
+            <AnimatePresence>
+                {hovered && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 4 }}
+                        transition={{ duration: 0.12 }}
+                        style={{
+                            position: 'absolute',
+                            bottom: '100%',
+                            left: 0,
+                            marginBottom: '5px',
+                            background: 'rgba(15, 23, 42, 0.96)',
+                            border: '1px solid rgba(148,163,184,0.2)',
+                            padding: '6px 10px',
+                            borderRadius: '6px',
+                            fontSize: '0.65rem',
+                            color: '#e2e8f0',
+                            zIndex: 9999,
+                            whiteSpace: 'pre-line',
+                            pointerEvents: 'none',
+                            boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                            maxWidth: '210px',
+                            lineHeight: '1.55',
+                        }}
+                    >
+                        {text}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
 
 const buildPublishedRows = (stageDetails, substations, relays) => {
     const subLookup = {};
@@ -2098,7 +2141,30 @@ const LoadSheddingDesigner = () => {
                     <span style={{ fontSize: '0.7rem', color: '#94a3b8', whiteSpace: 'nowrap', flexShrink: 0 }}>Scheme Designer</span>
                     <ChevronRight size={11} style={{ color: '#cbd5e1', flexShrink: 0 }} />
                     <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{schemeType} {reviewYear}</span>
-                    {versionLabel && <span style={{ fontSize: '0.7rem', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>· {versionLabel}</span>}
+                    <span style={{ color: '#cbd5e1', fontSize: '0.7rem', flexShrink: 0 }}>·</span>
+                    <input
+                        type="text"
+                        value={versionLabel}
+                        onChange={e => { setVersionLabel(e.target.value); setIsDirty(true); }}
+                        placeholder="Add label..."
+                        style={{
+                            fontSize: '0.7rem',
+                            color: '#64748b',
+                            fontFamily: "'Poppins', sans-serif",
+                            fontWeight: 400,
+                            background: 'transparent',
+                            border: 'none',
+                            borderBottom: '1px dashed transparent',
+                            outline: 'none',
+                            padding: '1px 2px',
+                            minWidth: '70px',
+                            maxWidth: '200px',
+                            cursor: 'text',
+                            transition: 'border-color 0.15s',
+                        }}
+                        onFocus={e => { e.target.style.borderBottomColor = '#94a3b8'; }}
+                        onBlur={e => { e.target.style.borderBottomColor = 'transparent'; }}
+                    />
                     {activeVersionMeta?.status === 'active'
                         ? <span style={{ fontSize: '0.57rem', fontWeight: 700, background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '2px 7px', borderRadius: '999px', flexShrink: 0 }}>Published</span>
                         : <span style={{ fontSize: '0.57rem', fontWeight: 700, background: '#fefce8', border: '1px solid #fde68a', color: '#92400e', padding: '2px 7px', borderRadius: '999px', flexShrink: 0 }}>Draft</span>
@@ -2148,7 +2214,7 @@ const LoadSheddingDesigner = () => {
                                         </div>
                                         <div>
                                             <label style={{ fontSize: '0.68rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Document Name</label>
-                                            <input type="text" placeholder="e.g. 2026 National UFLS" value={versionLabel} onChange={e => setVersionLabel(e.target.value)} disabled={!!activeVersionId && !isNewlyCloned} style={{ width: '100%', padding: '0.45rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.72rem', color: '#0f172a', outline: 'none', background: '#fff', opacity: (activeVersionId && !isNewlyCloned) ? 0.6 : 1, boxSizing: 'border-box' }} />
+                                            <input type="text" placeholder="e.g. 2026 National UFLS" value={versionLabel} onChange={e => { setVersionLabel(e.target.value); setIsDirty(true); }} disabled={!!activeVersionId && !isNewlyCloned} style={{ width: '100%', padding: '0.45rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.72rem', color: '#0f172a', outline: 'none', background: '#fff', opacity: (activeVersionId && !isNewlyCloned) ? 0.6 : 1, boxSizing: 'border-box' }} />
                                         </div>
                                         {activeVersionId && <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontStyle: 'italic' }}>Profile is locked for existing drafts.</div>}
                                     </div>
@@ -2269,20 +2335,85 @@ const LoadSheddingDesigner = () => {
                                 {/* Regional breakdown — scheme-wide */}
                                 {gridData?.regional_breakdown && (
                                     <div style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0' }}>
-                                        <div style={{ fontSize: '0.58rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '0.65rem' }}>All-Stage Regional</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '0.65rem' }}>
+                                            <div style={{ fontSize: '0.58rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8' }}>All-Stage Regional</div>
+                                            <DrawerInfoTip text={`Total MW assigned per region across all stages, compared against each region's proportional target.\n\nBar = assigned ÷ target. Regions over-assigned show in red.`} />
+                                        </div>
                                         <CompactRegionalMetrics data={getOverallRegionalSpiralData()} labelKey="region" valueKey="assigned_mw" targetKey="target_mw" />
                                     </div>
                                 )}
-                                {/* Regional breakdown — active stage */}
+                                {/* Regional Distribution by Stage — dual metric (stage share + grid coverage) */}
                                 {gridData?.regional_breakdown && stages[activeStageIdx] && (
-                                    <div style={{ padding: '1rem' }}>
+                                    <div style={{ padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
-                                            <div style={{ fontSize: '0.58rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8' }}>Stage Regional</div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <div style={{ fontSize: '0.58rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8' }}>Regional by Stage</div>
+                                                <DrawerInfoTip text={`For the active stage, two ratios per region:\n\n• Stage share (blue): Region MW ÷ Stage Total MW — this region's contribution to the stage's shed load.\n\n• Grid coverage (orange): Region MW ÷ Region Total Grid MW — fraction of the region's total load being shed.`} />
+                                            </div>
                                             <span style={{ fontSize: '0.57rem', fontWeight: 600, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '1px 5px' }}>
                                                 {stages[activeStageIdx].label}
                                             </span>
                                         </div>
-                                        <CompactRegionalMetrics data={getStageRegionalSpiralData(stages[activeStageIdx])} labelKey="region" valueKey="assigned_mw" targetKey="target_mw" />
+
+                                        {/* Metric legend */}
+                                        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem', paddingBottom: '0.4rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                <div style={{ width: 12, height: 3, borderRadius: '2px', background: '#3b82f6', flexShrink: 0 }} />
+                                                <span style={{ fontSize: '0.55rem', fontWeight: 600, color: '#64748b' }} title="Region MW ÷ Stage Total MW × 100">Stage share</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                <div style={{ width: 12, height: 3, borderRadius: '2px', background: '#f97316', flexShrink: 0 }} />
+                                                <span style={{ fontSize: '0.55rem', fontWeight: 600, color: '#64748b' }} title="Region MW ÷ Region Total Grid MW × 100">Grid coverage</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Region rows */}
+                                        {(() => {
+                                            const regionTotalMap = Object.fromEntries(
+                                                gridData.regional_breakdown.map(r => [r.region, r.total_pload_mw || 0])
+                                            );
+                                            const stageData = getStageRegionalSpiralData(stages[activeStageIdx]);
+                                            const filtered = stageData.filter(d => (d.assigned_mw || 0) > 0).sort((a, b) => (b.assigned_mw || 0) - (a.assigned_mw || 0));
+                                            if (!filtered.length) return (
+                                                <div style={{ fontSize: '0.63rem', color: '#475569', textAlign: 'center', padding: '0.5rem 0' }}>No assignments for this stage</div>
+                                            );
+                                            const stageTotalMW = filtered.reduce((s, d) => s + (d.assigned_mw || 0), 0);
+                                            return (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                    {filtered.map(d => {
+                                                        const stagePct = stageTotalMW > 0 ? (d.assigned_mw / stageTotalMW) * 100 : 0;
+                                                        const regionTotal = regionTotalMap[d.region] || 0;
+                                                        const coveragePct = regionTotal > 0 ? (d.assigned_mw / regionTotal) * 100 : null;
+                                                        return (
+                                                            <div key={d.region} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <span style={{ fontSize: '0.62rem', fontWeight: 600, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '110px' }}>
+                                                                        {d.region}
+                                                                    </span>
+                                                                    <span style={{ fontSize: '0.6rem', fontFamily: 'monospace', fontWeight: 600, color: '#10b981', flexShrink: 0 }}>
+                                                                        {(d.assigned_mw || 0).toFixed(1)} MW
+                                                                    </span>
+                                                                </div>
+                                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 30px', gap: '4px', alignItems: 'center' }}>
+                                                                    <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '3px', height: 4, overflow: 'hidden' }}>
+                                                                        <div style={{ width: `${stagePct}%`, height: '100%', background: '#3b82f6', borderRadius: '3px', transition: 'width 0.4s ease' }} />
+                                                                    </div>
+                                                                    <span style={{ fontSize: '0.57rem', fontWeight: 600, color: '#3b82f6', textAlign: 'right' }}>{stagePct.toFixed(1)}%</span>
+                                                                </div>
+                                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 30px', gap: '4px', alignItems: 'center' }}>
+                                                                    <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '3px', height: 4, overflow: 'hidden' }}>
+                                                                        <div style={{ width: `${Math.min(coveragePct || 0, 100)}%`, height: '100%', background: '#f97316', borderRadius: '3px', transition: 'width 0.4s ease' }} />
+                                                                    </div>
+                                                                    <span style={{ fontSize: '0.57rem', fontWeight: 600, color: coveragePct != null ? '#f97316' : '#475569', textAlign: 'right' }}>
+                                                                        {coveragePct != null ? `${coveragePct.toFixed(1)}%` : '—'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 )}
                             </>
