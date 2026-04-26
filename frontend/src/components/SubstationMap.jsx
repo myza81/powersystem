@@ -160,12 +160,12 @@ const lerpPoint = (p1, p2, t) => [
     p1[1] + (p2[1] - p1[1]) * t,
 ];
 
-const SubstationMap = ({ data, focusLocation, fuiMode = false, networkLinks = [], showNetworkLines = false, circuitDisplayMode = 'thickness', radiusConfig = null }) => {
+const SubstationMap = ({ data, focusLocation, fuiMode = false, networkLinks = [], showNetworkLines = false, circuitDisplayMode = 'thickness', radiusConfig = null, networkColors = null }) => {
     const defaultCenter = [4.2105, 101.9758];
     const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
     const [showSettings, setShowSettings] = useState(false);
     const [activeTab, setActiveTab] = useState('layers');
-    const [activeLayer, setActiveLayer] = useState(fuiMode ? 'dark' : 'light');
+    const [activeLayer, setActiveLayer] = useState('light');
     const [showHeatmap, setShowHeatmap] = useState(true);
     const [showMarkers, setShowMarkers] = useState(true);
 
@@ -678,10 +678,10 @@ const SubstationMap = ({ data, focusLocation, fuiMode = false, networkLinks = []
                                 return null;
                             }
                             
-                            let color = '#ffffff'; // unknown
-                            if (link.voltage_kv >= 500) color = '#facc15'; // gold
-                            else if (link.voltage_kv >= 275) color = '#22d3ee'; // cyan
-                            else if (link.voltage_kv >= 132) color = '#4ade80'; // lime green
+                            let color = networkColors?.other || '#ffffff'; // unknown
+                            if (link.voltage_kv >= 500) color = networkColors?.kv500 || '#facc15'; // gold
+                            else if (link.voltage_kv >= 275) color = networkColors?.kv275 || '#22d3ee'; // cyan
+                            else if (link.voltage_kv >= 132) color = networkColors?.kv132 || '#4ade80'; // lime green
                             
                             // Rendering strategy based on circuitDisplayMode
                             if (circuitDisplayMode === 'multiple' && link.circuit_count > 1) {

@@ -17,6 +17,22 @@ const SubstationFilter = ({
     onViewModeChange
 }) => {
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(false);
+
+    useEffect(() => {
+        const handleResize = () => {
+            const mobile = window.innerWidth < 1024;
+            setIsMobile(mobile);
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    useEffect(() => {
+        setIsCollapsed(isMobile);
+    }, [isMobile]);
 
     // Destructure current filters
     const { region, grid, state, voltage, ownership, search, hasRelay, commissionYear, transformerYear } = currentFilters;
@@ -95,13 +111,22 @@ const SubstationFilter = ({
 
     return (
         <div style={{ background: 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(12px)', borderRadius: '12px', border: '1px solid rgba(34, 211, 238, 0.2)', marginBottom: '1.5rem', padding: '1.25rem', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f766e' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isCollapsed ? 0 : '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <div 
+                    onClick={() => { if (isMobile) setIsCollapsed(!isCollapsed); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f766e', cursor: isMobile ? 'pointer' : 'default' }}
+                >
                     <Filter size={18} />
                     <span style={{ fontWeight: 600 }}>Filter Substations</span>
+                    {isMobile && (
+                        <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '4px' }}>
+                            {isCollapsed ? '(Tap to Expand)' : '(Tap to Collapse)'}
+                        </span>
+                    )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.75rem', flex: 1, justifyContent: 'flex-end', alignItems: 'center' }}>
+                {(!isMobile || !isCollapsed) && (
+                <div style={{ display: 'flex', gap: '0.75rem', flex: 1, justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
                     {/* Search Bar */}
                     <div style={{ position: 'relative', minWidth: '200px', flex: '0 1 350px' }}>
                         <Search size={16} color="#64748b" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -201,8 +226,17 @@ const SubstationFilter = ({
                         </button>
                     )}
                 </div>
+                )}
             </div>
 
+            <AnimatePresence>
+                {!isCollapsed && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        style={{ overflow: 'hidden' }}
+                    >
             {/* Basic Filters Row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
                 <FilterDropdown label="Region" value={region} options={uniqueValues.regions} onChange={(v) => updateFilter('region', v)} />
@@ -229,6 +263,9 @@ const SubstationFilter = ({
                             <FilterDropdown label="Substation Commission" value={commissionYear || 'All'} options={uniqueValues.decades} onChange={(v) => updateFilter('commissionYear', v)} />
                             <FilterDropdown label="Load Transformer Commission" value={transformerYear || 'All'} options={['All', 'None', ...uniqueValues.txDecades.filter(y => y !== 'All')]} onChange={(v) => updateFilter('transformerYear', v)} />
                         </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
                     </motion.div>
                 )}
             </AnimatePresence>
