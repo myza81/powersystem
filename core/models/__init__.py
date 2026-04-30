@@ -18,6 +18,7 @@ from .core_models import (
     LoadSheddingPocketBoundary,
     LoadSheddingSchemeType,
     LoadSheddingAlertConfig,
+    LoadSheddingChangeLog,
 )
 from .snapshot_models import (
     NetworkSnapshot,
@@ -60,6 +61,7 @@ __all__ = [
     'LoadSheddingPocketBoundary',
     'LoadSheddingSchemeType',
     'LoadSheddingAlertConfig',
+    'LoadSheddingChangeLog',
     'NetworkSnapshot',
     'NetworkArea',
     'NetworkZone',

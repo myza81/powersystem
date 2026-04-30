@@ -937,3 +937,58 @@ class LoadSheddingAlertConfig(models.Model):
             )
             results[scheme] = obj
         return results
+
+
+class LoadSheddingChangeLog(models.Model):
+    """
+    Permanent audit trail of bay-level changes made when a draft is published.
+    One row per changed bay (new / revised / defeated) per publish event.
+    Only superusers may edit the reason field after the fact.
+    """
+    CHANGE_TYPE_CHOICES = [
+        ('new', 'New Assignment'),
+        ('revised', 'Revised'),
+        ('defeated', 'Defeated'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    version = models.ForeignKey(
+        LoadSheddingVersion,
+        on_delete=models.CASCADE,
+        related_name='change_logs',
+    )
+    compared_to_version = models.ForeignKey(
+        LoadSheddingVersion,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='compared_in_logs',
+    )
+    change_type = models.CharField(max_length=20, choices=CHANGE_TYPE_CHOICES)
+    substation_id = models.CharField(max_length=50, blank=True)
+    substation_name = models.CharField(max_length=150, blank=True)
+    feeder = models.CharField(max_length=200, blank=True)
+    old_stage_label = models.CharField(max_length=100, blank=True)
+    new_stage_label = models.CharField(max_length=100, blank=True)
+    reason = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='created_change_logs',
+    )
+    edited_at = models.DateTimeField(null=True, blank=True)
+    edited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='edited_change_logs',
+    )
+
+    class Meta:
+        ordering = ['change_type', 'substation_id']
+        verbose_name = "Load Shedding Change Log"
+        verbose_name_plural = "Load Shedding Change Logs"
+
+    def __str__(self):
+        return f"{self.change_type} | {self.substation_id} | {self.feeder} [{self.version}]"

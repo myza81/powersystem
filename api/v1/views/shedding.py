@@ -12,6 +12,7 @@ from core.models import (
     LoadSheddingPocketBay,
     LoadSheddingPocketBoundary,
     LoadSheddingAlertConfig,
+    LoadSheddingChangeLog,
 )
 from api.v1.serializers.shedding import (
     LoadSheddingSettingSerializer,
@@ -22,6 +23,7 @@ from api.v1.serializers.shedding import (
     LoadSheddingPocketBaySerializer,
     LoadSheddingPocketBoundarySerializer,
     LoadSheddingAlertConfigSerializer,
+    LoadSheddingChangeLogSerializer,
 )
 
 class BaseSheddingViewSet(viewsets.ModelViewSet):
@@ -115,12 +117,46 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
             )
         return super().destroy(request, *args, **kwargs)
 
+    @action(detail=True, methods=['get'], url_path='pre-publish-diff')
+    def pre_publish_diff(self, request, pk=None):
+        """
+        Returns the currently active version ID for the same scheme type.
+        The frontend uses this to fetch both versions' stages, build rows,
+        and compute the diff before showing the publish reason modal.
+        """
+        version = self.get_object()
+        if version.status != 'draft':
+            return Response({"error": "Version is not a draft."}, status=status.HTTP_400_BAD_REQUEST)
+
+        active = LoadSheddingVersion.objects.filter(
+            scheme_type=version.scheme_type,
+            is_active=True,
+        ).exclude(id=version.id).first()
+
+        return Response({
+            "active_version_id": str(active.id) if active else None,
+            "active_version_label": str(active) if active else None,
+            "has_active": active is not None,
+        })
+
     @action(detail=True, methods=['post'])
     def publish(self, request, pk=None):
         version = self.get_object()
         user = request.user
         if not user.is_superuser and version.created_by != user:
             return Response({"error": "You are not authorized to publish this draft."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Validate change reasons when provided
+        change_reasons = request.data.get('change_reasons', [])
+        compared_to_version_id = request.data.get('compared_to_version_id')
+
+        if change_reasons:
+            missing = [i for i, r in enumerate(change_reasons) if not str(r.get('reason', '')).strip()]
+            if missing:
+                return Response(
+                    {"error": "All changed rows must have a reason filled in.", "missing_indices": missing},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         # Compute MW cache for all transformer bays before publishing
         from core.models import NetworkSnapshot
@@ -131,7 +167,6 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
                     try:
                         tb.compute_mw(snapshot)
                     except Exception as e:
-                        # Log but don't block publish
                         import logging
                         logging.getLogger(__name__).warning(f"Failed to compute MW for TB {tb.id}: {e}")
                 for pb in stage.pocket_bays.all():
@@ -142,7 +177,102 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
                         logging.getLogger(__name__).warning(f"Failed to compute topology for PB {pb.id}: {e}")
 
         version.publish(user=request.user)
+
+        # Persist change log entries
+        if change_reasons:
+            compared_to = None
+            if compared_to_version_id:
+                try:
+                    compared_to = LoadSheddingVersion.objects.get(id=compared_to_version_id)
+                except LoadSheddingVersion.DoesNotExist:
+                    pass
+            for entry in change_reasons:
+                LoadSheddingChangeLog.objects.create(
+                    version=version,
+                    compared_to_version=compared_to,
+                    change_type=entry.get('change_type', 'new'),
+                    substation_id=entry.get('substation_id', ''),
+                    substation_name=entry.get('substation_name', ''),
+                    feeder=entry.get('feeder', ''),
+                    old_stage_label=entry.get('old_stage_label', ''),
+                    new_stage_label=entry.get('new_stage_label', ''),
+                    reason=str(entry.get('reason', '')).strip(),
+                    created_by=user,
+                )
+
         return Response(self.get_serializer(version).data)
+
+    @action(detail=True, methods=['get'], url_path='change-log')
+    def change_log(self, request, pk=None):
+        """Returns all change log entries recorded when this version was published."""
+        version = self.get_object()
+        logs = LoadSheddingChangeLog.objects.filter(version=version).select_related(
+            'created_by', 'edited_by', 'compared_to_version'
+        )
+        return Response(LoadSheddingChangeLogSerializer(logs, many=True).data)
+
+    @action(detail=True, methods=['post'], url_path='add-change-log')
+    def add_change_log(self, request, pk=None):
+        """
+        Manually add change log entries for an already-published version.
+        Used when a version was published before the changelog feature existed,
+        or when entries were not captured at publish time.
+        Requires staff or superuser.
+        """
+        version = self.get_object()
+        user = request.user
+
+        if not (user.is_staff or user.is_superuser):
+            return Response(
+                {"error": "Only staff or superusers can add change log entries."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if version.status not in ['active', 'deactivated']:
+            return Response(
+                {"error": "Change log entries can only be added to published versions."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        change_reasons = request.data.get('change_reasons', [])
+        compared_to_version_id = request.data.get('compared_to_version_id')
+
+        if not change_reasons:
+            return Response({"error": "No change reasons provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        missing = [i for i, r in enumerate(change_reasons) if not str(r.get('reason', '')).strip()]
+        if missing:
+            return Response(
+                {"error": "All changed rows must have a reason filled in.", "missing_indices": missing},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        compared_to = None
+        if compared_to_version_id:
+            try:
+                compared_to = LoadSheddingVersion.objects.get(id=compared_to_version_id)
+            except LoadSheddingVersion.DoesNotExist:
+                pass
+
+        created = []
+        for entry in change_reasons:
+            log = LoadSheddingChangeLog.objects.create(
+                version=version,
+                compared_to_version=compared_to,
+                change_type=entry.get('change_type', 'new'),
+                substation_id=entry.get('substation_id', ''),
+                substation_name=entry.get('substation_name', ''),
+                feeder=entry.get('feeder', ''),
+                old_stage_label=entry.get('old_stage_label', ''),
+                new_stage_label=entry.get('new_stage_label', ''),
+                reason=str(entry.get('reason', '')).strip(),
+                created_by=user,
+            )
+            created.append(log)
+
+        return Response(
+            LoadSheddingChangeLogSerializer(created, many=True).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=['post'])
     def unpublish(self, request, pk=None):
@@ -601,3 +731,41 @@ class LoadSheddingAlertConfigViewSet(BaseSheddingViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save(updated_by=request.user)
         return Response(serializer.data)
+
+
+class LoadSheddingChangeLogViewSet(viewsets.GenericViewSet,
+                                   viewsets.mixins.ListModelMixin,
+                                   viewsets.mixins.RetrieveModelMixin,
+                                   viewsets.mixins.UpdateModelMixin):
+    """
+    Read-only for staff/viewers. Only superusers may PATCH the reason field.
+    """
+    serializer_class = LoadSheddingChangeLogSerializer
+    http_method_names = ['get', 'patch', 'head', 'options']
+
+    def get_queryset(self):
+        qs = LoadSheddingChangeLog.objects.select_related(
+            'version', 'compared_to_version', 'created_by', 'edited_by'
+        )
+        version_id = self.request.query_params.get('version')
+        if version_id:
+            qs = qs.filter(version_id=version_id)
+        return qs
+
+    def get_permissions(self):
+        if self.request.method in permissions.SAFE_METHODS:
+            return [permissions.AllowAny()]
+        return [IsSuperuser()]
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        reason = str(request.data.get('reason', '')).strip()
+        if not reason:
+            return Response({"error": "Reason cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(reason) > 200:
+            return Response({"error": "Reason must be 200 characters or less."}, status=status.HTTP_400_BAD_REQUEST)
+        instance.reason = reason
+        instance.edited_at = timezone.now()
+        instance.edited_by = request.user
+        instance.save(update_fields=['reason', 'edited_at', 'edited_by'])
+        return Response(LoadSheddingChangeLogSerializer(instance).data)

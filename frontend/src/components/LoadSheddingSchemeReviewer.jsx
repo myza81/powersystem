@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Search, X, Download, RefreshCw, BarChart2, Filter, RotateCcw, AlertCircle, TriangleAlert, CheckCircle2, GripVertical, ChevronDown, ChevronUp, Maximize2, Minimize2
+    Search, X, Download, RefreshCw, BarChart2, Filter, RotateCcw, AlertCircle, CheckCircle2, GripVertical, ChevronDown, ChevronUp, Maximize2, Minimize2, Pencil, Check
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { FaBolt, FaLayerGroup, FaCircleNodes, FaCodeBranch, FaTableList, FaShieldHalved } from 'react-icons/fa6';
+import { FaLayerGroup, FaCodeBranch, FaTableList, FaShieldHalved, FaClockRotateLeft } from 'react-icons/fa6';
 import { normalisePocketBay, computeSchemeMetrics } from '../utils/loadSheddingUtils';
 import SchemeAnalytics from './SchemeAnalytics';
 import api from '../api';
@@ -324,6 +324,12 @@ const EXPORT_COLUMNS = [
     { key: 'delay2', label: 'Delay 2 (s)', defaultOn: false, getValue: r => r.delay2 },
     { key: 'critical', label: 'Critical Subs', defaultOn: false, getValue: r => r.isCritical ? 'Yes' : '' },
     { key: 'comparison', label: 'Comparison', defaultOn: false, getValue: r => r._compRow ? `${CHANGE_META[r._compRow.changeType]?.label || r._compRow.changeType}: ${r._compRow.oldStageLabel || '—'} --> ${r._compRow.changeType === 'defeated' ? '—' : r._compRow.stageLabel}` : '—' },
+    { key: 'changelog', label: 'Change Log Reason', defaultOn: false, getValue: r => {
+        if (!r._changeLogRow) return '';
+        const e = r._changeLogRow;
+        const label = CHANGE_META[e.change_type]?.label || e.change_type;
+        return e.reason ? `${label}: ${e.reason}` : label;
+    }},
 ];
 
 
@@ -387,7 +393,22 @@ const LoadSheddingSchemeReviewer = () => {
 
     // Export comparison state (selected scheme vs latest deactivated published version)
     const [prevSchemeStages, setPrevSchemeStages] = useState([]);
-    const [loadingPrevScheme, setLoadingPrevScheme] = useState(false);
+    const [, setLoadingPrevScheme] = useState(false);
+
+    // Change log tab state
+    const [changeLog, setChangeLog] = useState([]);
+    const [loadingChangeLog, setLoadingChangeLog] = useState(false);
+    const [currentUser, setCurrentUser] = useState(null);
+    const [editingLogId, setEditingLogId] = useState(null);
+    const [editingLogReason, setEditingLogReason] = useState('');
+
+    // Add-change-log modal state (for versions published before this feature existed)
+    const [showAddLogModal, setShowAddLogModal] = useState(false);
+    const [addLogDiff, setAddLogDiff] = useState([]);
+    const [addLogReasons, setAddLogReasons] = useState({});
+    const [addLogComparedVersionId, setAddLogComparedVersionId] = useState(null);
+    const [addLogComparedLabel, setAddLogComparedLabel] = useState('');
+    const [addLogLoading, setAddLogLoading] = useState(false);
 
     // Filters
     const [search, setSearch] = useState('');
@@ -403,7 +424,7 @@ const LoadSheddingSchemeReviewer = () => {
     const dragIdx = React.useRef(null);
 
     const [isFilterCollapsed, setIsFilterCollapsed] = useState(window.innerWidth < 1024);
-    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+    const [, setIsMobile] = useState(window.innerWidth < 1024);
     const [isTableFullscreen, setIsTableFullscreen] = useState(false);
 
     useEffect(() => {
@@ -496,7 +517,120 @@ const LoadSheddingSchemeReviewer = () => {
         }
     };
 
+    const fetchChangeLog = async (versionId) => {
+        if (!versionId) return;
+        setLoadingChangeLog(true);
+        try {
+            const res = await api.get(`/load-shedding-versions/${versionId}/change-log/`);
+            setChangeLog(res.data || []);
+        } catch (err) {
+            console.error('Failed to fetch change log', err);
+            setChangeLog([]);
+        } finally {
+            setLoadingChangeLog(false);
+        }
+    };
+
+    const handleSaveLogReason = async (logId) => {
+        const reason = editingLogReason.trim();
+        if (!reason) return;
+        try {
+            await api.patch(`/load-shedding-change-logs/${logId}/`, { reason });
+            setChangeLog(prev => prev.map(e => e.id === logId ? { ...e, reason } : e));
+            setEditingLogId(null);
+        } catch (err) {
+            alert(`Failed to save reason. ${err?.response?.data?.error || err.message}`);
+        }
+    };
+
+    // The version published immediately before the selected scheme (same scheme type)
+    const previousVersion = useMemo(() => {
+        if (!selectedScheme) return null;
+        const thisTime = selectedScheme.published_at ? new Date(selectedScheme.published_at) : null;
+        return publishedVersions
+            .filter(v => v.scheme_type === selectedScheme.scheme_type && v.id !== selectedScheme.id)
+            .filter(v => !thisTime || new Date(v.published_at) < thisTime)
+            .sort((a, b) => new Date(b.published_at) - new Date(a.published_at))[0] || null;
+    }, [selectedScheme, publishedVersions]);
+
+    const sessionDraftKey = selectedScheme ? `cls_draft_${selectedScheme.id}` : null;
+
+    const openAddLogModal = async () => {
+        if (!selectedScheme || !previousVersion) return;
+        setAddLogLoading(true);
+        try {
+            const [curRes, prevRes] = await Promise.all([
+                api.get(`/load-shedding-stages/?version=${selectedScheme.id}&include_bays=true`),
+                api.get(`/load-shedding-stages/?version=${previousVersion.id}&include_bays=true`),
+            ]);
+            const curRows = buildRows(curRes.data, substations, relays);
+            const prevRows = buildRows(prevRes.data, substations, relays);
+            const diff = buildComparisonRows(curRows, prevRows).filter(r => r.changeType !== 'unchanged');
+            setAddLogDiff(diff);
+            setAddLogComparedVersionId(previousVersion.id);
+            setAddLogComparedLabel(`${previousVersion.scheme_type} ${previousVersion.review_year} v${previousVersion.version}`);
+
+            // Restore any previously drafted reasons from sessionStorage
+            const saved = sessionDraftKey ? sessionStorage.getItem(sessionDraftKey) : null;
+            if (saved) {
+                try { setAddLogReasons(JSON.parse(saved)); } catch { setAddLogReasons({}); }
+            } else {
+                setAddLogReasons({});
+            }
+
+            setShowAddLogModal(true);
+        } catch (err) {
+            alert(`Failed to load diff. ${err?.response?.data?.error || err.message}`);
+        } finally {
+            setAddLogLoading(false);
+        }
+    };
+
+    // Auto-save reasons to sessionStorage whenever they change while the modal is open
+    useEffect(() => {
+        if (!showAddLogModal || !sessionDraftKey) return;
+        sessionStorage.setItem(sessionDraftKey, JSON.stringify(addLogReasons));
+    }, [addLogReasons, showAddLogModal]);
+
+    const handleSubmitAddLog = async () => {
+        const rowKey = r => `${r.substationId}||${r.feeder}||${r.changeType}`;
+        // Only submit rows that have a reason — partial saves are allowed here
+        const change_reasons = addLogDiff
+            .filter(r => addLogReasons[rowKey(r)]?.trim())
+            .map(r => ({
+                change_type: r.changeType,
+                substation_id: r.substationId,
+                substation_name: r.substationName,
+                feeder: r.feeder,
+                old_stage_label: r.oldStageLabel || '',
+                new_stage_label: r.changeType === 'defeated' ? '' : (r.stageLabel || ''),
+                reason: addLogReasons[rowKey(r)].trim(),
+            }));
+        if (change_reasons.length === 0) {
+            alert('Please fill in at least one reason before saving.');
+            return;
+        }
+        setAddLogLoading(true);
+        try {
+            await api.post(`/load-shedding-versions/${selectedScheme.id}/add-change-log/`, {
+                change_reasons,
+                compared_to_version_id: addLogComparedVersionId,
+            });
+            // Clear session draft on successful commit
+            if (sessionDraftKey) sessionStorage.removeItem(sessionDraftKey);
+            setShowAddLogModal(false);
+            await fetchChangeLog(selectedScheme.id);
+        } catch (err) {
+            alert(`Failed to save. ${err?.response?.data?.error || err.message}`);
+        } finally {
+            setAddLogLoading(false);
+        }
+    };
+
     useEffect(() => { fetchVersions(); }, []);
+    useEffect(() => {
+        api.get('/users/me/').then(r => setCurrentUser(r.data)).catch(() => {});
+    }, []);
 
     useEffect(() => {
         const handler = () => fetchVersions();
@@ -506,6 +640,7 @@ const LoadSheddingSchemeReviewer = () => {
 
     useEffect(() => {
         if (activeTab === 'alert-report' && !complianceReport) fetchComplianceReport();
+        if (activeTab === 'change-log' && selectedScheme) fetchChangeLog(selectedScheme.id);
     }, [activeTab]);
 
     useEffect(() => {
@@ -718,11 +853,20 @@ const LoadSheddingSchemeReviewer = () => {
             compMap.set(`${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`, r);
         });
 
+        const changeLogMap = new Map();
+        changeLog.forEach(e => {
+            changeLogMap.set(`${e.substation_id}||${e.feeder}`, e);
+        });
+
         const headers = cols.map(c => c.label);
         const data = filteredRows
             .filter(r => r.type !== 'pocket_header')
             .map(r => {
-                const enriched = { ...r, _compRow: compMap.get(`${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`) || null };
+                const enriched = {
+                    ...r,
+                    _compRow: compMap.get(`${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`) || null,
+                    _changeLogRow: changeLogMap.get(`${r.substationId}||${r.feeder}`) || null,
+                };
                 return cols.map(c => c.getValue(enriched));
             });
 
@@ -732,7 +876,7 @@ const LoadSheddingSchemeReviewer = () => {
             data.push(new Array(cols.length).fill(''));
             data.push([`DEFEATED — Removed in current scheme (${defeatedRows.length} entr${defeatedRows.length === 1 ? 'y' : 'ies'})`]);
             data.push(headers);
-            defeatedRows.forEach(r => data.push(cols.map(c => c.getValue({ ...r, _compRow: r }))));
+            defeatedRows.forEach(r => data.push(cols.map(c => c.getValue({ ...r, _compRow: r, _changeLogRow: changeLogMap.get(`${r.substationId}||${r.feeder}`) || null }))));
         }
 
         const wb = XLSX.utils.book_new();
@@ -771,6 +915,11 @@ const LoadSheddingSchemeReviewer = () => {
             id: 'comparison',
             label: 'Comparison',
             icon: <FaCodeBranch size={15} />,
+        },
+        {
+            id: 'change-log',
+            label: 'Changes Log',
+            icon: <FaClockRotateLeft size={14} />,
         },
     ];
 
@@ -1696,8 +1845,297 @@ const LoadSheddingSchemeReviewer = () => {
                         </div>
                     )}
 
+                    {/* ── CHANGES LOG TAB ─────────────────────────────────── */}
+                    {activeTab === 'change-log' && (
+                        <div style={{ padding: '1.5rem 2rem', fontFamily: "'Poppins', sans-serif" }}>
+                            <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
+                                <div>
+                                    <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Changes Log</div>
+                                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
+                                        Permanent record of bay-level changes made when this version was published.
+                                        {currentUser?.is_superuser && (
+                                            <span style={{ marginLeft: '6px', color: '#7c3aed', fontWeight: 600 }}>Superuser: you may edit reasons.</span>
+                                        )}
+                                    </div>
+                                </div>
+                                {previousVersion && currentUser?.is_staff && changeLog.length > 0 && (
+                                    <button
+                                        onClick={openAddLogModal}
+                                        disabled={addLogLoading}
+                                        style={{
+                                            padding: '0.4rem 1rem', fontSize: '0.75rem', fontWeight: 600,
+                                            fontFamily: "'Poppins', sans-serif", whiteSpace: 'nowrap', flexShrink: 0,
+                                            background: '#f0fdf4', color: '#059669',
+                                            border: '1px solid #bbf7d0', borderRadius: '7px',
+                                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                            opacity: addLogLoading ? 0.6 : 1,
+                                        }}
+                                    >
+                                        <FaClockRotateLeft size={12} />
+                                        {addLogLoading ? 'Loading…' : 'Add More Records'}
+                                    </button>
+                                )}
+                            </div>
+
+                            {loadingChangeLog ? (
+                                <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.82rem' }}>Loading…</div>
+                            ) : changeLog.length === 0 ? (
+                                <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
+                                    <FaClockRotateLeft size={32} style={{ marginBottom: '0.75rem', opacity: 0.3 }} />
+                                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>No change records</div>
+                                    <div style={{ fontSize: '0.78rem', marginTop: '4px' }}>
+                                        Changes are recorded when a draft is published over an existing active version.
+                                    </div>
+                                    {previousVersion && currentUser?.is_staff && (
+                                        <button
+                                            onClick={openAddLogModal}
+                                            disabled={addLogLoading}
+                                            style={{
+                                                marginTop: '1.25rem', padding: '0.5rem 1.25rem',
+                                                fontSize: '0.8rem', fontWeight: 600,
+                                                fontFamily: "'Poppins', sans-serif",
+                                                background: '#f0fdf4', color: '#059669',
+                                                border: '1px solid #bbf7d0', borderRadius: '8px',
+                                                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px',
+                                                opacity: addLogLoading ? 0.6 : 1,
+                                            }}
+                                        >
+                                            <FaClockRotateLeft size={13} />
+                                            {addLogLoading ? 'Loading diff…' : `Record Changes vs ${addLogComparedLabel || `v${previousVersion.version}`}`}
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    {changeLog.map((entry) => {
+                                        const meta = CHANGE_META[entry.change_type] || CHANGE_META.new;
+                                        const isEditing = editingLogId === entry.id;
+                                        const stageChange = `${entry.old_stage_label || '—'} → ${entry.change_type === 'defeated' ? '—' : (entry.new_stage_label || '—')}`;
+                                        const dateStr = entry.created_at
+                                            ? new Date(entry.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                                            : '—';
+                                        return (
+                                            <div
+                                                key={entry.id}
+                                                style={{
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #e2e8f0',
+                                                    borderLeft: `4px solid ${meta.color}`,
+                                                    background: '#fff',
+                                                    padding: '0.6rem 0.85rem',
+                                                    transition: 'background 0.1s',
+                                                }}
+                                                onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
+                                                onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                                            >
+                                                {/* ── Top row: badge · substation · id chip · stage change ── meta right */}
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                                                        <span style={{
+                                                            padding: '1px 8px', borderRadius: '999px', fontSize: '0.6rem', fontWeight: 700,
+                                                            background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`,
+                                                            whiteSpace: 'nowrap', flexShrink: 0, letterSpacing: '0.03em',
+                                                        }}>
+                                                            {meta.label}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
+                                                            {entry.substation_name}
+                                                        </span>
+                                                        <span style={{
+                                                            padding: '1px 6px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 600,
+                                                            background: '#f1f5f9', color: '#475569', fontFamily: 'monospace',
+                                                            whiteSpace: 'nowrap', flexShrink: 0,
+                                                        }}>
+                                                            {entry.substation_id}
+                                                        </span>
+                                                        <span style={{ fontSize: '0.72rem', color: '#64748b', whiteSpace: 'nowrap' }}>
+                                                            {stageChange}
+                                                        </span>
+                                                    </div>
+                                                    {/* Meta: author · date · edit */}
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+                                                        <span style={{ fontSize: '0.68rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                                                            {entry.created_by_username || '—'} · {dateStr}
+                                                        </span>
+                                                        {entry.edited_at && (
+                                                            <span
+                                                                style={{ fontSize: '0.6rem', color: '#a78bfa', whiteSpace: 'nowrap', cursor: 'default' }}
+                                                                title={`Edited by ${entry.edited_by_username} on ${new Date(entry.edited_at).toLocaleString()}`}
+                                                            >
+                                                                · edited
+                                                            </span>
+                                                        )}
+                                                        {currentUser?.is_superuser && !isEditing && (
+                                                            <button
+                                                                onClick={() => { setEditingLogId(entry.id); setEditingLogReason(entry.reason); }}
+                                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c4b5fd', padding: '2px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
+                                                                title="Edit reason (superuser only)"
+                                                            >
+                                                                <Pencil size={12} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* ── Bottom row: feeder · reason / edit input ── */}
+                                                <div style={{ marginTop: '0.3rem', display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                    {entry.feeder && (
+                                                        <span style={{ fontSize: '0.68rem', color: '#94a3b8', whiteSpace: 'nowrap', paddingTop: '1px' }}>
+                                                            {entry.feeder}
+                                                        </span>
+                                                    )}
+                                                    {entry.feeder && <span style={{ fontSize: '0.68rem', color: '#e2e8f0', paddingTop: '1px' }}>·</span>}
+                                                    {isEditing ? (
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0 }}>
+                                                            <input
+                                                                autoFocus
+                                                                type="text"
+                                                                maxLength={200}
+                                                                value={editingLogReason}
+                                                                onChange={e => setEditingLogReason(e.target.value)}
+                                                                onKeyDown={e => { if (e.key === 'Enter') handleSaveLogReason(entry.id); if (e.key === 'Escape') setEditingLogId(null); }}
+                                                                style={{ flex: 1, padding: '4px 8px', fontSize: '0.75rem', fontFamily: "'Poppins', sans-serif", border: '1px solid #7c3aed', borderRadius: '6px', outline: 'none', minWidth: 0 }}
+                                                            />
+                                                            <button onClick={() => handleSaveLogReason(entry.id)} style={{ padding: '4px 10px', fontSize: '0.68rem', fontWeight: 700, background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                <Check size={11} /> Save
+                                                            </button>
+                                                            <button onClick={() => setEditingLogId(null)} style={{ padding: '4px', background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                                                                <X size={11} />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.75rem', color: '#334155', fontStyle: entry.reason ? 'normal' : 'italic' }}>
+                                                            {entry.reason || 'No reason recorded'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                 </div>
             </div>
+
+            {/* ── Add Change-Log Modal ────────────────────────────────────────── */}
+            <AnimatePresence>
+                {showAddLogModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                            style={{ background: '#fff', borderRadius: '14px', width: '100%', maxWidth: '860px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.25)', fontFamily: "'Poppins', sans-serif" }}
+                        >
+                            {/* Header */}
+                            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexShrink: 0 }}>
+                                <div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>Record Change Reasons</div>
+                                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '3px' }}>
+                                        {addLogDiff.length} change{addLogDiff.length !== 1 ? 's' : ''} detected vs <strong>{addLogComparedLabel}</strong>. Fill in a reason for each row.
+                                    </div>
+                                </div>
+                                <button onClick={() => setShowAddLogModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px', borderRadius: '6px', flexShrink: 0 }}>
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            {/* Table header */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 130px 180px 1fr', gap: '0.5rem', padding: '0.5rem 1.5rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                                {['Change', 'Substation', 'ID', 'Stage Change', 'Reason *'].map(h => (
+                                    <div key={h} style={{ fontSize: '0.63rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8' }}>{h}</div>
+                                ))}
+                            </div>
+
+                            {/* Rows */}
+                            <div style={{ overflowY: 'auto', flex: 1 }}>
+                                {addLogDiff.length === 0 ? (
+                                    <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
+                                        No differences found between these two versions.
+                                    </div>
+                                ) : addLogDiff.map((row, i) => {
+                                    const key = `${row.substationId}||${row.feeder}||${row.changeType}`;
+                                    const meta = CHANGE_META[row.changeType];
+                                    const reason = addLogReasons[key] || '';
+                                    const isEmpty = !reason.trim();
+                                    return (
+                                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 130px 180px 1fr', gap: '0.5rem', padding: '0.6rem 1.5rem', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
+                                            <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap', width: 'fit-content' }}>
+                                                {meta.label}
+                                            </span>
+                                            <div>
+                                                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>{row.substationName}</div>
+                                                <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{row.feeder}</div>
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: '#475569', fontFamily: 'monospace' }}>{row.substationId}</div>
+                                            <div style={{ fontSize: '0.72rem', color: '#475569' }}>
+                                                {row.oldStageLabel || '—'} → {row.changeType === 'defeated' ? '—' : (row.stageLabel || '—')}
+                                            </div>
+                                            <input
+                                                type="text"
+                                                maxLength={200}
+                                                placeholder="Enter reason…"
+                                                value={reason}
+                                                onChange={e => setAddLogReasons(prev => ({ ...prev, [key]: e.target.value }))}
+                                                style={{
+                                                    width: '100%', padding: '5px 8px', fontSize: '0.75rem',
+                                                    fontFamily: "'Poppins', sans-serif",
+                                                    border: `1px solid ${isEmpty ? '#fca5a5' : '#cbd5e1'}`,
+                                                    borderRadius: '6px', outline: 'none',
+                                                    background: isEmpty ? '#fff7f7' : '#fff',
+                                                    boxSizing: 'border-box',
+                                                }}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Footer */}
+                            {(() => {
+                                const rowKey = r => `${r.substationId}||${r.feeder}||${r.changeType}`;
+                                const filledCount = addLogDiff.filter(r => addLogReasons[rowKey(r)]?.trim()).length;
+                                const hasDraft = sessionDraftKey && sessionStorage.getItem(sessionDraftKey);
+                                const canSave = !addLogLoading && filledCount > 0;
+                                return (
+                                    <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexShrink: 0 }}>
+                                        <div style={{ fontSize: '0.72rem', color: '#94a3b8', fontFamily: "'Poppins', sans-serif", display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span style={{ color: filledCount > 0 ? '#059669' : '#94a3b8', fontWeight: 600 }}>{filledCount}</span>
+                                            <span>of {addLogDiff.length} filled</span>
+                                            {hasDraft && filledCount > 0 && (
+                                                <span style={{ marginLeft: '6px', color: '#0ea5e9', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                                    · draft saved in browser
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                            <button onClick={() => setShowAddLogModal(false)} style={{ padding: '0.5rem 1.25rem', fontSize: '0.8rem', fontFamily: "'Poppins', sans-serif", fontWeight: 600, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer' }}>
+                                                Close
+                                            </button>
+                                            <button
+                                                onClick={handleSubmitAddLog}
+                                                disabled={!canSave}
+                                                style={{
+                                                    padding: '0.5rem 1.25rem', fontSize: '0.8rem', fontFamily: "'Poppins', sans-serif", fontWeight: 700,
+                                                    background: '#059669', color: '#fff', border: 'none', borderRadius: '8px',
+                                                    cursor: canSave ? 'pointer' : 'not-allowed',
+                                                    opacity: canSave ? 1 : 0.45, transition: 'opacity 0.15s',
+                                                }}
+                                            >
+                                                {addLogLoading ? 'Saving…' : `Commit ${filledCount} Record${filledCount !== 1 ? 's' : ''} to DB`}
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* ── Export column picker modal ──────────────────────────────────── */}
             {showExportModal && (() => {

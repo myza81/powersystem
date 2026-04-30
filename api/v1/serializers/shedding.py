@@ -8,6 +8,7 @@ from core.models import (
     LoadSheddingPocketBay,
     LoadSheddingPocketBoundary,
     LoadSheddingAlertConfig,
+    LoadSheddingChangeLog,
     NetworkSnapshot
 )
 
@@ -275,5 +276,37 @@ class LoadSheddingAlertConfigSerializer(serializers.ModelSerializer):
         if obj.updated_by:
             return obj.updated_by.get_full_name() or obj.updated_by.username
         return None
+
+
+class LoadSheddingChangeLogSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.SerializerMethodField()
+    edited_by_username = serializers.SerializerMethodField()
+    compared_to_version_label = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LoadSheddingChangeLog
+        fields = [
+            'id', 'version', 'compared_to_version', 'compared_to_version_label',
+            'change_type', 'substation_id', 'substation_name', 'feeder',
+            'old_stage_label', 'new_stage_label', 'reason',
+            'created_at', 'created_by', 'created_by_username',
+            'edited_at', 'edited_by', 'edited_by_username',
+        ]
+        read_only_fields = [
+            'id', 'version', 'compared_to_version', 'change_type',
+            'substation_id', 'substation_name', 'feeder',
+            'old_stage_label', 'new_stage_label',
+            'created_at', 'created_by',
+            'edited_at', 'edited_by',
+        ]
+
+    def get_created_by_username(self, obj):
+        return obj.created_by.get_full_name() or obj.created_by.username if obj.created_by else None
+
+    def get_edited_by_username(self, obj):
+        return obj.edited_by.get_full_name() or obj.edited_by.username if obj.edited_by else None
+
+    def get_compared_to_version_label(self, obj):
+        return str(obj.compared_to_version) if obj.compared_to_version else None
 
 

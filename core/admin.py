@@ -8,6 +8,7 @@ from .models import (
     NetworkZone,
     NetworkOwner,
     NetworkTopology,
+    LoadSheddingChangeLog,
     TopologyVersion,
     TopologyBus,
     TopologyBranch,
@@ -497,3 +498,27 @@ class LoadSheddingPocketBayAdmin(admin.ModelAdmin):
                 return f"{mw:g} MW"
         return "-"
     cached_mw.short_description = "Cached MW"
+
+
+@admin.register(LoadSheddingChangeLog)
+class LoadSheddingChangeLogAdmin(admin.ModelAdmin):
+    list_display = ['version', 'change_type', 'substation_id', 'substation_name', 'feeder',
+                    'old_stage_label', 'new_stage_label', 'reason', 'created_by', 'created_at']
+    list_filter = ['change_type', 'version__scheme_type']
+    search_fields = ['substation_id', 'substation_name', 'feeder', 'reason']
+    readonly_fields = ['version', 'compared_to_version', 'change_type', 'substation_id',
+                       'substation_name', 'feeder', 'old_stage_label', 'new_stage_label',
+                       'created_at', 'created_by', 'edited_at', 'edited_by']
+    ordering = ['-version__published_at', 'change_type', 'substation_id']
+
+    def get_readonly_fields(self, request, obj=None):
+        if request.user.is_superuser:
+            # Superusers may edit only the reason field
+            return [f for f in self.readonly_fields]
+        return list(self.readonly_fields) + ['reason']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser

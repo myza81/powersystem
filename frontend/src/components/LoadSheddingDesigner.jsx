@@ -262,6 +262,13 @@ const LoadSheddingDesigner = () => {
     const [saving, setSaving] = useState(false);
     const [publishing, setPublishing] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
+
+    // Publish changelog modal state
+    const [showPublishModal, setShowPublishModal] = useState(false);
+    const [publishDiff, setPublishDiff] = useState([]);
+    const [publishReasons, setPublishReasons] = useState({});
+    const [publishActiveVersionId, setPublishActiveVersionId] = useState(null);
+    const [publishDraftVersionId, setPublishDraftVersionId] = useState(null);
     const skipDirtyRef = useRef(true); // skip dirty on initial hydration and draft loads
 
     // Mark workspace dirty whenever stages change, except on initial load or after a draft load/save
@@ -1331,16 +1338,87 @@ const LoadSheddingDesigner = () => {
             if (!vId || !activeVersionMeta || activeVersionMeta.status === 'draft') {
                 vId = await handleSaveWorkspace();
             }
-
             if (!vId) return;
 
-            await api.post(`/load-shedding-versions/${vId}/publish/`);
+            const diffRes = await api.get(`/load-shedding-versions/${vId}/pre-publish-diff/`);
+            const { active_version_id, has_active } = diffRes.data;
+
+            if (!has_active) {
+                // First-ever publish for this scheme type — no comparison needed
+                await api.post(`/load-shedding-versions/${vId}/publish/`, {
+                    change_reasons: [],
+                    compared_to_version_id: null,
+                });
+                await fetchMasterData();
+                window.dispatchEvent(new CustomEvent('load-shedding-published'));
+                alert('Scheme published successfully.');
+                return;
+            }
+
+            // Fetch stages for both versions and compute the diff
+            const [draftRes, activeRes] = await Promise.all([
+                api.get(`/load-shedding-stages/?version=${vId}&include_bays=true`),
+                api.get(`/load-shedding-stages/?version=${active_version_id}&include_bays=true`),
+            ]);
+            const draftRows = buildPublishedRows(draftRes.data, substations, relays);
+            const activeRows = buildPublishedRows(activeRes.data, substations, relays);
+            const allComp = buildComparisonRowsComp(draftRows, activeRows);
+            const changedRows = allComp.filter(r => r.changeType !== 'unchanged');
+
+            if (changedRows.length === 0) {
+                await api.post(`/load-shedding-versions/${vId}/publish/`, {
+                    change_reasons: [],
+                    compared_to_version_id: active_version_id,
+                });
+                await fetchMasterData();
+                window.dispatchEvent(new CustomEvent('load-shedding-published'));
+                alert('Scheme published successfully. No changes detected from current active version.');
+                return;
+            }
+
+            // Show the reason modal
+            setPublishDiff(changedRows);
+            setPublishReasons({});
+            setPublishActiveVersionId(active_version_id);
+            setPublishDraftVersionId(vId);
+            setShowPublishModal(true);
+        } catch (err) {
+            console.error('Failed to prepare publish', err);
+            alert(`Failed to publish scheme. ${err?.response?.data?.error || err.message}`);
+        } finally {
+            setPublishing(false);
+        }
+    };
+
+    const handleSubmitPublish = async () => {
+        const rowKey = r => `${r.substationId}||${r.feeder}||${r.changeType}`;
+        const missing = publishDiff.filter(r => !publishReasons[rowKey(r)]?.trim());
+        if (missing.length > 0) {
+            alert(`Please fill in a reason for all ${missing.length} highlighted row(s).`);
+            return;
+        }
+        setPublishing(true);
+        try {
+            const change_reasons = publishDiff.map(r => ({
+                change_type: r.changeType,
+                substation_id: r.substationId,
+                substation_name: r.substationName,
+                feeder: r.feeder,
+                old_stage_label: r.oldStageLabel || '',
+                new_stage_label: r.changeType === 'defeated' ? '' : (r.stageLabel || ''),
+                reason: publishReasons[rowKey(r)].trim(),
+            }));
+            await api.post(`/load-shedding-versions/${publishDraftVersionId}/publish/`, {
+                change_reasons,
+                compared_to_version_id: publishActiveVersionId,
+            });
+            setShowPublishModal(false);
             await fetchMasterData();
             window.dispatchEvent(new CustomEvent('load-shedding-published'));
             alert('Scheme published successfully.');
         } catch (err) {
-            console.error('Failed to publish scheme', err);
-            alert(`Failed to publish scheme. ${err?.response?.data?.error || err.message}`);
+            console.error('Failed to publish', err);
+            alert(`Failed to publish. ${err?.response?.data?.error || err.message}`);
         } finally {
             setPublishing(false);
         }
@@ -2129,6 +2207,7 @@ const LoadSheddingDesigner = () => {
     // VIEW: DESIGNER WORKSPACE
     // ==========================================
     return (
+        <>
         <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Poppins', sans-serif", background: '#fff' }}>
 
             {/* ── TOP BAR ──────────────────────────────────────────── */}
@@ -3643,6 +3722,114 @@ const LoadSheddingDesigner = () => {
             </AnimatePresence>
 
         </div >
+
+        {/* ── Publish Change-Reason Modal ──────────────────────────────── */}
+        <AnimatePresence>
+            {showPublishModal && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
+                >
+                    <motion.div
+                        initial={{ scale: 0.95, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.95, opacity: 0 }}
+                        style={{ background: '#fff', borderRadius: '14px', width: '100%', maxWidth: '860px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.25)' }}
+                    >
+                        {/* Header */}
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexShrink: 0 }}>
+                            <div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins',sans-serif" }}>
+                                    Publish Requires Change Reasons
+                                </div>
+                                <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '3px', fontFamily: "'Poppins',sans-serif" }}>
+                                    {publishDiff.length} change{publishDiff.length !== 1 ? 's' : ''} detected vs current active version.
+                                    Provide a reason for each before publishing.
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowPublishModal(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px', borderRadius: '6px', flexShrink: 0 }}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Table header */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 130px 180px 1fr', gap: '0.5rem', padding: '0.5rem 1.5rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                            {['Change', 'Substation', 'ID', 'Stage Change', 'Reason *'].map(h => (
+                                <div key={h} style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', fontFamily: "'Poppins',sans-serif" }}>{h}</div>
+                            ))}
+                        </div>
+
+                        {/* Rows */}
+                        <div style={{ overflowY: 'auto', flex: 1 }}>
+                            {publishDiff.map((row, i) => {
+                                const key = `${row.substationId}||${row.feeder}||${row.changeType}`;
+                                const meta = COMP_CHANGE_META[row.changeType];
+                                const reason = publishReasons[key] || '';
+                                const isEmpty = !reason.trim();
+                                return (
+                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 130px 180px 1fr', gap: '0.5rem', padding: '0.6rem 1.5rem', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
+                                        <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap', width: 'fit-content' }}>
+                                            {meta.label}
+                                        </span>
+                                        <div>
+                                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', fontFamily: "'Poppins',sans-serif" }}>{row.substationName}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{row.feeder}</div>
+                                        </div>
+                                        <div style={{ fontSize: '0.72rem', color: '#475569', fontFamily: 'monospace' }}>{row.substationId}</div>
+                                        <div style={{ fontSize: '0.72rem', color: '#475569', fontFamily: "'Poppins',sans-serif" }}>
+                                            {row.oldStageLabel || '—'} → {row.changeType === 'defeated' ? '—' : (row.stageLabel || '—')}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            maxLength={200}
+                                            placeholder="Enter reason…"
+                                            value={reason}
+                                            onChange={e => setPublishReasons(prev => ({ ...prev, [key]: e.target.value }))}
+                                            style={{
+                                                width: '100%', padding: '5px 8px', fontSize: '0.75rem',
+                                                fontFamily: "'Poppins',sans-serif",
+                                                border: `1px solid ${isEmpty ? '#fca5a5' : '#cbd5e1'}`,
+                                                borderRadius: '6px', outline: 'none',
+                                                background: isEmpty ? '#fff7f7' : '#fff',
+                                                boxSizing: 'border-box',
+                                            }}
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexShrink: 0 }}>
+                            <button
+                                onClick={() => setShowPublishModal(false)}
+                                style={{ padding: '0.5rem 1.25rem', fontSize: '0.8rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSubmitPublish}
+                                disabled={publishing || publishDiff.some(r => !publishReasons[`${r.substationId}||${r.feeder}||${r.changeType}`]?.trim())}
+                                style={{
+                                    padding: '0.5rem 1.25rem', fontSize: '0.8rem', fontFamily: "'Poppins',sans-serif", fontWeight: 700,
+                                    background: '#059669', color: '#fff', border: 'none', borderRadius: '8px',
+                                    cursor: 'pointer', opacity: (publishing || publishDiff.some(r => !publishReasons[`${r.substationId}||${r.feeder}||${r.changeType}`]?.trim())) ? 0.5 : 1,
+                                    transition: 'opacity 0.15s',
+                                }}
+                            >
+                                {publishing ? 'Publishing…' : `Publish with ${publishDiff.length} Reason${publishDiff.length !== 1 ? 's' : ''}`}
+                            </button>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+        </>
     );
 };
 
