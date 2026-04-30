@@ -22,8 +22,6 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ── Navigation structure ────────────────────────────────────────────────────
-// requiresStaff: visible to is_staff or is_superuser
-// requiresAdmin: visible to is_superuser only
 const NAV_GROUPS = [
     {
         id: 'grid',
@@ -59,8 +57,9 @@ const SYSTEM_ITEMS = [
 ];
 
 // ── Component ───────────────────────────────────────────────────────────────
-const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin }) => {
+const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin, mobileOpen, onMobileClose }) => {
     const [collapsed, setCollapsed] = useState(false);
+    const isMobile = mobileOpen !== undefined;
 
     const isStaff = currentUser?.is_staff || currentUser?.is_superuser || false;
     const isAdmin = currentUser?.is_superuser || false;
@@ -71,7 +70,6 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
         return true;
     };
 
-    // Track which groups are open — all open by default
     const [openGroups, setOpenGroups] = useState(() =>
         Object.fromEntries(NAV_GROUPS.map(g => [g.id, true]))
     );
@@ -79,11 +77,10 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
     const toggleGroup = (id) =>
         setOpenGroups(prev => ({ ...prev, [id]: !prev[id] }));
 
-    const navigate = (view) => onViewChange(view);
-
-    // Returns true if any visible item in a group matches currentView
-    const groupIsActive = (group) =>
-        group.items.filter(canSeeItem).some(i => i.id === currentView);
+    const navigate = (view) => {
+        onViewChange(view);
+        if (onMobileClose) onMobileClose();
+    };
 
     const userRoleLabel = () => {
         if (currentUser?.is_anonymous) return 'Guest Access';
@@ -92,150 +89,176 @@ const Sidebar = ({ currentView, onViewChange, currentUser, onLogout, onShowLogin
         return 'User';
     };
 
+    const effectiveCollapsed = isMobile ? false : collapsed;
+    const sidebarWidth = effectiveCollapsed ? 'var(--sidebar-width-collapsed)' : 'var(--sidebar-width)';
+
     return (
-        <motion.div
-            className={`sidebar ${collapsed ? 'collapsed' : ''}`}
-            initial={{ width: 260 }}
-            animate={{ width: collapsed ? 80 : 260 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        >
-            {/* Header */}
-            <div className={`sidebar-header ${collapsed ? 'justify-center' : ''}`}>
-                <div className="brand-container">
-                    {!collapsed && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="logo-text">
-                            <span className="logo-text-bold">Grid</span> Defence
-                        </motion.div>
-                    )}
-                </div>
-                <button
-                    className="collapse-btn-floating"
-                    onClick={() => setCollapsed(c => !c)}
-                    title={collapsed ? 'Expand' : 'Collapse'}
-                >
-                    {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-                </button>
-            </div>
+        <>
+            {/* Mobile backdrop */}
+            {isMobile && (
+                <div
+                    className={`sidebar-backdrop ${mobileOpen ? 'visible' : ''}`}
+                    onClick={onMobileClose}
+                />
+            )}
 
-            {/* Navigation */}
-            <nav className="sidebar-nav">
-
-                {/* Main groups */}
-                {NAV_GROUPS.map(group => (
-                    <div key={group.id} className="nav-group">
-                        <div
-                            className={`nav-group-header ${collapsed ? 'collapsed' : ''} ${groupIsActive(group) ? 'group-active' : ''}`}
-                            onClick={() => toggleGroup(group.id)}
-                        >
-                            <div className="nav-group-title">
-                                <group.icon size={20} className="nav-icon" />
-                                {!collapsed && <span>{group.label}</span>}
-                            </div>
-                            {!collapsed && (
-                                <ChevronDown
-                                    size={14}
-                                    className={`chevron ${openGroups[group.id] ? 'open' : ''}`}
-                                />
-                            )}
-                        </div>
-
-                        <AnimatePresence initial={false}>
-                            {openGroups[group.id] && (
-                                <motion.div
-                                    key="items"
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: 'auto', opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.18 }}
-                                    style={{ overflow: 'hidden' }}
-                                >
-                                    {group.items.filter(canSeeItem).map(item => (
-                                        <a
-                                            key={item.id}
-                                            href={`?view=${item.id}`}
-                                            className={[
-                                                'nav-item sub-item',
-                                                collapsed ? 'collapsed' : '',
-                                                currentView === item.id ? 'active' : '',
-                                            ].filter(Boolean).join(' ')}
-                                            onClick={(e) => { e.preventDefault(); navigate(item.id); }}
-                                            title={collapsed ? item.label : ''}
-                                        >
-                                            <item.icon size={16} />
-                                            {!collapsed && <span className="nav-label">{item.label}</span>}
-                                        </a>
-                                    ))}
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                ))}
-
-                {/* System — pinned to bottom, only shown if user has access to any item */}
-                {SYSTEM_ITEMS.some(canSeeItem) && (
-                    <div className="nav-group system-section">
-                        <div className={`nav-group-header ${collapsed ? 'collapsed' : ''}`} style={{ cursor: 'default', pointerEvents: 'none' }}>
-                            <div className="nav-group-title">
-                                <Sliders size={20} className="nav-icon" />
-                                {!collapsed && <span>System</span>}
-                            </div>
-                        </div>
-                        {SYSTEM_ITEMS.filter(canSeeItem).map(item => (
-                            <a
-                                key={item.id}
-                                href={`?view=${item.id}`}
-                                className={[
-                                    'nav-item sub-item',
-                                    collapsed ? 'collapsed' : '',
-                                    currentView === item.id ? 'active' : '',
-                                ].filter(Boolean).join(' ')}
-                                onClick={(e) => { e.preventDefault(); navigate(item.id); }}
-                                title={collapsed ? item.label : ''}
+            <motion.div
+                className={`sidebar ${isMobile ? (mobileOpen ? 'mobile-open' : '') : ''}`}
+                initial={false}
+                animate={{ width: sidebarWidth }}
+                transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+                style={{ minWidth: sidebarWidth }}
+            >
+                {/* Header */}
+                <div className={`sidebar-header ${effectiveCollapsed ? 'justify-center' : ''}`}>
+                    <div className="brand-container">
+                        {!effectiveCollapsed && (
+                            <motion.div
+                                initial={{ opacity: 0, x: -6 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.18 }}
+                                className="logo-text"
                             >
-                                <item.icon size={16} />
-                                {!collapsed && <span className="nav-label">{item.label}</span>}
-                            </a>
-                        ))}
+                                <span className="logo-text-bold">Grid</span> Defence
+                            </motion.div>
+                        )}
                     </div>
-                )}
-
-            </nav>
-
-            {/* Footer / User */}
-            <div className="sidebar-footer">
-                <div className="user-profile">
-                    <div className={`avatar ${currentUser?.is_anonymous ? 'guest' : ''}`}>
-                        {currentUser?.is_anonymous
-                            ? <Ghost size={18} color="var(--text-secondary)" />
-                            : <User size={20} />}
-                    </div>
-                    {!collapsed && (
-                        <div className="user-info">
-                            <div className="user-name">
-                                {currentUser?.is_anonymous ? 'Anonymous' : (currentUser?.username || 'Guest')}
-                            </div>
-                            <div className="user-role" style={currentUser?.is_anonymous ? { color: 'rgba(75, 85, 99, 0.7)' } : {}}>
-                                {userRoleLabel()}
-                            </div>
-                        </div>
+                    {!isMobile && (
+                        <button
+                            className="collapse-btn-floating"
+                            onClick={() => setCollapsed(c => !c)}
+                            title={effectiveCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                        >
+                            {effectiveCollapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+                        </button>
                     )}
                 </div>
-                {!collapsed && (
-                    currentUser?.is_anonymous ? (
-                        <button className="login-sidebar-btn" onClick={onShowLogin} title="Sign In">
-                            <LogIn size={15} />
-                            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Sign In</span>
-                        </button>
-                    ) : (
-                        currentUser && (
-                            <button className="logout-btn" onClick={onLogout} title="Logout">
-                                <LogOut size={16} />
+
+                {/* Navigation */}
+                <nav className="sidebar-nav">
+                    {NAV_GROUPS.map(group => (
+                        <div key={group.id} className="nav-group">
+                            <div
+                                className={`nav-group-header ${effectiveCollapsed ? 'collapsed' : ''}`}
+                                onClick={() => !effectiveCollapsed && toggleGroup(group.id)}
+                                title={effectiveCollapsed ? group.label : ''}
+                            >
+                                <div className="nav-group-title">
+                                    <group.icon size={14} className="nav-icon" />
+                                    {!effectiveCollapsed && <span>{group.label}</span>}
+                                </div>
+                                {!effectiveCollapsed && (
+                                    <ChevronDown
+                                        size={12}
+                                        className={`chevron ${openGroups[group.id] ? 'open' : ''}`}
+                                    />
+                                )}
+                            </div>
+
+                            <AnimatePresence initial={false}>
+                                {(openGroups[group.id] || effectiveCollapsed) && (
+                                    <motion.div
+                                        key="items"
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.16 }}
+                                        style={{ overflow: 'hidden' }}
+                                    >
+                                        {group.items.filter(canSeeItem).map(item => (
+                                            <a
+                                                key={item.id}
+                                                href={`?view=${item.id}`}
+                                                className={[
+                                                    'nav-item sub-item',
+                                                    effectiveCollapsed ? 'collapsed' : '',
+                                                    currentView === item.id ? 'active' : '',
+                                                ].filter(Boolean).join(' ')}
+                                                onClick={(e) => { e.preventDefault(); navigate(item.id); }}
+                                                title={effectiveCollapsed ? item.label : ''}
+                                            >
+                                                <item.icon size={15} className="nav-icon" />
+                                                {!effectiveCollapsed && (
+                                                    <span className="nav-label">{item.label}</span>
+                                                )}
+                                            </a>
+                                        ))}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    ))}
+
+                    {/* System section */}
+                    {SYSTEM_ITEMS.some(canSeeItem) && (
+                        <div className="nav-group system-section">
+                            <div
+                                className={`nav-group-header ${effectiveCollapsed ? 'collapsed' : ''}`}
+                                style={{ cursor: 'default', pointerEvents: 'none' }}
+                            >
+                                <div className="nav-group-title">
+                                    <Sliders size={14} className="nav-icon" />
+                                    {!effectiveCollapsed && <span>System</span>}
+                                </div>
+                            </div>
+                            {SYSTEM_ITEMS.filter(canSeeItem).map(item => (
+                                <a
+                                    key={item.id}
+                                    href={`?view=${item.id}`}
+                                    className={[
+                                        'nav-item sub-item',
+                                        effectiveCollapsed ? 'collapsed' : '',
+                                        currentView === item.id ? 'active' : '',
+                                    ].filter(Boolean).join(' ')}
+                                    onClick={(e) => { e.preventDefault(); navigate(item.id); }}
+                                    title={effectiveCollapsed ? item.label : ''}
+                                >
+                                    <item.icon size={15} className="nav-icon" />
+                                    {!effectiveCollapsed && (
+                                        <span className="nav-label">{item.label}</span>
+                                    )}
+                                </a>
+                            ))}
+                        </div>
+                    )}
+                </nav>
+
+                {/* Footer / User */}
+                <div className="sidebar-footer">
+                    <div className="user-profile">
+                        <div className={`avatar ${currentUser?.is_anonymous ? 'guest' : ''}`}>
+                            {currentUser?.is_anonymous
+                                ? <Ghost size={16} color="var(--text-2)" />
+                                : <User size={17} color="var(--text-2)" />}
+                        </div>
+                        {!effectiveCollapsed && (
+                            <div className="user-info">
+                                <div className="user-name">
+                                    {currentUser?.is_anonymous ? 'Anonymous' : (currentUser?.username || 'Guest')}
+                                </div>
+                                <div className="user-role">
+                                    {userRoleLabel()}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    {!effectiveCollapsed && (
+                        currentUser?.is_anonymous ? (
+                            <button className="login-sidebar-btn" onClick={onShowLogin}>
+                                <LogIn size={14} />
+                                Sign In
                             </button>
+                        ) : (
+                            currentUser && (
+                                <button className="logout-btn" onClick={onLogout} title="Sign out">
+                                    <LogOut size={15} />
+                                </button>
+                            )
                         )
-                    )
-                )}
-            </div>
-        </motion.div>
+                    )}
+                </div>
+            </motion.div>
+        </>
     );
 };
 

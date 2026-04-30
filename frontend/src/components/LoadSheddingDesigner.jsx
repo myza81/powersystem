@@ -1950,7 +1950,7 @@ const LoadSheddingDesigner = () => {
 
     if (loading && view === 'manager') {
         return (
-            <div style={{ height: 'calc(100vh - 60px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <CardLoader show={true} message="Loading designer..." />
             </div>
         );
@@ -1985,60 +1985,50 @@ const LoadSheddingDesigner = () => {
             : <span style={{ fontSize: '0.6rem', fontWeight: 600, background: '#f8fafc', border: '1px solid #e2e8f0', color: '#64748b', padding: '2px 8px', borderRadius: '999px' }}>Inactive</span>;
 
         return (
-            <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Poppins', sans-serif", background: '#fff' }}>
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-card)' }}>
 
-                {/* ── Header ──────────────────────────────────────────── */}
-                <div style={{ flexShrink: 0, padding: '1.5rem 2rem 0', background: '#fff' }}>
+                {/* ── Command bar ──────────────────────────────────────────── */}
+                <div style={{ height: 52, display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0 1.5rem', borderBottom: '1px solid var(--border-default)', flexShrink: 0 }}>
 
-                    {/* Title */}
-                    <div style={{ marginBottom: '1.25rem' }}>
-                        <div style={{ fontSize: '0.68rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(30,41,59,0.45)', marginBottom: '0.4rem' }}>
-                            Load Shedding Registry
-                        </div>
-                        <h1 style={{ margin: 0, fontSize: '2.2rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                    {/* Icon + title */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                        <FaLayerGroup size={15} color="var(--brand-mid)" />
+                        <span style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--text-1)', letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
                             Scheme Designer
-                        </h1>
+                        </span>
                     </div>
 
-                    {/* Info / action bar */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.85rem 1.25rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                    {/* Divider */}
+                    <div style={{ width: 1, height: 20, background: 'var(--border-default)', flexShrink: 0 }} />
 
-                        {/* Stats */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.75rem', flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                                <span style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8' }}>Your Drafts</span>
-                                <span style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>{drafts.length}</span>
-                            </div>
-                            <div style={{ width: '1px', height: '28px', background: '#e2e8f0' }} />
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                                <span style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8' }}>Published</span>
-                                <span style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>{published.length}</span>
-                            </div>
+                    {/* Stats */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexShrink: 0 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>Drafts</span>
+                            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1 }}>{drafts.length}</span>
                         </div>
+                        <div style={{ width: 1, height: 20, background: 'var(--border-default)' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>Published</span>
+                            <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-1)', lineHeight: 1 }}>{published.length}</span>
+                        </div>
+                    </div>
 
-                        {/* New Scheme button — pushed to far right */}
-                        <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
-                            <button
-                                onClick={handleCreateNew}
-                                style={{
-                                    height: '36px', padding: '0 16px',
-                                    display: 'flex', alignItems: 'center', gap: '6px',
-                                    fontSize: '0.8rem', fontFamily: "'Poppins', sans-serif", fontWeight: 600,
-                                    color: '#0f172a', background: '#fff',
-                                    border: '1px solid #e2e8f0', borderRadius: '8px',
-                                    cursor: 'pointer', transition: 'all 0.15s ease', whiteSpace: 'nowrap',
-                                }}
-                                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-                            >
-                                <Plus size={15} /> New Scheme
-                            </button>
-                        </div>
+                    {/* New Scheme button */}
+                    <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                        <button
+                            onClick={handleCreateNew}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 14px', background: 'var(--brand-gradient)', border: 'none', borderRadius: 'var(--radius-sm)', color: '#fff', fontSize: 'var(--text-sm)', fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 8px rgba(2,64,49,0.18)', whiteSpace: 'nowrap', transition: 'filter 0.15s' }}
+                            onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.08)'}
+                            onMouseLeave={e => e.currentTarget.style.filter = 'none'}
+                        >
+                            <Plus size={14} /> New Scheme
+                        </button>
                     </div>
                 </div>
 
                 {/* ── Two-column body ──────────────────────────────────── */}
-                <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '1.25rem', padding: '0 2rem 2rem', overflow: 'hidden' }}>
+                <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '1.25rem', padding: '1rem 1.5rem 1.5rem', overflow: 'hidden' }}>
 
                     {/* Left: Your Drafts */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', overflow: 'hidden', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.25rem', background: '#fff' }}>
@@ -2208,10 +2198,10 @@ const LoadSheddingDesigner = () => {
     // ==========================================
     return (
         <>
-        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Poppins', sans-serif", background: '#fff' }}>
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-card)' }}>
 
             {/* ── TOP BAR ──────────────────────────────────────────── */}
-            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 1.25rem', height: '50px', borderBottom: '1px solid #e2e8f0', background: '#fff', gap: '0.5rem' }}>
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 1.25rem', height: 52, borderBottom: '1px solid var(--border-default)', background: 'var(--surface-card)', gap: '0.5rem' }}>
                 {/* Left: back + breadcrumb */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, minWidth: 0 }}>
                     <button onClick={() => setView('manager')} style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', cursor: 'pointer', flexShrink: 0 }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
@@ -2252,10 +2242,10 @@ const LoadSheddingDesigner = () => {
                 {/* Right: toggles + actions */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
                     {/* Panel toggles */}
-                    <button onClick={() => setIsMetricsDrawerOpen(v => !v)} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: isMetricsDrawerOpen ? '#0f172a' : '#94a3b8', background: isMetricsDrawerOpen ? '#f1f5f9' : '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }}>
+                    <button onClick={() => setIsMetricsDrawerOpen(v => !v)} style={{ height: 28, padding: '0 9px', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', fontWeight: 600, color: isMetricsDrawerOpen ? 'var(--text-1)' : 'var(--text-3)', background: isMetricsDrawerOpen ? 'var(--surface-raised)' : 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
                         <FaGaugeHigh size={11} /> Metrics
                     </button>
-                    <button onClick={() => setShowLibrary(v => !v)} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: showLibrary ? '#0f172a' : '#94a3b8', background: showLibrary ? '#f1f5f9' : '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }}>
+                    <button onClick={() => setShowLibrary(v => !v)} style={{ height: 28, padding: '0 9px', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', fontWeight: 600, color: showLibrary ? 'var(--text-1)' : 'var(--text-3)', background: showLibrary ? 'var(--surface-raised)' : 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
                         <FaBolt size={11} /> Library
                     </button>
                     <div style={{ width: '1px', height: '18px', background: '#e2e8f0', margin: '0 2px' }} />

@@ -432,38 +432,20 @@ const App = () => {
                     )}
 
                     {effectiveView === 'list' && (
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        height: '100vh',
-                        color: '#1e293b',
-                        fontFamily: "'Poppins', 'IBM Plex Sans', sans-serif",
-                        letterSpacing: '-0.01em',
-                        width: '100%'
-                    }}>
-                        {/* Top Section: Header + Filter */}
-                        <div style={{ flexShrink: 0, padding: '1.5rem 2.5rem 1rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', marginBottom: '0.75rem' }}>
-                                <div>
-                                    <div style={{ fontSize: '0.7rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(30, 41, 59, 0.6)', marginBottom: '0.5rem' }}>ASSET REGISTRY</div>
-                                    <h1 style={{ margin: 0, fontSize: '2.6rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.03em' }}>Substation Assets</h1>
-                                </div>
-                            </div>
-                            <div style={{ marginBottom: '0.75rem', fontSize: '0.85rem', color: 'rgba(30, 41, 59, 0.7)', textTransform: 'uppercase', letterSpacing: '0.3em' }}>
-                                {filteredSubstations.length} assets • {filterCriteria.region !== 'All' || filterCriteria.grid !== 'All' || filterCriteria.state !== 'All' || filterCriteria.voltage !== 'All' ? 'Filters Active' : 'All Regions'}
-                            </div>
-                            <SubstationFilter
-                                substations={substations}
-                                currentFilters={filterCriteria}
-                                onUpdateFilters={setFilterCriteria}
-                                onRegister={isStaff ? () => { setSelectedSub(null); setView('create'); } : null}
-                                viewMode={listDisplayMode}
-                                onViewModeChange={setListDisplayMode}
-                            />
-                        </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                        <SubstationFilter
+                            substations={substations}
+                            currentFilters={filterCriteria}
+                            onUpdateFilters={setFilterCriteria}
+                            onRegister={isStaff ? () => { setSelectedSub(null); setView('create'); } : null}
+                            pageTitle="Substation Assets"
+                            resultCount={filteredSubstations.length}
+                            viewMode={listDisplayMode}
+                            onViewModeChange={setListDisplayMode}
+                        />
 
-                        {/* Bottom Section: Table - takes remaining space */}
-                        <div style={{ flex: 1, padding: '0 2.5rem 1.5rem', overflowY: 'auto', minHeight: 0 }}>
+                        {/* Content — scrolls independently */}
+                        <div style={{ flex: 1, padding: '1rem 1.5rem 1.5rem', overflowY: 'auto', minHeight: 0 }}>
                             {listDisplayMode === 'grid' ? (
                                 <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
                                     <AnimatePresence>

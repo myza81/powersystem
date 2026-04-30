@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Search, X, Download, RefreshCw, BarChart2, Filter, RotateCcw, AlertCircle, CheckCircle2, GripVertical, ChevronDown, ChevronUp, Maximize2, Minimize2, Pencil, Check
+    Search, X, Download, RefreshCw, BarChart2, Filter, RotateCcw, AlertCircle, CheckCircle2, GripVertical, ChevronDown, ChevronUp, Maximize2, Minimize2, Pencil, Check, SlidersHorizontal
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { FaLayerGroup, FaCodeBranch, FaTableList, FaShieldHalved, FaClockRotateLeft } from 'react-icons/fa6';
@@ -230,32 +230,33 @@ const StatusBadge = ({ scheme }) => {
 
 
 const StatPill = ({ label, value }) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-        <span style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8' }}>{label}</span>
-        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0f172a' }}>{value}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-3)' }}>{label}</span>
+        <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--text-1)' }}>{value}</span>
     </div>
 );
 
 const FilterDropdown = ({ label, value, onChange, options }) => (
     <div>
-        <label style={{ display: 'block', fontSize: '0.7rem', color: '#64748b', marginBottom: '4px', fontFamily: "'Poppins', sans-serif" }}>
+        <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-3)', marginBottom: 3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             {label}
         </label>
         <select
             value={value}
             onChange={e => onChange(e.target.value)}
             style={{
-                width: '100%',
-                padding: '8px',
-                fontSize: '0.75rem',
-                fontFamily: "'Poppins', sans-serif",
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '6px',
-                color: '#0f172a',
-                cursor: 'pointer',
-                outline: 'none',
+                width: '100%', height: 33, padding: '0 8px',
+                fontSize: 'var(--text-sm)',
+                background: '#fff',
+                border: '1px solid var(--border-default)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-1)',
+                cursor: 'pointer', outline: 'none',
+                transition: 'border-color 0.15s',
+                fontFamily: 'var(--font-sans)',
             }}
+            onFocus={e => e.target.style.borderColor = 'var(--brand-mid)'}
+            onBlur={e => e.target.style.borderColor = 'var(--border-default)'}
         >
             {options.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -423,20 +424,8 @@ const LoadSheddingSchemeReviewer = () => {
     const [exportColOrder, setExportColOrder] = useState(() => EXPORT_COLUMNS.map(c => c.key));
     const dragIdx = React.useRef(null);
 
-    const [isFilterCollapsed, setIsFilterCollapsed] = useState(window.innerWidth < 1024);
-    const [, setIsMobile] = useState(window.innerWidth < 1024);
+    const [showFilters, setShowFilters] = useState(false);
     const [isTableFullscreen, setIsTableFullscreen] = useState(false);
-
-    useEffect(() => {
-        const handleResize = () => {
-            const mobile = window.innerWidth < 1024;
-            setIsMobile(mobile);
-            if (!mobile) setIsFilterCollapsed(false);
-            else setIsFilterCollapsed(true);
-        };
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
 
     // Only show published versions
     const publishedVersions = useMemo(() =>
@@ -926,18 +915,16 @@ const LoadSheddingSchemeReviewer = () => {
     const tabButtonStyle = (isActive) => ({
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        padding: '0.75rem 1.5rem',
-        background: isActive ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
+        gap: '6px',
+        padding: '0.6rem 1.25rem',
+        background: 'transparent',
         border: 'none',
-        borderBottom: isActive ? '2px solid var(--accent-blue)' : '2px solid transparent',
-        color: isActive ? 'var(--accent-blue)' : '#64748b',
+        borderBottom: isActive ? '2px solid var(--brand-mid)' : '2px solid transparent',
+        color: isActive ? 'var(--brand-dark)' : 'var(--text-2)',
         cursor: 'pointer',
-        fontWeight: isActive ? 600 : 400,
-        fontSize: '0.82rem',
-        fontFamily: "'Poppins', sans-serif",
-        transition: 'all 0.2s ease',
-        borderRadius: '8px 8px 0 0',
+        fontWeight: isActive ? 600 : 500,
+        fontSize: 'var(--text-sm)',
+        transition: 'all 0.15s',
         whiteSpace: 'nowrap',
     });
 
@@ -945,7 +932,7 @@ const LoadSheddingSchemeReviewer = () => {
 
     if (loading) {
         return (
-            <div style={{ height: 'calc(100vh - 60px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <CardLoader show={true} message="Loading scheme reviewer..." />
             </div>
         );
@@ -953,7 +940,7 @@ const LoadSheddingSchemeReviewer = () => {
 
     if (publishedVersions.length === 0) {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '24rem', gap: '1rem', fontFamily: "'Poppins', sans-serif" }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '24rem', gap: '1rem' }}>
                 <FaLayerGroup size={48} style={{ color: '#e2e8f0' }} />
                 <div style={{ fontSize: '1rem', fontWeight: 600, color: '#94a3b8' }}>No Published Schemes</div>
                 <div style={{ fontSize: '0.82rem', color: '#cbd5e1', maxWidth: '380px', textAlign: 'center', lineHeight: 1.6 }}>
@@ -967,16 +954,16 @@ const LoadSheddingSchemeReviewer = () => {
 
     return (
         <>
-            <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Poppins', sans-serif", background: '#fff' }}>
+            <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-card)' }}>
 
                 {/* ── ROW 1: Tab navigation ─────────────────────────────────── */}
                 <div style={{
                     display: 'flex',
                     gap: '0.25rem',
-                    borderBottom: '1px solid #e2e8f0',
+                    borderBottom: '1px solid var(--border-default)',
                     flexShrink: 0,
-                    background: '#fff',
-                    padding: '0 2rem',
+                    background: 'var(--surface-card)',
+                    padding: '0 1.5rem',
                     zIndex: 20,
                 }}>
                     {tabList.map(tab => (
@@ -996,247 +983,224 @@ const LoadSheddingSchemeReviewer = () => {
                     ))}
                 </div>
 
-                {/* ── ROW 2: Header ─────────────────────────────────────────── */}
-                <div style={{ flexShrink: 0, zIndex: 10, padding: '1.25rem 2rem 0', background: '#fff' }}>
+                {/* ── Command bar ───────────────────────────────────────────── */}
+                {(() => {
+                    const hasActiveFilters = filterStage !== 'All' || filterRegion !== 'All' || filterGrid !== 'All' || filterType !== 'All';
+                    const activeFilterCount = [filterStage, filterRegion, filterGrid, filterType].filter(v => v !== 'All').length;
+                    const chipStyle = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px 2px 10px', background: 'rgba(4,125,96,0.08)', border: '1px solid rgba(4,125,96,0.2)', borderRadius: 'var(--radius-pill)', color: 'var(--brand-dark)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' };
+                    return (
+                        <>
+                            {/* ── Command bar — title + scheme selector + actions ── */}
+                            <div style={{ height: 52, display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0 1.5rem', borderBottom: !loadingStages && selectedScheme ? 'none' : '1px solid var(--border-default)', flexShrink: 0 }}>
 
-                    {/* Title */}
-                    <div style={{ marginBottom: '1rem' }}>
-                        <div style={{ fontSize: '0.7rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(30, 41, 59, 0.5)', marginBottom: '0.5rem' }}>
-                            Load Shedding Registry
-                        </div>
-                        <h1 style={{ margin: 0, fontSize: '2.4rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
-                            Scheme Assignments
-                        </h1>
-                    </div>
+                                {/* Icon + title + count */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                                    <FaLayerGroup size={15} color="var(--brand-mid)" />
+                                    <span style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--text-1)', letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+                                        Scheme Viewer
+                                    </span>
+                                    {activeTab === 'assignments' && !loadingStages && (
+                                        <span style={{ background: 'var(--surface-raised)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--text-2)', padding: '1px 8px', whiteSpace: 'nowrap' }}>
+                                            {filteredRows.length}
+                                        </span>
+                                    )}
+                                </div>
 
-                    {/* Scheme selector card */}
-                    {/* Scheme selector card */}
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '1rem',
-                        background: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '10px',
-                        padding: '0.75rem 1.25rem',
-                        marginBottom: '1rem',
-                        flexWrap: 'wrap',
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-                            {/* Selector */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexShrink: 0 }}>
-                                <span style={{ fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8' }}>
-                                    Viewing Scheme
-                                </span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                                {/* Divider */}
+                                <div style={{ width: 1, height: 20, background: 'var(--border-default)', flexShrink: 0 }} />
+
+                                {/* Scheme selector + status */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
                                     <select
                                         value={selectedScheme?.id || ''}
-                                        onChange={e => {
-                                            const v = publishedVersions.find(s => s.id === e.target.value);
-                                            if (v) fetchStages(v);
-                                        }}
+                                        onChange={e => { const v = publishedVersions.find(s => s.id === e.target.value); if (v) fetchStages(v); }}
                                         style={{
-                                            height: '34px',
-                                            padding: '0 32px 0 10px',
-                                            fontSize: '0.82rem',
-                                            fontFamily: "'Poppins', sans-serif",
-                                            fontWeight: 600,
-                                            color: '#0f172a',
-                                            background: '#fff',
-                                            border: '1px solid #e2e8f0',
-                                            borderRadius: '8px',
-                                            cursor: 'pointer',
-                                            outline: 'none',
-                                            minWidth: '180px',
+                                            height: 34, padding: '0 28px 0 10px',
+                                            fontSize: 'var(--text-sm)', fontWeight: 600,
+                                            color: 'var(--text-1)', background: 'var(--surface-raised)',
+                                            border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)',
+                                            cursor: 'pointer', outline: 'none', minWidth: '140px',
                                             appearance: 'none',
                                             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                                            backgroundRepeat: 'no-repeat',
-                                            backgroundPosition: 'right 10px center',
+                                            backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
+                                            fontFamily: 'var(--font-sans)',
                                         }}
                                     >
-                                        {publishedVersions.map(v => (
-                                            <option key={v.id} value={v.id}>
-                                                {getVersionLabel(v)}
-                                            </option>
-                                        ))}
+                                        {publishedVersions.map(v => <option key={v.id} value={v.id}>{getVersionLabel(v)}</option>)}
                                     </select>
                                     <StatusBadge scheme={selectedScheme} />
                                 </div>
-                            </div>
 
-                            {/* Divider */}
-                            <div style={{ width: '1px', height: '32px', background: '#e2e8f0', flexShrink: 0 }} />
+                                {/* Right-side: search (shrinks) + fixed action buttons */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
 
-                            {/* Stats pills */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-                                {loadingStages ? (
-                                    <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Loading…</span>
-                                ) : (
-                                    <>
-                                        <StatPill label="Assignments" value={allRows.length} />
-                                        <StatPill label="Stages" value={stageDetails.length} />
-                                        <StatPill label="Total MW" value={`${formatMW(schemeMetrics.totalMW)} MW`} />
-                                        {selectedScheme?.published_at && (
-                                            <StatPill label="Published" value={formatDate(selectedScheme.published_at)} />
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Export and Actions */}
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: 'auto' }}>
-                            {activeTab === 'assignments' && (
-                                <button
-                                    onClick={() => setIsTableFullscreen(true)}
-                                    style={{
-                                        height: '34px',
-                                        padding: '0 12px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        fontSize: '0.78rem',
-                                        fontFamily: "'Poppins', sans-serif",
-                                        fontWeight: 600,
-                                        color: '#334155',
-                                        background: '#fff',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s ease',
-                                        whiteSpace: 'nowrap',
-                                    }}
-                                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
-                                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-                                >
-                                    <Maximize2 size={14} /> Fullscreen Table
-                                </button>
-                            )}
-                            <button
-                                onClick={() => setShowExportModal(true)}
-                                disabled={!filteredRows.length}
-                                style={{
-                                    height: '34px',
-                                    padding: '0 12px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    fontSize: '0.78rem',
-                                    fontFamily: "'Poppins', sans-serif",
-                                    fontWeight: 600,
-                                    color: filteredRows.length ? '#334155' : '#94a3b8',
-                                    background: '#fff',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: '8px',
-                                    cursor: filteredRows.length ? 'pointer' : 'not-allowed',
-                                    transition: 'all 0.15s ease',
-                                    whiteSpace: 'nowrap',
-                                }}
-                                onMouseEnter={e => { if (filteredRows.length) { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#cbd5e1'; } }}
-                                onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
-                            >
-                                <Download size={14} />
-                                Export to Excel
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Filter card */}
-                    {activeTab === 'assignments' && (
-                        <div style={{ background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(12px)', borderRadius: '12px', border: '1px solid rgba(34, 211, 238, 0.2)', marginBottom: '1.5rem', padding: '1.25rem', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
-                            {/* Top row: label + search + reset */}
-                            <div
-                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isFilterCollapsed ? 0 : '1rem', flexWrap: 'wrap', gap: '1rem', cursor: 'pointer' }}
-                                onClick={() => setIsFilterCollapsed(!isFilterCollapsed)}
-                            >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0f766e' }}>
-                                    <Filter size={18} />
-                                    <span style={{ fontWeight: 600, fontSize: '0.85rem', fontFamily: "'Poppins', sans-serif" }}>Filter Assignments</span>
-                                </div>
-
-                                <div style={{ display: 'flex', gap: '0.75rem', flex: 1, justifyContent: 'flex-end', alignItems: 'center' }}>
-                                    {!isFilterCollapsed && (
-                                        <>
-                                            {/* Search */}
-                                            <div style={{ position: 'relative', minWidth: '200px', flex: '0 1 350px' }} onClick={e => e.stopPropagation()}>
-                                                <Search size={16} color="#64748b" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-                                                <input
-                                                    placeholder="Search substation, feeder…"
-                                                    value={search}
-                                                    onChange={e => setSearch(e.target.value)}
-                                                    style={{
-                                                        paddingLeft: '2.2rem',
-                                                        paddingRight: search ? '2rem' : '0.75rem',
-                                                        width: '100%',
-                                                        height: '36px',
-                                                        background: '#f8fafc',
-                                                        border: '1px solid #e2e8f0',
-                                                        borderRadius: '6px',
-                                                        color: '#0f172a',
-                                                        outline: 'none',
-                                                        fontFamily: "'Poppins', sans-serif",
-                                                        fontSize: '0.82rem',
-                                                        boxSizing: 'border-box',
-                                                    }}
-                                                />
-                                                {search && (
-                                                    <X size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', color: '#64748b' }} onClick={() => setSearch('')} />
-                                                )}
-                                            </div>
-
-                                            {/* Reset */}
-                                            {(search || filterStage !== 'All' || filterRegion !== 'All' || filterGrid !== 'All' || filterType !== 'All') && (
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); setSearch(''); setFilterStage('All'); setFilterRegion('All'); setFilterGrid('All'); setFilterType('All'); }}
-                                                    style={{
-                                                        background: '#f8fafc', border: '1px solid #e2e8f0', color: '#64748b',
-                                                        padding: '0 12px', height: '36px', borderRadius: '6px', cursor: 'pointer',
-                                                        display: 'flex', alignItems: 'center', gap: '6px',
-                                                        fontSize: '0.8rem', fontFamily: "'Poppins', sans-serif",
-                                                        transition: 'all 0.2s',
-                                                    }}
-                                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.color = '#ef4444'; }}
-                                                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}
-                                                >
-                                                    <RotateCcw size={13} />
-                                                    Reset
+                                    {/* Search — assignments tab only, shrinks on small screens */}
+                                    {activeTab === 'assignments' && (
+                                        <div style={{ position: 'relative', flex: '1 1 0', minWidth: 80, maxWidth: 300 }}>
+                                            <Search size={14} color="var(--text-3)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                                            <input
+                                                placeholder="Search substation, feeder…"
+                                                value={search}
+                                                onChange={e => setSearch(e.target.value)}
+                                                className="filter-search-input"
+                                                style={{
+                                                    paddingLeft: '2rem', paddingRight: search ? '2rem' : '0.75rem',
+                                                    height: 34, width: '100%',
+                                                    background: 'var(--surface-raised)', border: '1px solid var(--border-default)',
+                                                    borderRadius: 'var(--radius-sm)', color: 'var(--text-1)',
+                                                    outline: 'none', fontSize: 'var(--text-sm)', transition: 'border-color 0.15s',
+                                                    fontFamily: 'var(--font-sans)',
+                                                }}
+                                                onFocus={e => e.target.style.borderColor = 'var(--brand-mid)'}
+                                                onBlur={e => e.target.style.borderColor = 'var(--border-default)'}
+                                            />
+                                            {search && (
+                                                <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: 'var(--text-3)', display: 'flex', alignItems: 'center' }}>
+                                                    <X size={13} />
                                                 </button>
                                             )}
-                                        </>
+                                        </div>
                                     )}
-                                    {isFilterCollapsed ? <ChevronDown size={18} color="#64748b" /> : <ChevronUp size={18} color="#64748b" />}
+
+                                    {/* Filter toggle — assignments tab only */}
+                                    {activeTab === 'assignments' && (
+                                        <button
+                                            onClick={() => setShowFilters(f => !f)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 6,
+                                                height: 34, padding: '0 12px',
+                                                background: showFilters ? 'rgba(4,125,96,0.08)' : (hasActiveFilters ? 'rgba(4,125,96,0.06)' : 'var(--surface-raised)'),
+                                                border: `1px solid ${showFilters || hasActiveFilters ? 'var(--brand-mid)' : 'var(--border-default)'}`,
+                                                borderRadius: 'var(--radius-sm)',
+                                                color: showFilters || hasActiveFilters ? 'var(--brand-dark)' : 'var(--text-2)',
+                                                cursor: 'pointer', fontSize: 'var(--text-sm)', fontWeight: 600, transition: 'all 0.15s',
+                                            }}
+                                        >
+                                            <SlidersHorizontal size={13} />
+                                            Filters
+                                            {activeFilterCount > 0 && (
+                                                <span style={{ background: 'var(--brand-mid)', color: '#fff', borderRadius: 'var(--radius-pill)', fontSize: '0.6rem', fontWeight: 700, padding: '1px 6px', lineHeight: 1.5 }}>
+                                                    {activeFilterCount}
+                                                </span>
+                                            )}
+                                        </button>
+                                    )}
+
+                                    {/* Fullscreen — assignments tab only */}
+                                    {activeTab === 'assignments' && (
+                                        <button
+                                            onClick={() => setIsTableFullscreen(true)}
+                                            title="Fullscreen table"
+                                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 34, width: 34, background: 'var(--surface-raised)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-2)', transition: 'all 0.15s' }}
+                                        >
+                                            <Maximize2 size={14} />
+                                        </button>
+                                    )}
+
+                                    {/* Export */}
+                                    <button
+                                        onClick={() => setShowExportModal(true)}
+                                        disabled={!filteredRows.length}
+                                        style={{
+                                            display: 'flex', alignItems: 'center', gap: 6,
+                                            height: 34, padding: '0 14px',
+                                            background: filteredRows.length ? 'var(--brand-gradient)' : 'var(--surface-raised)',
+                                            border: 'none', borderRadius: 'var(--radius-sm)',
+                                            color: filteredRows.length ? '#fff' : 'var(--text-3)',
+                                            cursor: filteredRows.length ? 'pointer' : 'not-allowed',
+                                            fontSize: 'var(--text-sm)', fontWeight: 700, whiteSpace: 'nowrap',
+                                            boxShadow: filteredRows.length ? '0 2px 8px rgba(2,64,49,0.18)' : 'none',
+                                            transition: 'filter 0.15s',
+                                        }}
+                                        onMouseEnter={e => { if (filteredRows.length) e.currentTarget.style.filter = 'brightness(1.08)'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}
+                                    >
+                                        <Download size={14} /> Export
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* Dropdown filters grid */}
+                            {/* ── Stats strip — below command bar ─────────────────── */}
+                            {!loadingStages && selectedScheme && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '0 1.5rem', height: 34, borderBottom: '1px solid var(--border-default)', flexShrink: 0, background: 'var(--surface-raised)' }}>
+                                    <StatPill label="Assignments" value={allRows.length} />
+                                    <div style={{ width: 1, height: 14, background: 'var(--border-default)' }} />
+                                    <StatPill label="Stages" value={stageDetails.length} />
+                                    <div style={{ width: 1, height: 14, background: 'var(--border-default)' }} />
+                                    <StatPill label="Total MW" value={`${formatMW(schemeMetrics.totalMW)} MW`} />
+                                    {selectedScheme?.published_at && <>
+                                        <div style={{ width: 1, height: 14, background: 'var(--border-default)' }} />
+                                        <StatPill label="Published" value={formatDate(selectedScheme.published_at)} />
+                                    </>}
+                                </div>
+                            )}
+                            {loadingStages && (
+                                <div style={{ height: 34, borderBottom: '1px solid var(--border-default)', flexShrink: 0, background: 'var(--surface-raised)', display: 'flex', alignItems: 'center', padding: '0 1.5rem' }}>
+                                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-3)' }}>Loading scheme data…</span>
+                                </div>
+                            )}
+
+                            {/* ── Active filter chips ──────────────────────────────── */}
                             <AnimatePresence>
-                                {!isFilterCollapsed && (
+                                {activeTab === 'assignments' && !showFilters && hasActiveFilters && (
                                     <motion.div
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        transition={{ duration: 0.2 }}
-                                        style={{ overflow: 'hidden' }}
+                                        initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.15 }}
+                                        style={{ overflow: 'hidden', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}
                                     >
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
-                                            <FilterDropdown label="Stage" value={filterStage} onChange={setFilterStage} options={stageOptions} />
-                                            <FilterDropdown label="Region" value={filterRegion} onChange={setFilterRegion} options={regionOptions} />
-                                            <FilterDropdown label="Grid" value={filterGrid} onChange={setFilterGrid} options={gridOptions} />
-                                            <FilterDropdown label="Assignment Type" value={filterType} onChange={setFilterType} options={typeOptions} />
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', padding: '0.4rem 1.5rem' }}>
+                                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-3)', fontWeight: 600, whiteSpace: 'nowrap' }}>Filtered by:</span>
+                                            {filterStage !== 'All' && <button onClick={() => setFilterStage('All')} style={chipStyle}>Stage: {filterStage} <X size={10} strokeWidth={2.5} /></button>}
+                                            {filterRegion !== 'All' && <button onClick={() => setFilterRegion('All')} style={chipStyle}>{filterRegion} <X size={10} strokeWidth={2.5} /></button>}
+                                            {filterGrid !== 'All' && <button onClick={() => setFilterGrid('All')} style={chipStyle}>{filterGrid} <X size={10} strokeWidth={2.5} /></button>}
+                                            {filterType !== 'All' && <button onClick={() => setFilterType('All')} style={chipStyle}>Type: {filterType} <X size={10} strokeWidth={2.5} /></button>}
+                                            <button onClick={() => { setFilterStage('All'); setFilterRegion('All'); setFilterGrid('All'); setFilterType('All'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer' }}>
+                                                <RotateCcw size={10} /> Clear all
+                                            </button>
                                         </div>
                                     </motion.div>
                                 )}
                             </AnimatePresence>
-                        </div>
-                    )}
 
-                </div>
+                            {/* ── Filter panel ─────────────────────────────────────── */}
+                            <AnimatePresence>
+                                {showFilters && activeTab === 'assignments' && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.18 }}
+                                        style={{ overflow: 'hidden', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}
+                                    >
+                                        <div style={{ padding: '0.75rem 1.5rem', background: 'var(--surface-raised)' }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.65rem' }}>
+                                                <FilterDropdown label="Stage" value={filterStage} onChange={setFilterStage} options={stageOptions} />
+                                                <FilterDropdown label="Region" value={filterRegion} onChange={setFilterRegion} options={regionOptions} />
+                                                <FilterDropdown label="Grid" value={filterGrid} onChange={setFilterGrid} options={gridOptions} />
+                                                <FilterDropdown label="Assignment Type" value={filterType} onChange={setFilterType} options={typeOptions} />
+                                                {hasActiveFilters && (
+                                                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                                                        <button
+                                                            onClick={() => { setFilterStage('All'); setFilterRegion('All'); setFilterGrid('All'); setFilterType('All'); }}
+                                                            style={{ display: 'flex', alignItems: 'center', gap: 4, height: 33, padding: '0 10px', background: '#fff', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-2)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s' }}
+                                                            onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--c-danger)'}
+                                                            onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-default)'}
+                                                        >
+                                                            <RotateCcw size={11} /> Reset
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </>
+                    );
+                })()}
 
                 {/* ── ROW 3: Scrollable content ──────────────────────────────── */}
                 <div style={isTableFullscreen && activeTab === 'assignments' ? {
                     position: 'fixed', inset: 0, zIndex: 9999, background: '#fff', display: 'flex', flexDirection: 'column', overflow: 'hidden'
-                } : { flex: 1, overflowY: 'auto', minHeight: 0, padding: '0 2rem 2rem' }} className="custom-scrollbar">
+                } : { flex: 1, overflowY: 'auto', minHeight: 0, padding: '1rem 1.5rem 1.5rem' }} className="custom-scrollbar">
 
                     {/* ── ASSIGNMENTS TAB ──────────────────────────────────── */}
                     {activeTab === 'assignments' && (
@@ -1851,12 +1815,6 @@ const LoadSheddingSchemeReviewer = () => {
                             <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
                                 <div>
                                     <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>Changes Log</div>
-                                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
-                                        Permanent record of bay-level changes made when this version was published.
-                                        {currentUser?.is_superuser && (
-                                            <span style={{ marginLeft: '6px', color: '#7c3aed', fontWeight: 600 }}>Superuser: you may edit reasons.</span>
-                                        )}
-                                    </div>
                                 </div>
                                 {previousVersion && currentUser?.is_staff && changeLog.length > 0 && (
                                     <button

@@ -12,6 +12,7 @@ const DEFAULT_FILTERS = {
     region: 'All',
     grid: 'All',
     state: 'All',
+    voltage: 'All',
     category: 'All',
     search: '',
     hasRelay: 'All',
@@ -226,60 +227,21 @@ const CriticalSubstationManager = ({ isStaff, onEditSubstation }) => {
     const tabButtonStyle = (isActive) => ({
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        padding: '0.75rem 1.5rem',
-        background: isActive ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
+        gap: '6px',
+        padding: '0.6rem 1.25rem',
+        background: 'transparent',
         border: 'none',
-        borderBottom: isActive ? '2px solid var(--accent-blue)' : '2px solid transparent',
-        color: isActive ? 'var(--accent-blue)' : '#64748b',
+        borderBottom: isActive ? '2px solid var(--brand-mid)' : '2px solid transparent',
+        color: isActive ? 'var(--brand-dark)' : 'var(--text-2)',
         cursor: 'pointer',
-        fontWeight: isActive ? '600' : '400',
-        transition: 'all 0.2s ease',
-        borderRadius: '8px 8px 0 0'
+        fontWeight: isActive ? 600 : 500,
+        fontSize: 'var(--text-sm)',
+        transition: 'all 0.15s',
+        whiteSpace: 'nowrap',
     });
 
-    const FIXED_HEADER_STYLE = {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        flexShrink: 0,
-        background: '#fff',
-        position: 'sticky',
-        top: 0,
-        zIndex: 10,
-        padding: '0.5rem 0 1rem 0'
-    };
-    const ICON_WRAP_STYLE = {
-        width: '36px',
-        height: '36px',
-        borderRadius: '10px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0
-    };
-    const TITLE_STYLE = {
-        fontSize: '0.9rem',
-        fontWeight: 700,
-        fontFamily: "'Poppins', sans-serif",
-        letterSpacing: '-0.01em'
-    };
-    const SUBTITLE_STYLE = {
-        fontSize: '0.65rem',
-        color: '#64748b',
-        fontFamily: "'Poppins', sans-serif",
-        marginTop: '1px'
-    };
-    const COUNT_STYLE = {
-        fontSize: '0.65rem',
-        fontWeight: 700,
-        padding: '2px 10px',
-        borderRadius: '20px',
-        border: '1px solid'
-    };
-
     return (
-        <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', fontFamily: "'Poppins', sans-serif" }}>
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
 
             {/* ROW 1: Tab Navigation — fixed, no scroll */}
             <div style={{
@@ -303,66 +265,51 @@ const CriticalSubstationManager = ({ isStaff, onEditSubstation }) => {
                 ))}
             </div>
 
-            {/* ROW 2: Header — fixed, no scroll, changes per tab */}
-            <div style={{ flexShrink: 0, zIndex: 10, padding: '1.25rem 2rem 0', display: activeTab === 'geo' ? 'none' : undefined }}>
-                {status && (
-                    <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: status.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: status.type === 'success' ? '#10b981' : '#ef4444', border: `1px solid ${status.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}` }}>
+            {/* Status banner */}
+            {activeTab !== 'geo' && status && (
+                <div style={{ padding: '0.5rem 1.5rem 0', flexShrink: 0 }}>
+                    <div style={{ padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', background: status.type === 'success' ? 'var(--c-success-bg)' : 'var(--c-danger-bg)', color: status.type === 'success' ? 'var(--c-success)' : 'var(--c-danger)', border: `1px solid ${status.type === 'success' ? 'var(--c-success-border)' : 'var(--c-danger-border)'}` }}>
                         {status.msg}
                     </div>
-                )}
+                </div>
+            )}
 
-                {activeTab === 'assets' && (
-                    <div style={{ flexShrink: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', marginBottom: '0.75rem' }}>
-                            <div>
-                                <div style={{fontSize: '0.7rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(30, 41, 59, 0.6)', marginBottom: '0.5rem' }}>Critical Substation Registry</div>
-                                <h1 style={{ margin: 0, fontSize: '2.6rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.03em' }}>Critical Substations</h1>
-                            </div>
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: 'rgba(30, 41, 59, 0.7)', textTransform: 'uppercase', letterSpacing: '0.3em', marginBottom: '0.75rem'}}>{Object.keys(grouped).length} critical substations • All Regions</div>
-                        <SubstationFilter
-                            substations={substations}
-                            currentFilters={filterCriteria}
-                            onUpdateFilters={setFilterCriteria}
-                            extraLabel="Category"
-                            extraValue={filterCriteria.category}
-                            onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, category: val }))}
-                            extraOptions={['All', ...categories.map(c => c.category_name)].sort()}
-                            showVoltage={false}
-                            viewMode={listDisplayMode}
-                            onViewModeChange={setListDisplayMode}
-                        />
-                    </div>
-                )}
+            {activeTab === 'assets' && (
+                <SubstationFilter
+                    substations={substations}
+                    currentFilters={filterCriteria}
+                    onUpdateFilters={setFilterCriteria}
+                    extraLabel="Category"
+                    extraValue={filterCriteria.category}
+                    onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, category: val }))}
+                    extraOptions={['All', ...categories.map(c => c.category_name)].sort()}
+                    showVoltage={false}
+                    pageTitle="Critical Substations"
+                    resultCount={Object.keys(filteredGrouped).length}
+                    icon={ShieldAlert}
+                    viewMode={listDisplayMode}
+                    onViewModeChange={setListDisplayMode}
+                />
+            )}
 
-                {activeTab === 'analysis' && (
-                    <div style={{ flexShrink: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', marginBottom: '0.75rem' }}>
-                            <div>
-                                <div style={{ fontSize: '0.7rem', letterSpacing: '0.4em', textTransform: 'uppercase', color: 'rgba(30, 41, 59, 0.6)', marginBottom: '0.5rem' }}>Analytics</div>
-                                <h1 style={{ margin: 0, fontSize: '2.6rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.03em' }}>Stats Overview</h1>
-                            </div>
-                        </div>
-                        <div style={{ fontSize: '0.85rem', color: 'rgba(30, 41, 59, 0.7)', textTransform: 'uppercase', letterSpacing: '0.3em', marginBottom: '0.75rem'}}>{tags.length} critical customers • {Object.keys(grouped).length} critical substations</div>
-                        <SubstationFilter
-                            substations={substations}
-                            currentFilters={filterCriteria}
-                            onUpdateFilters={setFilterCriteria}
-                            extraLabel="Category"
-                            extraValue={filterCriteria.category}
-                            onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, category: val }))}
-                            extraOptions={['All', ...categories.map(c => c.category_name)].sort()}
-                            showVoltage={false}
-                            viewMode={listDisplayMode}
-                            onViewModeChange={setListDisplayMode}
-                        />
-                    </div>
-                )}
-
-            </div>
+            {activeTab === 'analysis' && (
+                <SubstationFilter
+                    substations={substations}
+                    currentFilters={filterCriteria}
+                    onUpdateFilters={setFilterCriteria}
+                    extraLabel="Category"
+                    extraValue={filterCriteria.category}
+                    onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, category: val }))}
+                    extraOptions={['All', ...categories.map(c => c.category_name)].sort()}
+                    showVoltage={false}
+                    pageTitle="Analytics"
+                    resultCount={tags.length}
+                    icon={BarChart2}
+                />
+            )}
 
             {/* ROW 3: Scrollable content */}
-            <div style={activeTab === 'geo' ? { flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' } : { flex: 1, overflowY: 'auto', minHeight: 0, padding: '0.75rem 2rem 1.5rem' }} className={activeTab !== 'geo' ? 'custom-scrollbar' : undefined}>
+            <div style={activeTab === 'geo' ? { flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' } : { flex: 1, overflowY: 'auto', minHeight: 0, padding: '1rem 1.5rem 1.5rem' }} className={activeTab !== 'geo' ? 'custom-scrollbar' : undefined}>
                 {activeTab === 'assets' && (
                     <>
                         {listDisplayMode === 'grid' ? (
