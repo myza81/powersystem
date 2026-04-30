@@ -90,6 +90,11 @@ const SubstationSelectionPanel = ({
     const [catGrid, setCatGrid] = useState('All');
     const [catOwnership, setCatOwnership] = useState('All');
     const [catVoltages, setCatVoltages] = useState(new Set()); // Empty Set = All
+    const [catCritical, setCatCritical] = useState(false);
+    const [catHasRelay, setCatHasRelay] = useState(false);
+    const [catSchemeTypes, setCatSchemeTypes] = useState(new Set()); // Empty = All
+    const [catStages, setCatStages] = useState(new Set()); // Empty = All
+    const [catLoadBrackets, setCatLoadBrackets] = useState(new Set()); // Empty = All
 
     // Individual tab search
     const [indSearch, setIndSearch] = useState('');
@@ -113,19 +118,56 @@ const SubstationSelectionPanel = ({
 
     const uniqueVoltages = useMemo(() => {
         const volts = new Set(substations.map(s => s.voltage).filter(v => v && v !== 230));
-        return Array.from(volts).sort((a,b) => b - a);
+        return Array.from(volts).sort((a, b) => b - a);
     }, [substations]);
+
+    const uniqueSchemeTypes = useMemo(() => {
+        const types = new Set();
+        substations.forEach(s => (s.relay_scheme_types || []).forEach(t => types.add(t)));
+        return Array.from(types).sort();
+    }, [substations]);
+
+    const uniqueStages = useMemo(() => {
+        const stages = new Set();
+        substations.forEach(s => (s.relay_stages || []).forEach(n => stages.add(n)));
+        return Array.from(stages).sort((a, b) => a - b);
+    }, [substations]);
+
+    const LOAD_BRACKETS = [
+        { id: 'none',     label: 'None',     color: '#3b82f6', min: 0,   max: 1   },
+        { id: 'low',      label: 'Low',      color: '#3bf7ea', min: 1,   max: 30  },
+        { id: 'medium',   label: 'Medium',   color: '#22c55e', min: 30,  max: 80  },
+        { id: 'heavy',    label: 'Heavy',    color: '#f97316', min: 80,  max: 100 },
+        { id: 'critical', label: 'Critical', color: '#ef4444', min: 100, max: Infinity },
+    ];
+
+    const getLoadBracket = (mw) => {
+        for (const b of LOAD_BRACKETS) {
+            if (mw >= b.min && mw < b.max) return b.id;
+        }
+        return 'critical';
+    };
 
     // Substations matching current category filters
     const categoryMatches = useMemo(() =>
-        substations.filter(s =>
-            (catRegion === 'All' || s.region === catRegion) &&
-            (catState === 'All' || s.state === catState) &&
-            (catGrid === 'All' || s.grid === catGrid) &&
-            (catOwnership === 'All' || s.ownership === catOwnership) &&
-            (catVoltages.size === 0 || catVoltages.has(s.voltage))
-        ),
-        [substations, catRegion, catState, catGrid, catOwnership, catVoltages]);
+        substations.filter(s => {
+            if (catRegion !== 'All' && s.region !== catRegion) return false;
+            if (catState !== 'All' && s.state !== catState) return false;
+            if (catGrid !== 'All' && s.grid !== catGrid) return false;
+            if (catOwnership !== 'All' && s.ownership !== catOwnership) return false;
+            if (catVoltages.size > 0 && !catVoltages.has(s.voltage)) return false;
+            if (catCritical && !s.is_critical) return false;
+            if (catHasRelay && !s.has_active_relay) return false;
+            if (catSchemeTypes.size > 0 && !(s.relay_scheme_types || []).some(t => catSchemeTypes.has(t))) return false;
+            if (catStages.size > 0 && !(s.relay_stages || []).some(n => catStages.has(n))) return false;
+            if (catLoadBrackets.size > 0) {
+                const load = parseFloat(s.total_pload_mw || s.current_load_mw || s.load_mw || 0);
+                if (!catLoadBrackets.has(getLoadBracket(load))) return false;
+            }
+            return true;
+        }),
+        [substations, catRegion, catState, catGrid, catOwnership, catVoltages,
+         catCritical, catHasRelay, catSchemeTypes, catStages, catLoadBrackets]); // eslint-disable-line
 
     // Individual tab: substations filtered by search text
     const individualFiltered = useMemo(() => {
@@ -171,10 +213,15 @@ const SubstationSelectionPanel = ({
 
     const toggleCatVoltage = (v) => {
         const next = new Set(catVoltages);
-        if (next.has(v)) next.delete(v);
-        else next.add(v);
+        if (next.has(v)) next.delete(v); else next.add(v);
         setCatVoltages(next);
     };
+
+    const toggleSet = (setter, value) => setter(prev => {
+        const next = new Set(prev);
+        if (next.has(value)) next.delete(value); else next.add(value);
+        return next;
+    });
 
     const isChecked = (id) => selectedIds === null || selectedIds.has(id);
 
@@ -185,8 +232,8 @@ const SubstationSelectionPanel = ({
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 1001,
-        width: '360px',
-        height: '460px',
+        width: '380px',
+        height: '520px',
         display: 'flex',
         flexDirection: 'column',
         background: 'rgba(15, 23, 42, 0.97)',
@@ -322,18 +369,13 @@ const SubstationSelectionPanel = ({
                                         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                                             {uniqueVoltages.map(v => (
                                                 <label key={v} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                                                    <div 
+                                                    <div
                                                         onClick={() => toggleCatVoltage(v)}
                                                         style={{
-                                                            width: '14px',
-                                                            height: '14px',
-                                                            borderRadius: '3px',
+                                                            width: '14px', height: '14px', borderRadius: '3px',
                                                             border: `1px solid ${catVoltages.has(v) || catVoltages.size === 0 ? '#00e5ff' : 'rgba(255,255,255,0.3)'}`,
                                                             background: catVoltages.has(v) || catVoltages.size === 0 ? 'rgba(0,229,255,0.25)' : 'transparent',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            transition: 'all 0.15s ease',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s ease',
                                                         }}
                                                     >
                                                         {(catVoltages.has(v) || catVoltages.size === 0) && <Check size={10} color="#00e5ff" />}
@@ -342,16 +384,130 @@ const SubstationSelectionPanel = ({
                                                 </label>
                                             ))}
                                             {catVoltages.size > 0 && (
-                                                <button 
-                                                    onClick={() => setCatVoltages(new Set())}
-                                                    style={{ background: 'none', border: 'none', color: '#aaa', fontSize: '0.65rem', cursor: 'pointer', padding: '0 4px', textDecoration: 'underline' }}
-                                                >
+                                                <button onClick={() => setCatVoltages(new Set())}
+                                                    style={{ background: 'none', border: 'none', color: '#aaa', fontSize: '0.65rem', cursor: 'pointer', padding: '0 4px', textDecoration: 'underline' }}>
                                                     Reset
                                                 </button>
                                             )}
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* ── OPERATIONAL STATUS ── */}
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '10px', marginBottom: '10px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', marginBottom: '8px', letterSpacing: '0.05em' }}>OPERATIONAL STATUS</label>
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                        {[
+                                            { id: 'critical', label: '⚡ Critical', active: catCritical, toggle: () => setCatCritical(v => !v) },
+                                            { id: 'relay',    label: '🔌 Has LS Relay', active: catHasRelay, toggle: () => setCatHasRelay(v => !v) },
+                                        ].map(({ id, label, active, toggle }) => (
+                                            <button key={id} onClick={toggle} style={{
+                                                background: active ? 'rgba(0,229,255,0.18)' : 'rgba(255,255,255,0.05)',
+                                                border: `1px solid ${active ? '#00e5ff' : 'rgba(255,255,255,0.15)'}`,
+                                                borderRadius: '20px', color: active ? '#00e5ff' : '#aaa',
+                                                fontSize: '0.7rem', fontWeight: active ? 600 : 400,
+                                                padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s',
+                                                boxShadow: active ? '0 0 8px rgba(0,229,255,0.2)' : 'none',
+                                            }}>
+                                                {label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* ── SCHEME TYPE ── */}
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '10px', marginBottom: '10px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', marginBottom: '8px', letterSpacing: '0.05em' }}>SCHEME TYPE</label>
+                                    {uniqueSchemeTypes.length === 0 ? (
+                                        <span style={{ fontSize: '0.68rem', color: '#444', fontStyle: 'italic' }}>No scheme assignments found</span>
+                                    ) : (
+                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                            {uniqueSchemeTypes.map(t => {
+                                                const active = catSchemeTypes.has(t) || catSchemeTypes.size === 0;
+                                                return (
+                                                    <button key={t} onClick={() => toggleSet(setCatSchemeTypes, t)} style={{
+                                                        background: active ? 'rgba(0,229,255,0.15)' : 'rgba(255,255,255,0.04)',
+                                                        border: `1px solid ${active ? 'rgba(0,229,255,0.5)' : 'rgba(255,255,255,0.12)'}`,
+                                                        borderRadius: '4px', color: active ? '#00e5ff' : '#666',
+                                                        fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.04em',
+                                                        padding: '4px 10px', cursor: 'pointer', transition: 'all 0.15s',
+                                                    }}>
+                                                        {t}
+                                                    </button>
+                                                );
+                                            })}
+                                            {catSchemeTypes.size > 0 && (
+                                                <button onClick={() => setCatSchemeTypes(new Set())}
+                                                    style={{ background: 'none', border: 'none', color: '#666', fontSize: '0.65rem', cursor: 'pointer', padding: '0 4px', textDecoration: 'underline' }}>
+                                                    All
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ── LS STAGE ── */}
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '10px', marginBottom: '10px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', marginBottom: '8px', letterSpacing: '0.05em' }}>LS STAGE</label>
+                                    {uniqueStages.length === 0 ? (
+                                        <span style={{ fontSize: '0.68rem', color: '#444', fontStyle: 'italic' }}>No stage assignments found</span>
+                                    ) : (
+                                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                            {uniqueStages.map(n => {
+                                                const active = catStages.has(n) || catStages.size === 0;
+                                                return (
+                                                    <button key={n} onClick={() => toggleSet(setCatStages, n)} style={{
+                                                        width: '32px', height: '32px',
+                                                        background: active ? 'rgba(0,229,255,0.15)' : 'rgba(255,255,255,0.04)',
+                                                        border: `1px solid ${active ? 'rgba(0,229,255,0.5)' : 'rgba(255,255,255,0.12)'}`,
+                                                        borderRadius: '6px', color: active ? '#00e5ff' : '#666',
+                                                        fontSize: '0.75rem', fontWeight: 700,
+                                                        cursor: 'pointer', transition: 'all 0.15s',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    }}>
+                                                        {n}
+                                                    </button>
+                                                );
+                                            })}
+                                            {catStages.size > 0 && (
+                                                <button onClick={() => setCatStages(new Set())}
+                                                    style={{ background: 'none', border: 'none', color: '#666', fontSize: '0.65rem', cursor: 'pointer', padding: '0 4px', textDecoration: 'underline', alignSelf: 'center' }}>
+                                                    All
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ── LOAD BRACKET ── */}
+                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '10px', marginBottom: '10px' }}>
+                                    <label style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(0,229,255,0.7)', marginBottom: '8px', letterSpacing: '0.05em' }}>LOAD BRACKET</label>
+                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                        {LOAD_BRACKETS.map(b => {
+                                            const active = catLoadBrackets.has(b.id) || catLoadBrackets.size === 0;
+                                            return (
+                                                <button key={b.id} onClick={() => toggleSet(setCatLoadBrackets, b.id)} style={{
+                                                    background: active ? `${b.color}22` : 'rgba(255,255,255,0.04)',
+                                                    border: `1px solid ${active ? b.color + '88' : 'rgba(255,255,255,0.12)'}`,
+                                                    borderRadius: '20px', color: active ? b.color : '#555',
+                                                    fontSize: '0.68rem', fontWeight: active ? 600 : 400,
+                                                    padding: '3px 9px', cursor: 'pointer', transition: 'all 0.15s',
+                                                    display: 'flex', alignItems: 'center', gap: '4px',
+                                                }}>
+                                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: active ? b.color : '#444', flexShrink: 0 }} />
+                                                    {b.label}
+                                                </button>
+                                            );
+                                        })}
+                                        {catLoadBrackets.size > 0 && (
+                                            <button onClick={() => setCatLoadBrackets(new Set())}
+                                                style={{ background: 'none', border: 'none', color: '#666', fontSize: '0.65rem', cursor: 'pointer', padding: '0 4px', textDecoration: 'underline', alignSelf: 'center' }}>
+                                                All
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
                                 <div style={{ fontSize: '0.7rem', color: '#aaa', marginBottom: '10px' }}>
                                     {categoryMatches.length} substation{categoryMatches.length !== 1 ? 's' : ''} match current filters
                                 </div>

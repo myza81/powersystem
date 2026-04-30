@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status, parsers, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.conf import settings
 from django.db import models
 from django.core.files.storage import default_storage
 from django.core.files import File
@@ -162,7 +163,7 @@ class SnapshotViewSet(viewsets.ModelViewSet):
         if not snapshot:
             return Response({"error": "Snapshot not found or access denied"}, status=status.HTTP_404_NOT_FOUND)
 
-        self._set_active_snapshot(snapshot)
+        self._set_active_snapshot(snapshot)  # also triggers mw_cache recompute
         serializer = self.get_serializer(snapshot)
         summary = self._build_upload_summary(snapshot)
         return Response({"snapshot": serializer.data, "summary": summary})
@@ -247,3 +248,27 @@ class SnapshotViewSet(viewsets.ModelViewSet):
         snapshot.is_active = True
         snapshot.activated_at = timezone.now()
         snapshot.save(update_fields=["is_active", "activated_at"])
+
+        self._recompute_scheme_mw_cache(snapshot)
+
+    def _recompute_scheme_mw_cache(self, snapshot: NetworkSnapshot):
+        """
+        Recompute mw_cache for every transformer bay in all currently-published
+        scheme versions so the Load Shedding Viewer always reflects the latest snapshot.
+        Failures are logged but do not abort the snapshot activation.
+        """
+        from core.models import LoadSheddingVersion
+        active_versions = (
+            LoadSheddingVersion.objects
+            .filter(is_active=True)
+            .prefetch_related('stages__transformer_bays')
+        )
+        for version in active_versions:
+            for stage in version.stages.all():
+                for tb in stage.transformer_bays.all():
+                    try:
+                        tb.compute_mw(snapshot)
+                    except Exception:
+                        logger.exception(
+                            "Failed to recompute MW for TransformerBay %s (version %s)", tb.id, version.id
+                        )

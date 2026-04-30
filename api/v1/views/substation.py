@@ -51,6 +51,34 @@ class SubstationViewSet(viewsets.ModelViewSet):
             return SubstationDetailSerializer
         return SubstationSerializer
 
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        if self.action == 'list':
+            from core.models import LoadSheddingTransformerBay
+            # relay__substation__substation_id is the live path (relay still exists);
+            # frozen_substation_id is the fallback when relay has been deleted (SET_NULL).
+            rows = (
+                LoadSheddingTransformerBay.objects
+                .select_related('stage__version', 'relay__substation')
+                .values(
+                    'relay__substation__substation_id',
+                    'frozen_substation_id',
+                    'stage__version__scheme_type',
+                    'stage__stage_number',
+                )
+            )
+            scheme_types_map = {}
+            stages_map = {}
+            for row in rows:
+                sid = row['relay__substation__substation_id'] or row['frozen_substation_id']
+                if not sid:
+                    continue
+                scheme_types_map.setdefault(sid, set()).add(row['stage__version__scheme_type'])
+                stages_map.setdefault(sid, set()).add(row['stage__stage_number'])
+            ctx['scheme_types_map'] = scheme_types_map
+            ctx['stages_map'] = stages_map
+        return ctx
+
     def get_permissions(self):
         if self.request.method in permissions.SAFE_METHODS:
             return [permissions.AllowAny()]

@@ -19,15 +19,17 @@ class SubstationSerializer(serializers.ModelSerializer):
     total_pload_mw = serializers.SerializerMethodField()
     is_critical = serializers.SerializerMethodField()
     has_active_relay = serializers.SerializerMethodField()
+    relay_scheme_types = serializers.SerializerMethodField()
+    relay_stages = serializers.SerializerMethodField()
     transformer_commissioning_years = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = Substation
-        fields = ['substation_id', 'mnemonic', 'name', 'ownership', 'voltage', 
-                  'grid', 'state', 'region', 'latitude', 'longitude', 
-                  'commission_date', 'sld', 'sld_file', 'total_pload_mw', 
-                  'is_critical', 'has_active_relay', 'transformer_commissioning_years',
-                  'created_at', 'updated_at']
+        fields = ['substation_id', 'mnemonic', 'name', 'ownership', 'voltage',
+                  'grid', 'state', 'region', 'latitude', 'longitude',
+                  'commission_date', 'sld', 'sld_file', 'total_pload_mw',
+                  'is_critical', 'has_active_relay', 'relay_scheme_types', 'relay_stages',
+                  'transformer_commissioning_years', 'created_at', 'updated_at']
         read_only_fields = ['substation_id', 'sld', 'created_at', 'updated_at', 'region', 'state']
 
     def get_snapshot(self):
@@ -58,6 +60,13 @@ class SubstationSerializer(serializers.ModelSerializer):
     def get_has_active_relay(self, obj):
         # Uses prefetched load_shedding_relays when available (list action), avoiding N+1
         return any(r.is_active for r in obj.load_shedding_relays.all())
+
+    def get_relay_scheme_types(self, obj):
+        # Uses precomputed map from viewset context (single query for all substations)
+        return sorted(self.context.get('scheme_types_map', {}).get(obj.substation_id, []))
+
+    def get_relay_stages(self, obj):
+        return sorted(self.context.get('stages_map', {}).get(obj.substation_id, []))
 
     def get_transformer_commissioning_years(self, obj):
         # Uses prefetched load_transformers when available (list action), avoiding N+1

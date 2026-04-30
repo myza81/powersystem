@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutGrid, BarChart2, MapPin, ShieldAlert, Info } from 'lucide-react';
+import { LayoutGrid, BarChart2, ShieldAlert, Info } from 'lucide-react';
 import api from '../api';
 import CriticalSubstationCard from './CriticalSubstationCard';
 import CriticalSubstationListRow from './CriticalSubstationListRow';
-import SubstationMap from './SubstationMap';
 import SubstationFilter from './SubstationFilter';
 import { BsGrid3X3GapFill, BsListUl } from 'react-icons/bs';
 
@@ -206,22 +205,9 @@ const CriticalSubstationManager = ({ isStaff, onEditSubstation }) => {
         return sortedMap;
     }, [grouped, filteredSubstations]);
 
-    // Filter substations for the map (only those with critical assets)
-    const criticalSubstationsForMap = useMemo(() => {
-        return Object.keys(grouped).map(subId => {
-            const sub = substationLookup[subId];
-            if (!sub) return null;
-            return {
-                ...sub,
-                load_mw: grouped[subId].reduce((acc, t) => acc + (t.load_data?.pload_mw || 0), 0)
-            };
-        }).filter(Boolean);
-    }, [grouped, substationLookup]);
-
     const tabList = [
         { id: 'assets', label: 'Critical Substations', icon: <LayoutGrid size={18} /> },
         { id: 'analysis', label: 'Analytics', icon: <BarChart2 size={18} /> },
-        { id: 'geo', label: 'Geo Location', icon: <MapPin size={18} /> }
     ];
 
     const tabButtonStyle = (isActive) => ({
@@ -266,7 +252,7 @@ const CriticalSubstationManager = ({ isStaff, onEditSubstation }) => {
             </div>
 
             {/* Status banner */}
-            {activeTab !== 'geo' && status && (
+            {status && (
                 <div style={{ padding: '0.5rem 1.5rem 0', flexShrink: 0 }}>
                     <div style={{ padding: '0.6rem 0.9rem', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', background: status.type === 'success' ? 'var(--c-success-bg)' : 'var(--c-danger-bg)', color: status.type === 'success' ? 'var(--c-success)' : 'var(--c-danger)', border: `1px solid ${status.type === 'success' ? 'var(--c-success-border)' : 'var(--c-danger-border)'}` }}>
                         {status.msg}
@@ -309,7 +295,7 @@ const CriticalSubstationManager = ({ isStaff, onEditSubstation }) => {
             )}
 
             {/* ROW 3: Scrollable content */}
-            <div style={activeTab === 'geo' ? { flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden' } : { flex: 1, overflowY: 'auto', minHeight: 0, padding: '1rem 1.5rem 1.5rem' }} className={activeTab !== 'geo' ? 'custom-scrollbar' : undefined}>
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '1rem 1.5rem 1.5rem' }} className="custom-scrollbar">
                 {activeTab === 'assets' && (
                     <>
                         {listDisplayMode === 'grid' ? (
@@ -762,71 +748,6 @@ const CriticalSubstationManager = ({ isStaff, onEditSubstation }) => {
                     );
                 })()}
 
-                {activeTab === 'geo' && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ position: 'absolute', inset: 0 }}>
-
-                        {/* Backdrop map */}
-                        <div style={{ position: 'absolute', inset: 0, opacity: 0.9, filter: 'saturate(0.6) brightness(0.85)' }}>
-                            <SubstationMap data={criticalSubstationsForMap} fuiMode={true} />
-                        </div>
-
-                        {/* Right-side panel stack */}
-                        <div style={{
-                            position: 'absolute', top: '1.25rem', right: '1.25rem', zIndex: 10,
-                            display: 'flex', flexDirection: 'column', gap: '10px', width: '220px',
-                        }}>
-                            {/* Title badge */}
-                            <div style={{
-                                display: 'flex', alignItems: 'center', gap: '10px',
-                                background: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(10px)',
-                                border: '1px solid rgba(255,159,67,0.25)', borderRadius: '12px',
-                                padding: '10px 14px',
-                            }}>
-                                <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(255,159,67,0.15)', border: '1px solid rgba(255,159,67,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                    <ShieldAlert size={15} color="#ff9f43" />
-                                </div>
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.01em' }}>Critical Substations</div>
-                                    <div style={{ fontSize: '0.6rem', color: '#94a3b8', marginTop: '1px' }}>Geographic distribution</div>
-                                </div>
-                                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#ff9f43', background: 'rgba(255,159,67,0.12)', border: '1px solid rgba(255,159,67,0.25)', padding: '2px 8px', borderRadius: '20px', flexShrink: 0 }}>
-                                    {Object.keys(grouped).length}
-                                </span>
-                            </div>
-
-                            {/* Region breakdown */}
-                            {(() => {
-                                const regionCounts = {};
-                                criticalSubstationsForMap.forEach(s => {
-                                    const r = s.region || 'Unknown';
-                                    regionCounts[r] = (regionCounts[r] || 0) + 1;
-                                });
-                                const entries = Object.entries(regionCounts).sort((a, b) => b[1] - a[1]);
-                                return (
-                                    <div style={{
-                                        background: 'rgba(15, 23, 42, 0.72)', backdropFilter: 'blur(10px)',
-                                        border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px',
-                                        padding: '12px 14px',
-                                    }}>
-                                        <div style={{ fontSize: '0.6rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>By Region</div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                                            {entries.map(([region, count]) => (
-                                                <div key={region} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <div style={{ flex: 1, fontSize: '0.7rem', color: '#cbd5e1' }}>{region}</div>
-                                                    <div style={{ width: '50px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '99px', overflow: 'hidden' }}>
-                                                        <div style={{ height: '100%', width: `${(count / entries[0][1]) * 100}%`, background: '#ff9f43', borderRadius: '99px' }} />
-                                                    </div>
-                                                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#ff9f43', minWidth: '14px', textAlign: 'right' }}>{count}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-
-                    </motion.div>
-                )}
             </div>
 
         </div>
