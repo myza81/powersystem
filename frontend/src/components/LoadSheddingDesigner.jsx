@@ -291,7 +291,7 @@ const LoadSheddingDesigner = () => {
 
     const [stages, setStages] = useState(() => getInitialState('stages', [{ id: Date.now(), stage_number: 1, label: 'Stage 1', transformer_bays: [], pocket_bays: [], computed_pockets: [], setting_ids: [], target_mw: 1000 }]));
     const [activeStageIdx, setActiveStageIdx] = useState(() => getInitialState('activeStageIdx', 0));
-    const [detailedSubstations, setDetailedSubstations] = useState(() => getInitialState('detailedSubstations', {}));
+    const [detailedSubstations, setDetailedSubstations] = useState({});
 
     const [saving, setSaving] = useState(false);
     const [publishing, setPublishing] = useState(false);
@@ -304,6 +304,7 @@ const LoadSheddingDesigner = () => {
     const [publishActiveVersionId, setPublishActiveVersionId] = useState(null);
     const [publishDraftVersionId, setPublishDraftVersionId] = useState(null);
     const skipDirtyRef = useRef(true); // skip dirty on initial hydration and draft loads
+    const sessionSaveTimerRef = useRef(null);
 
     // Mark workspace dirty whenever stages change, except on initial load or after a draft load/save
     useEffect(() => {
@@ -584,15 +585,44 @@ const LoadSheddingDesigner = () => {
         }
     };
 
-    // --- Session Storage Auto-Save ---
+    // --- Session Storage Auto-Save (debounced) ---
+    // detailedSubstations is excluded — it's large topology data that is re-fetched on resume.
     useEffect(() => {
-        if (view === 'designer') {
+        if (view !== 'designer') return;
+        clearTimeout(sessionSaveTimerRef.current);
+        sessionSaveTimerRef.current = setTimeout(() => {
             const draftState = {
-                activeVersionId, schemeType, versionLabel, reviewYear, targetPercentage, isMetricsDrawerOpen, isNewlyCloned, stages, activeStageIdx, detailedSubstations
+                activeVersionId, schemeType, versionLabel, reviewYear, targetPercentage,
+                isMetricsDrawerOpen, isNewlyCloned, stages, activeStageIdx,
             };
             sessionStorage.setItem('ls_draft_state', JSON.stringify(draftState));
-        }
-    }, [activeVersionId, schemeType, versionLabel, reviewYear, targetPercentage, isMetricsDrawerOpen, isNewlyCloned, stages, activeStageIdx, detailedSubstations, view]);
+        }, 500);
+        return () => clearTimeout(sessionSaveTimerRef.current);
+    }, [activeVersionId, schemeType, versionLabel, reviewYear, targetPercentage, isMetricsDrawerOpen, isNewlyCloned, stages, activeStageIdx, view]);
+
+    // --- On-mount detail fetch for session-storage restore ---
+    // detailedSubstations is never persisted. When stages are hydrated from session storage
+    // (page refresh with saved draft), handleResumeDraft is NOT called, so we must fetch here.
+    useEffect(() => {
+        const subIds = [...new Set(
+            stages.flatMap(s => (s.transformer_bays || []).map(b => b.relay_substation_id).filter(Boolean))
+        )];
+        if (subIds.length === 0) return;
+        subIds.forEach(async (subId) => {
+            try {
+                const [res, txRes] = await Promise.all([
+                    api.get(`/substations/${subId}/`),
+                    api.get(`/load-transformers/?substation=${subId}`),
+                ]);
+                const data = res.data;
+                data.db_transformers = txRes.data;
+                setDetailedSubstations(prev => ({ ...prev, [subId]: data }));
+            } catch (e) {
+                console.error(`Failed to pre-fetch sub detail for ${subId}`, e);
+            }
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // intentionally runs once on mount only
 
     // --- Asset Library: auto-expand tree to matching nodes on search ---
     useEffect(() => {
@@ -2184,9 +2214,9 @@ const LoadSheddingDesigner = () => {
                     <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{schemeType} {reviewYear}</span>
                     <span style={{ color: '#cbd5e1', fontSize: '0.7rem', flexShrink: 0 }}>·</span>
                     <input
+                        key={activeVersionId || 'new'}
                         type="text"
-                        value={versionLabel}
-                        onChange={e => { setVersionLabel(e.target.value); setIsDirty(true); }}
+                        defaultValue={versionLabel}
                         placeholder="Add label..."
                         style={{
                             fontSize: '0.7rem',
@@ -2204,7 +2234,11 @@ const LoadSheddingDesigner = () => {
                             transition: 'border-color 0.15s',
                         }}
                         onFocus={e => { e.target.style.borderBottomColor = '#94a3b8'; }}
-                        onBlur={e => { e.target.style.borderBottomColor = 'transparent'; }}
+                        onBlur={e => {
+                            e.target.style.borderBottomColor = 'transparent';
+                            setVersionLabel(e.target.value);
+                            if (!isDirty) setIsDirty(true);
+                        }}
                     />
                     {activeVersionMeta?.status === 'active'
                         ? <span style={{ fontSize: '0.57rem', fontWeight: 700, background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', padding: '2px 7px', borderRadius: '999px', flexShrink: 0 }}>Published</span>
