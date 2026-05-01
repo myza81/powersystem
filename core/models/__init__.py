@@ -22,9 +22,6 @@ from .core_models import (
 )
 from .snapshot_models import (
     NetworkSnapshot,
-    NetworkArea,
-    NetworkZone,
-    NetworkOwner,
     NetworkTopology,
     TopologyVersion,
     TopologyBus,
@@ -63,9 +60,6 @@ __all__ = [
     'LoadSheddingAlertConfig',
     'LoadSheddingChangeLog',
     'NetworkSnapshot',
-    'NetworkArea',
-    'NetworkZone',
-    'NetworkOwner',
     'NetworkTopology',
     'TopologyVersion',
     'TopologyBus',

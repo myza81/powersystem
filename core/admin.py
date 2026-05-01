@@ -4,9 +4,6 @@ from django.core.exceptions import ValidationError
 from .models import (
     Substation,
     NetworkSnapshot,
-    NetworkArea,
-    NetworkZone,
-    NetworkOwner,
     NetworkTopology,
     LoadSheddingChangeLog,
     TopologyVersion,
@@ -252,27 +249,6 @@ class NetworkGeneratorAdmin(admin.ModelAdmin):
     list_filter = ('snapshot',)
     raw_id_fields = ('snapshot', 'bus')
 
-# Register Reference Data with proper admin displays
-@admin.register(NetworkArea)
-class NetworkAreaAdmin(admin.ModelAdmin):
-    list_display = ('number', 'name', 'snapshot')
-    list_filter = ('snapshot',)
-    search_fields = ('number', 'name')
-    ordering = ('snapshot', 'number')
-
-@admin.register(NetworkZone)
-class NetworkZoneAdmin(admin.ModelAdmin):
-    list_display = ('number', 'name', 'snapshot')
-    list_filter = ('snapshot',)
-    search_fields = ('number', 'name')
-    ordering = ('snapshot', 'number')
-
-@admin.register(NetworkOwner)
-class NetworkOwnerAdmin(admin.ModelAdmin):
-    list_display = ('number', 'name', 'snapshot')
-    list_filter = ('snapshot',)
-    search_fields = ('number', 'name')
-    ordering = ('snapshot', 'number')
 
 @admin.register(NetworkShunt)
 class NetworkShuntAdmin(admin.ModelAdmin):

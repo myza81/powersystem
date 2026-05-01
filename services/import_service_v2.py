@@ -16,9 +16,6 @@ from django.utils import timezone
 
 from core.models import (
     NetworkSnapshot,
-    NetworkArea,
-    NetworkZone,
-    NetworkOwner,
     NetworkTopology,
     TopologyVersion,
     TopologyBus,
@@ -101,9 +98,6 @@ class ImportServiceV2:
 
             logger.info(f"Created snapshot: {snapshot.name} (ID: {snapshot.id})")
 
-            cls._import_areas(snapshot, sections.get('AREA', []))
-            cls._import_zones(snapshot, sections.get('ZONE', []))
-            cls._import_owners(snapshot, sections.get('OWNER', []))
 
             cls._create_bus_states(snapshot, topology_version, bus_records)
             cls._import_loads(snapshot, topology_version, sections.get('LOAD', []))
@@ -537,53 +531,6 @@ class ImportServiceV2:
 
         return sections
 
-    @classmethod
-    def _import_areas(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        areas = []
-        for line in lines:
-            if not line.strip():
-                continue
-            parts = [p.strip().strip("'") for p in line.split(',')]
-            if len(parts) >= 2:
-                areas.append(NetworkArea(
-                    snapshot=snapshot,
-                    number=cls._safe_int(parts[0]),
-                    name=parts[4] if len(parts) > 4 else '',
-                ))
-
-        NetworkArea.objects.bulk_create(areas, ignore_conflicts=True)
-
-    @classmethod
-    def _import_zones(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        zones = []
-        for line in lines:
-            if not line.strip():
-                continue
-            parts = [p.strip().strip("'") for p in line.split(',')]
-            if len(parts) >= 2:
-                zones.append(NetworkZone(
-                    snapshot=snapshot,
-                    number=cls._safe_int(parts[0]),
-                    name=parts[1],
-                ))
-
-        NetworkZone.objects.bulk_create(zones, ignore_conflicts=True)
-
-    @classmethod
-    def _import_owners(cls, snapshot: NetworkSnapshot, lines: List[str]):
-        owners = []
-        for line in lines:
-            if not line.strip():
-                continue
-            parts = [p.strip().strip("'") for p in line.split(',')]
-            if len(parts) >= 2:
-                owners.append(NetworkOwner(
-                    snapshot=snapshot,
-                    number=cls._safe_int(parts[0]),
-                    name=parts[1],
-                ))
-
-        NetworkOwner.objects.bulk_create(owners, ignore_conflicts=True)
 
     @classmethod
     def _parse_bus_records(cls, lines: List[str]) -> Tuple[List[Dict[str, object]], Dict[str, list]]:

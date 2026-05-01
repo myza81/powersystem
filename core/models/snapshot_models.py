@@ -67,47 +67,6 @@ class NetworkSnapshot(models.Model):
         return f"{self.name} ({self.timestamp.strftime('%Y-%m-%d %H:%M')})"
 
 
-class NetworkArea(models.Model):
-    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='areas')
-    number = models.IntegerField()
-    name = models.CharField(max_length=50, blank=True)
-
-    class Meta:
-        unique_together = ('snapshot', 'number')
-        verbose_name = 'Network Area'
-        verbose_name_plural = 'Network Areas'
-
-    def __str__(self):
-        return f"Area {self.number}: {self.name}"
-
-
-class NetworkZone(models.Model):
-    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='zones')
-    number = models.IntegerField()
-    name = models.CharField(max_length=50, blank=True)
-
-    class Meta:
-        unique_together = ('snapshot', 'number')
-        verbose_name = 'Network Zone'
-        verbose_name_plural = 'Network Zones'
-
-    def __str__(self):
-        return f"Zone {self.number}: {self.name}"
-
-
-class NetworkOwner(models.Model):
-    snapshot = models.ForeignKey(NetworkSnapshot, on_delete=models.CASCADE, related_name='owners')
-    number = models.IntegerField()
-    name = models.CharField(max_length=50, blank=True)
-
-    class Meta:
-        unique_together = ('snapshot', 'number')
-        verbose_name = 'Network Owner'
-        verbose_name_plural = 'Network Owners'
-
-    def __str__(self):
-        return f"Owner {self.number}: {self.name}"
-
 
 class NetworkTopology(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
