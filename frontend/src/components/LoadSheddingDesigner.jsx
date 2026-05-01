@@ -51,6 +51,126 @@ const COMP_CHANGE_META = {
     unchanged: { label: 'Unchanged',      color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
 };
 
+// Isolated so reason-field keystrokes only re-render this modal, not the full 3000-line designer.
+const PublishReasonModal = React.memo(function PublishReasonModal({ show, publishDiff, publishing, onClose, onSubmit }) {
+    const [reasons, setReasons] = React.useState({});
+
+    // Reset reasons each time the modal opens for a new publish session
+    const prevShow = React.useRef(false);
+    React.useEffect(() => {
+        if (show && !prevShow.current) setReasons({});
+        prevShow.current = show;
+    }, [show]);
+
+    const rowKey = r => `${r.substationId}||${r.feeder}||${r.changeType}`;
+    const hasEmpty = publishDiff.some(r => !reasons[rowKey(r)]?.trim());
+
+    return (
+        <AnimatePresence>
+            {show && (
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
+                >
+                    <motion.div
+                        initial={{ scale: 0.95, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.95, opacity: 0 }}
+                        style={{ background: '#fff', borderRadius: '14px', width: '100%', maxWidth: '860px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.25)' }}
+                    >
+                        {/* Header */}
+                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexShrink: 0 }}>
+                            <div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins',sans-serif" }}>
+                                    Publish Requires Change Reasons
+                                </div>
+                                <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '3px', fontFamily: "'Poppins',sans-serif" }}>
+                                    {publishDiff.length} change{publishDiff.length !== 1 ? 's' : ''} detected vs current active version.
+                                    Provide a reason for each before publishing.
+                                </div>
+                            </div>
+                            <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px', borderRadius: '6px', flexShrink: 0 }}>
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        {/* Table header */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 130px 180px 1fr', gap: '0.5rem', padding: '0.5rem 1.5rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                            {['Change', 'Substation', 'ID', 'Stage Change', 'Reason *'].map(h => (
+                                <div key={h} style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', fontFamily: "'Poppins',sans-serif" }}>{h}</div>
+                            ))}
+                        </div>
+
+                        {/* Rows */}
+                        <div style={{ overflowY: 'auto', flex: 1 }}>
+                            {publishDiff.map((row, i) => {
+                                const key = rowKey(row);
+                                const meta = COMP_CHANGE_META[row.changeType];
+                                const reason = reasons[key] || '';
+                                const isEmpty = !reason.trim();
+                                return (
+                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 130px 180px 1fr', gap: '0.5rem', padding: '0.6rem 1.5rem', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
+                                        <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap', width: 'fit-content' }}>
+                                            {meta.label}
+                                        </span>
+                                        <div>
+                                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', fontFamily: "'Poppins',sans-serif" }}>{row.substationName}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{row.feeder}</div>
+                                        </div>
+                                        <div style={{ fontSize: '0.72rem', color: '#475569', fontFamily: 'monospace' }}>{row.substationId}</div>
+                                        <div style={{ fontSize: '0.72rem', color: '#475569', fontFamily: "'Poppins',sans-serif" }}>
+                                            {row.oldStageLabel || '—'} → {row.changeType === 'defeated' ? '—' : (row.stageLabel || '—')}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            maxLength={200}
+                                            placeholder="Enter reason…"
+                                            value={reason}
+                                            onChange={e => setReasons(prev => ({ ...prev, [key]: e.target.value }))}
+                                            style={{
+                                                width: '100%', padding: '5px 8px', fontSize: '0.75rem',
+                                                fontFamily: "'Poppins',sans-serif",
+                                                border: `1px solid ${isEmpty ? '#fca5a5' : '#cbd5e1'}`,
+                                                borderRadius: '6px', outline: 'none',
+                                                background: isEmpty ? '#fff7f7' : '#fff',
+                                                boxSizing: 'border-box',
+                                            }}
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexShrink: 0 }}>
+                            <button
+                                onClick={onClose}
+                                style={{ padding: '0.5rem 1.25rem', fontSize: '0.8rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => onSubmit(reasons)}
+                                disabled={publishing || hasEmpty}
+                                style={{
+                                    padding: '0.5rem 1.25rem', fontSize: '0.8rem', fontFamily: "'Poppins',sans-serif", fontWeight: 700,
+                                    background: '#059669', color: '#fff', border: 'none', borderRadius: '8px',
+                                    cursor: 'pointer', opacity: (publishing || hasEmpty) ? 0.5 : 1,
+                                    transition: 'opacity 0.15s',
+                                }}
+                            >
+                                {publishing ? 'Publishing…' : `Publish with ${publishDiff.length} Reason${publishDiff.length !== 1 ? 's' : ''}`}
+                            </button>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+});
+
 const compactMnemonicComp = (subId) => String(subId || '').replace(/\d+$/, '');
 
 // Match a transformer from the snapshot list by its DB transformer_no.
@@ -300,7 +420,6 @@ const LoadSheddingDesigner = () => {
     // Publish changelog modal state
     const [showPublishModal, setShowPublishModal] = useState(false);
     const [publishDiff, setPublishDiff] = useState([]);
-    const [publishReasons, setPublishReasons] = useState({});
     const [publishActiveVersionId, setPublishActiveVersionId] = useState(null);
     const [publishDraftVersionId, setPublishDraftVersionId] = useState(null);
     const skipDirtyRef = useRef(true); // skip dirty on initial hydration and draft loads
@@ -1289,80 +1408,63 @@ const LoadSheddingDesigner = () => {
                 });
             }
 
-            // 2. We simply delete all stages for this draft and recreate them to avoid complex diffing logic for now
-            // (Only because this is a draft. Do not do this for active versions)
+            // 2. Delete all old stages in parallel (cascade deletes bays too)
             const oldStagesRes = await api.get(`/load-shedding-stages/?version=${vId}`);
-            for (const oldS of oldStagesRes.data) {
-                await api.delete(`/load-shedding-stages/${oldS.id}/`);
-            }
+            await Promise.all(oldStagesRes.data.map(s => api.delete(`/load-shedding-stages/${s.id}/`)));
 
-            // 3. Create stages and assignments
-            for (const stage of stages) {
+            // 3. Create all stages in parallel; within each stage create bays + pockets in parallel
+            await Promise.all(stages.map(async (stage) => {
                 const stageRes = await api.post('/load-shedding-stages/', {
                     version: vId,
                     stage_number: stage.stage_number,
                     label: stage.label,
                     target_mw: stage.target_mw || 0,
-                    setting_ids: stage.setting_ids
+                    setting_ids: stage.setting_ids,
                 });
                 const stageId = stageRes.data.id;
 
-                // Add transformer bays
-                for (const tb of stage.transformer_bays || []) {
+                // All transformer bays for this stage in parallel
+                const tbPromises = (stage.transformer_bays || []).map(tb => {
                     const transformerIds = (tb.transformers || [])
                         .map(t => (typeof t === 'object' ? t?.id : t))
                         .filter(Boolean);
-
-                    if (transformerIds.length === 0) continue;
-
-                    await api.post('/load-shedding-transformer-bays/', {
+                    if (transformerIds.length === 0) return Promise.resolve();
+                    return api.post('/load-shedding-transformer-bays/', {
                         stage: stageId,
                         relay: tb.relay,
-                        transformers: transformerIds
+                        transformers: transformerIds,
                     });
-                }
+                });
 
-                // Add pocket bays
-                const pockets = stage.computed_pockets || [];
-                for (const pocket of pockets) {
-                    const pbRes = await api.post('/load-shedding-pocket-bays/', {
-                        stage: stageId
-                    });
+                // All pockets for this stage in parallel (boundaries within each pocket are parallel too)
+                const pocketPromises = (stage.computed_pockets || []).map(async (pocket) => {
+                    const pbRes = await api.post('/load-shedding-pocket-bays/', { stage: stageId });
                     const pbId = pbRes.data.id;
 
-                    // Group branches in this pocket by relay
                     const relayGroups = {};
                     (pocket.branches || []).forEach(bayId => {
-                        let foundRelay = null;
-                        let foundBranchId = null;
                         relays.forEach(r => {
                             const br = (r.incoming_branches || []).find(b => b.bay_id === bayId);
                             if (br) {
-                                foundRelay = r;
-                                foundBranchId = br.id;
+                                if (!relayGroups[r.id]) relayGroups[r.id] = [];
+                                relayGroups[r.id].push(br.id);
                             }
                         });
-                        if (foundRelay && foundBranchId) {
-                            if (!relayGroups[foundRelay.id]) relayGroups[foundRelay.id] = [];
-                            relayGroups[foundRelay.id].push(foundBranchId);
-                        }
                     });
 
-                    for (const [rId, branchIds] of Object.entries(relayGroups)) {
-                        await api.post('/load-shedding-pocket-boundaries/', {
-                            pocket: pbId,
-                            relay: rId,
-                            branches: branchIds
-                        });
-                    }
+                    await Promise.all(
+                        Object.entries(relayGroups).map(([rId, branchIds]) =>
+                            api.post('/load-shedding-pocket-boundaries/', { pocket: pbId, relay: rId, branches: branchIds })
+                        )
+                    );
 
                     if (Object.keys(relayGroups).length > 0) {
-                        await api.post('/load-shedding-pocket-bays/recompute/', {
-                            pocket_ids: [pbId]
-                        });
+                        await api.post('/load-shedding-pocket-bays/recompute/', { pocket_ids: [pbId] });
                     }
-                }
-            }
+                });
+
+                await Promise.all([...tbPromises, ...pocketPromises]);
+            }));
             
             // 4. Trigger backend recompute to sync mw_cache, then reload bays so UI shows fresh MW
             // (stages were deleted/recreated, so old local bay IDs no longer exist in DB)
@@ -1460,7 +1562,6 @@ const LoadSheddingDesigner = () => {
 
             // Show the reason modal
             setPublishDiff(changedRows);
-            setPublishReasons({});
             setPublishActiveVersionId(active_version_id);
             setPublishDraftVersionId(vId);
             setShowPublishModal(true);
@@ -1472,9 +1573,9 @@ const LoadSheddingDesigner = () => {
         }
     };
 
-    const handleSubmitPublish = async () => {
+    const handleSubmitPublish = async (reasons) => {
         const rowKey = r => `${r.substationId}||${r.feeder}||${r.changeType}`;
-        const missing = publishDiff.filter(r => !publishReasons[rowKey(r)]?.trim());
+        const missing = publishDiff.filter(r => !reasons[rowKey(r)]?.trim());
         if (missing.length > 0) {
             alert(`Please fill in a reason for all ${missing.length} highlighted row(s).`);
             return;
@@ -1488,7 +1589,7 @@ const LoadSheddingDesigner = () => {
                 feeder: r.feeder,
                 old_stage_label: r.oldStageLabel || '',
                 new_stage_label: r.changeType === 'defeated' ? '' : (r.stageLabel || ''),
-                reason: publishReasons[rowKey(r)].trim(),
+                reason: reasons[rowKey(r)].trim(),
             }));
             await api.post(`/load-shedding-versions/${publishDraftVersionId}/publish/`, {
                 change_reasons,
@@ -3780,111 +3881,13 @@ const LoadSheddingDesigner = () => {
         </div >
 
         {/* ── Publish Change-Reason Modal ──────────────────────────────── */}
-        <AnimatePresence>
-            {showPublishModal && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
-                >
-                    <motion.div
-                        initial={{ scale: 0.95, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0.95, opacity: 0 }}
-                        style={{ background: '#fff', borderRadius: '14px', width: '100%', maxWidth: '860px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.25)' }}
-                    >
-                        {/* Header */}
-                        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexShrink: 0 }}>
-                            <div>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins',sans-serif" }}>
-                                    Publish Requires Change Reasons
-                                </div>
-                                <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '3px', fontFamily: "'Poppins',sans-serif" }}>
-                                    {publishDiff.length} change{publishDiff.length !== 1 ? 's' : ''} detected vs current active version.
-                                    Provide a reason for each before publishing.
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => setShowPublishModal(false)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '4px', borderRadius: '6px', flexShrink: 0 }}
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        {/* Table header */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr 130px 180px 1fr', gap: '0.5rem', padding: '0.5rem 1.5rem', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
-                            {['Change', 'Substation', 'ID', 'Stage Change', 'Reason *'].map(h => (
-                                <div key={h} style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', fontFamily: "'Poppins',sans-serif" }}>{h}</div>
-                            ))}
-                        </div>
-
-                        {/* Rows */}
-                        <div style={{ overflowY: 'auto', flex: 1 }}>
-                            {publishDiff.map((row, i) => {
-                                const key = `${row.substationId}||${row.feeder}||${row.changeType}`;
-                                const meta = COMP_CHANGE_META[row.changeType];
-                                const reason = publishReasons[key] || '';
-                                const isEmpty = !reason.trim();
-                                return (
-                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 130px 180px 1fr', gap: '0.5rem', padding: '0.6rem 1.5rem', borderBottom: '1px solid #f1f5f9', alignItems: 'center' }}>
-                                        <span style={{ padding: '2px 8px', borderRadius: '999px', fontSize: '0.62rem', fontWeight: 700, background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, whiteSpace: 'nowrap', width: 'fit-content' }}>
-                                            {meta.label}
-                                        </span>
-                                        <div>
-                                            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a', fontFamily: "'Poppins',sans-serif" }}>{row.substationName}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>{row.feeder}</div>
-                                        </div>
-                                        <div style={{ fontSize: '0.72rem', color: '#475569', fontFamily: 'monospace' }}>{row.substationId}</div>
-                                        <div style={{ fontSize: '0.72rem', color: '#475569', fontFamily: "'Poppins',sans-serif" }}>
-                                            {row.oldStageLabel || '—'} → {row.changeType === 'defeated' ? '—' : (row.stageLabel || '—')}
-                                        </div>
-                                        <input
-                                            type="text"
-                                            maxLength={200}
-                                            placeholder="Enter reason…"
-                                            value={reason}
-                                            onChange={e => setPublishReasons(prev => ({ ...prev, [key]: e.target.value }))}
-                                            style={{
-                                                width: '100%', padding: '5px 8px', fontSize: '0.75rem',
-                                                fontFamily: "'Poppins',sans-serif",
-                                                border: `1px solid ${isEmpty ? '#fca5a5' : '#cbd5e1'}`,
-                                                borderRadius: '6px', outline: 'none',
-                                                background: isEmpty ? '#fff7f7' : '#fff',
-                                                boxSizing: 'border-box',
-                                            }}
-                                        />
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {/* Footer */}
-                        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', flexShrink: 0 }}>
-                            <button
-                                onClick={() => setShowPublishModal(false)}
-                                style={{ padding: '0.5rem 1.25rem', fontSize: '0.8rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '8px', cursor: 'pointer' }}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSubmitPublish}
-                                disabled={publishing || publishDiff.some(r => !publishReasons[`${r.substationId}||${r.feeder}||${r.changeType}`]?.trim())}
-                                style={{
-                                    padding: '0.5rem 1.25rem', fontSize: '0.8rem', fontFamily: "'Poppins',sans-serif", fontWeight: 700,
-                                    background: '#059669', color: '#fff', border: 'none', borderRadius: '8px',
-                                    cursor: 'pointer', opacity: (publishing || publishDiff.some(r => !publishReasons[`${r.substationId}||${r.feeder}||${r.changeType}`]?.trim())) ? 0.5 : 1,
-                                    transition: 'opacity 0.15s',
-                                }}
-                            >
-                                {publishing ? 'Publishing…' : `Publish with ${publishDiff.length} Reason${publishDiff.length !== 1 ? 's' : ''}`}
-                            </button>
-                        </div>
-                    </motion.div>
-                </motion.div>
-            )}
-        </AnimatePresence>
+        <PublishReasonModal
+            show={showPublishModal}
+            publishDiff={publishDiff}
+            publishing={publishing}
+            onClose={() => setShowPublishModal(false)}
+            onSubmit={handleSubmitPublish}
+        />
         </>
     );
 };
