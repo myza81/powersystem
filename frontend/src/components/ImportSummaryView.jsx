@@ -995,7 +995,7 @@ case 'topology':
                                 <LayoutDashboard size={20} /> Active Snapshot Overview
                             </h3>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', animation: 'fadeIn 0.3s' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.5rem', animation: 'fadeIn 0.3s' }}>
                             <div style={{ background: '#fff', borderRadius: '12px', padding: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                                 <div style={{ color: '#f59e0b', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <AlertTriangle size={20} /> <span style={{ fontWeight: 600, color: '#334155' }}>Missing Data</span>
@@ -1138,7 +1138,7 @@ case 'topology':
             </div>
 
             {/* Content Area */}
-            <div style={{ flex: 1, padding: '2rem', minHeight: '400px', background: '#fff' }}>
+            <div style={{ flex: 1, minWidth: 0, padding: '2rem', minHeight: '400px', background: '#fff' }}>
                 {renderContent()}
             </div>
         </motion.div>

@@ -490,9 +490,12 @@ const LoadSheddingDesigner = () => {
             // Fetch load analytics (System Total and Regional Breakdown)
             api.get('/load-analytics/aggregate/?level=grid').then(res => {
                 setGridData(res.data);
-                setFetchingAnalytics(false);
             }).catch(err => {
-                console.error("Failed to fetch grid analytics", err);
+                // 404 means no snapshot is loaded yet — not an error, analytics will be unavailable
+                if (err?.response?.status !== 404) {
+                    console.error("Failed to fetch grid analytics", err);
+                }
+            }).finally(() => {
                 setFetchingAnalytics(false);
             });
 
@@ -2240,19 +2243,19 @@ const LoadSheddingDesigner = () => {
                     }
                 </div>
                 {/* Right: toggles + actions */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
-                    {/* Panel toggles */}
-                    <button onClick={() => setIsMetricsDrawerOpen(v => !v)} style={{ height: 28, padding: '0 9px', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', fontWeight: 600, color: isMetricsDrawerOpen ? 'var(--text-1)' : 'var(--text-3)', background: isMetricsDrawerOpen ? 'var(--surface-raised)' : 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
-                        <FaGaugeHigh size={11} /> Metrics
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0 }}>
+                    {/* Panel toggles — icon only to save space */}
+                    <button onClick={() => setIsMetricsDrawerOpen(v => !v)} title="Metrics panel" style={{ height: 28, width: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: isMetricsDrawerOpen ? 'var(--text-1)' : 'var(--text-3)', background: isMetricsDrawerOpen ? 'var(--surface-raised)' : 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
+                        <FaGaugeHigh size={12} />
                     </button>
-                    <button onClick={() => setShowLibrary(v => !v)} style={{ height: 28, padding: '0 9px', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-xs)', fontWeight: 600, color: showLibrary ? 'var(--text-1)' : 'var(--text-3)', background: showLibrary ? 'var(--surface-raised)' : 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
-                        <FaBolt size={11} /> Library
+                    <button onClick={() => setShowLibrary(v => !v)} title="Asset library" style={{ height: 28, width: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: showLibrary ? 'var(--text-1)' : 'var(--text-3)', background: showLibrary ? 'var(--surface-raised)' : 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
+                        <FaBolt size={12} />
                     </button>
                     <div style={{ width: '1px', height: '18px', background: '#e2e8f0', margin: '0 2px' }} />
-                    {/* Profile */}
+                    {/* Profile — icon only */}
                     <div style={{ position: 'relative' }}>
-                        <button onClick={() => setShowProfilePopover(v => !v)} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: showProfilePopover ? '#0f172a' : '#64748b', background: showProfilePopover ? '#f1f5f9' : '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => { if (!showProfilePopover) e.currentTarget.style.background = '#fff'; }}>
-                            <Lock size={11} /> Profile
+                        <button onClick={() => setShowProfilePopover(v => !v)} title="Scheme profile" style={{ height: '28px', width: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: showProfilePopover ? '#0f172a' : '#64748b', background: showProfilePopover ? '#f1f5f9' : '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => { if (!showProfilePopover) e.currentTarget.style.background = '#fff'; }}>
+                            <Lock size={12} />
                         </button>
                         {showProfilePopover && (
                             <>
@@ -2291,17 +2294,17 @@ const LoadSheddingDesigner = () => {
                             </>
                         )}
                     </div>
-                    {/* Settings drawer */}
-                    <button onClick={() => setShowSettingsDrawer(v => !v)} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: showSettingsDrawer ? '#0f172a' : '#64748b', background: showSettingsDrawer ? '#f1f5f9' : '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => { if (!showSettingsDrawer) e.currentTarget.style.background = '#fff'; }}>
-                        <FaGear size={11} /> Settings
+                    {/* Settings drawer — icon only */}
+                    <button onClick={() => setShowSettingsDrawer(v => !v)} title="Settings" style={{ height: '28px', width: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: showSettingsDrawer ? '#0f172a' : '#64748b', background: showSettingsDrawer ? '#f1f5f9' : '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => { if (!showSettingsDrawer) e.currentTarget.style.background = '#fff'; }}>
+                        <FaGear size={12} />
                     </button>
                     <div style={{ width: '1px', height: '18px', background: '#e2e8f0', margin: '0 2px' }} />
                     {/* Summary */}
-                    <button onClick={() => setShowSummaryModal(true)} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#64748b', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                    <button onClick={() => setShowSummaryModal(true)} style={{ height: '28px', padding: '0 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#64748b', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                         <FaTableList size={11} /> Summary
                     </button>
                     {/* Compare with published */}
-                    <button onClick={openCompareModal} style={{ height: '28px', padding: '0 9px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#64748b', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                    <button onClick={openCompareModal} style={{ height: '28px', padding: '0 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#64748b', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                         <FaCodeBranch size={11} /> Compare
                     </button>
                     {/* Publish / Unpublish */}

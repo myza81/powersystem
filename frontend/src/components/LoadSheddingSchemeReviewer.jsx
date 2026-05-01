@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Search, X, Download, RefreshCw, BarChart2, Filter, RotateCcw, AlertCircle, CheckCircle2, GripVertical, ChevronDown, ChevronUp, Maximize2, Minimize2, Pencil, Check, SlidersHorizontal
+    Search, X, Download, RefreshCw, BarChart2, Filter, RotateCcw, AlertCircle, CheckCircle2, GripVertical, ChevronDown, ChevronUp, Maximize2, Minimize2, Pencil, Check, SlidersHorizontal, ShieldOff
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { FaLayerGroup, FaCodeBranch, FaTableList, FaShieldHalved, FaClockRotateLeft } from 'react-icons/fa6';
@@ -124,6 +124,7 @@ const buildRows = (stageDetails, substations, relays) => {
                     pocketLabel,
                     boundaryCount: boundaries.length,
                     boundarySubstationIds: boundaries.map(b => b.relay_substation_id).filter(Boolean),
+                    isolatedSubstations: pocket.topology_cache?.isolated_substations || [],
                     mw: pocketMW,
                     threshold1, delay1, threshold2, delay2,
                     // neutral values so filter pass-throughs work
@@ -163,6 +164,7 @@ const buildRows = (stageDetails, substations, relays) => {
                     feeder,
                     breakerNumber,
                     mw: isMultiBoundary ? null : pocketMW,
+                    isolatedSubstations: isMultiBoundary ? [] : (pocket.topology_cache?.isolated_substations || []),
                     threshold1, delay1, threshold2, delay2,
                 });
             });
@@ -318,6 +320,19 @@ const EXPORT_COLUMNS = [
     { key: 'feeder', label: 'Feeder Bay', defaultOn: true, getValue: r => r.feeder },
     { key: 'breaker', label: 'Breaker No.', defaultOn: true, getValue: r => r.breakerNumber },
     { key: 'mw', label: 'MW', defaultOn: true, getValue: r => r.mw != null ? Math.round(r.mw) : '' },
+    { key: 'involved', label: 'Impacted Substation', defaultOn: false, getValue: r => {
+        if (r.type === 'transformer') {
+            const vid = r.voltage && r.voltage !== '—' ? String(r.voltage) : '';
+            const mnemonic = vid && r.substationId.endsWith(vid)
+                ? r.substationId.slice(0, -vid.length)
+                : r.substationId;
+            return vid ? `${mnemonic} ${vid}kV` : r.substationId;
+        }
+        if (r.type === 'pocket' || r.type === 'pocket_boundary') {
+            return (r.isolatedSubstations || []).join(', ');
+        }
+        return '';
+    }},
     { key: 'type', label: 'Type', defaultOn: false, getValue: r => r.type === 'transformer' ? 'TX Bay' : 'Network Pocket' },
     { key: 'thresh1', label: 'Threshold 1 (Hz)', defaultOn: true, getValue: r => r.threshold1 },
     { key: 'delay1', label: 'Delay 1 (s)', defaultOn: true, getValue: r => r.delay1 },
@@ -426,6 +441,7 @@ const LoadSheddingSchemeReviewer = () => {
 
     const [showFilters, setShowFilters] = useState(false);
     const [isTableFullscreen, setIsTableFullscreen] = useState(false);
+    const [unpublishing, setUnpublishing] = useState(false);
 
     // Only show published versions
     const publishedVersions = useMemo(() =>
@@ -517,6 +533,29 @@ const LoadSheddingSchemeReviewer = () => {
             setChangeLog([]);
         } finally {
             setLoadingChangeLog(false);
+        }
+    };
+
+    const handleUnpublish = async () => {
+        if (!selectedScheme?.is_active) return;
+        const label = `${selectedScheme.scheme_type} ${selectedScheme.review_year} v${selectedScheme.version}`;
+        if (!window.confirm(`Unpublish ${label}?\n\nThis will deactivate the current version and restore the most recent previously-published version (if any).`)) return;
+        setUnpublishing(true);
+        try {
+            const res = await api.post(`/load-shedding-versions/${selectedScheme.id}/unpublish/`);
+            await fetchVersions();
+            const restored = res.data?.restored_version;
+            if (restored) {
+                const full = (await api.get('/load-shedding-versions/')).data;
+                setAllVersions(full);
+                const restoredFull = full.find(v => v.id === restored.id);
+                if (restoredFull) fetchStages(restoredFull);
+            }
+        } catch (err) {
+            const msg = err?.response?.data?.error || 'Failed to unpublish version.';
+            alert(msg);
+        } finally {
+            setUnpublishing(false);
         }
     };
 
@@ -957,7 +996,7 @@ const LoadSheddingSchemeReviewer = () => {
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface-card)' }}>
 
                 {/* ── ROW 1: Tab navigation ─────────────────────────────────── */}
-                <div style={{
+                <div className="no-scrollbar" style={{
                     display: 'flex',
                     gap: '0.25rem',
                     borderBottom: '1px solid var(--border-default)',
@@ -965,6 +1004,7 @@ const LoadSheddingSchemeReviewer = () => {
                     background: 'var(--surface-card)',
                     padding: '0 1.5rem',
                     zIndex: 20,
+                    overflowX: 'auto',
                 }}>
                     {tabList.map(tab => (
                         <button
@@ -991,7 +1031,7 @@ const LoadSheddingSchemeReviewer = () => {
                     return (
                         <>
                             {/* ── Command bar — title + scheme selector + actions ── */}
-                            <div style={{ height: 52, display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0 1.5rem', borderBottom: !loadingStages && selectedScheme ? 'none' : '1px solid var(--border-default)', flexShrink: 0 }}>
+                            <div style={{ minHeight: 52, height: 'auto', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', rowGap: '4px', padding: '6px 1.5rem', borderBottom: !loadingStages && selectedScheme ? 'none' : '1px solid var(--border-default)', flexShrink: 0 }}>
 
                                 {/* Icon + title + count */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
@@ -1019,7 +1059,7 @@ const LoadSheddingSchemeReviewer = () => {
                                             fontSize: 'var(--text-sm)', fontWeight: 600,
                                             color: 'var(--text-1)', background: 'var(--surface-raised)',
                                             border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)',
-                                            cursor: 'pointer', outline: 'none', minWidth: '140px',
+                                            cursor: 'pointer', outline: 'none', minWidth: '110px',
                                             appearance: 'none',
                                             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
                                             backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
@@ -1032,7 +1072,7 @@ const LoadSheddingSchemeReviewer = () => {
                                 </div>
 
                                 {/* Right-side: search (shrinks) + fixed action buttons */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
 
                                     {/* Search — assignments tab only, shrinks on small screens */}
                                     {activeTab === 'assignments' && (
@@ -1066,20 +1106,21 @@ const LoadSheddingSchemeReviewer = () => {
                                     {activeTab === 'assignments' && (
                                         <button
                                             onClick={() => setShowFilters(f => !f)}
+                                            title={`Filters${activeFilterCount > 0 ? ` (${activeFilterCount} active)` : ''}`}
                                             style={{
-                                                display: 'flex', alignItems: 'center', gap: 6,
-                                                height: 34, padding: '0 12px',
+                                                position: 'relative',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                height: 34, width: 34,
                                                 background: showFilters ? 'rgba(4,125,96,0.08)' : (hasActiveFilters ? 'rgba(4,125,96,0.06)' : 'var(--surface-raised)'),
                                                 border: `1px solid ${showFilters || hasActiveFilters ? 'var(--brand-mid)' : 'var(--border-default)'}`,
                                                 borderRadius: 'var(--radius-sm)',
                                                 color: showFilters || hasActiveFilters ? 'var(--brand-dark)' : 'var(--text-2)',
-                                                cursor: 'pointer', fontSize: 'var(--text-sm)', fontWeight: 600, transition: 'all 0.15s',
+                                                cursor: 'pointer', transition: 'all 0.15s',
                                             }}
                                         >
                                             <SlidersHorizontal size={13} />
-                                            Filters
                                             {activeFilterCount > 0 && (
-                                                <span style={{ background: 'var(--brand-mid)', color: '#fff', borderRadius: 'var(--radius-pill)', fontSize: '0.6rem', fontWeight: 700, padding: '1px 6px', lineHeight: 1.5 }}>
+                                                <span style={{ position: 'absolute', top: -4, right: -4, background: 'var(--brand-mid)', color: '#fff', borderRadius: 'var(--radius-pill)', fontSize: '0.55rem', fontWeight: 700, padding: '1px 4px', lineHeight: 1.5, minWidth: 14, textAlign: 'center' }}>
                                                     {activeFilterCount}
                                                 </span>
                                             )}
@@ -1094,6 +1135,30 @@ const LoadSheddingSchemeReviewer = () => {
                                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 34, width: 34, background: 'var(--surface-raised)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--text-2)', transition: 'all 0.15s' }}
                                         >
                                             <Maximize2 size={14} />
+                                        </button>
+                                    )}
+
+                                    {/* Unpublish — superuser only, active scheme only */}
+                                    {currentUser?.is_superuser && selectedScheme?.is_active && (
+                                        <button
+                                            onClick={handleUnpublish}
+                                            disabled={unpublishing}
+                                            title={unpublishing ? 'Unpublishing…' : 'Unpublish this version and restore the previous published version'}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                height: 34, width: 34,
+                                                background: 'rgba(239,68,68,0.07)',
+                                                border: '1px solid rgba(239,68,68,0.35)',
+                                                borderRadius: 'var(--radius-sm)',
+                                                color: unpublishing ? 'var(--text-3)' : '#dc2626',
+                                                cursor: unpublishing ? 'not-allowed' : 'pointer',
+                                                opacity: unpublishing ? 0.6 : 1,
+                                                transition: 'all 0.15s',
+                                            }}
+                                            onMouseEnter={e => { if (!unpublishing) e.currentTarget.style.background = 'rgba(239,68,68,0.14)'; }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.07)'; }}
+                                        >
+                                            <ShieldOff size={14} />
                                         </button>
                                     )}
 
@@ -1334,6 +1399,8 @@ const LoadSheddingSchemeReviewer = () => {
                                                     {group.rows.map((row, rowIdx) => {
                                                         // ── Pocket header row ──────────────────────────────
                                                         if (row.type === 'pocket_header') {
+                                                            const isolatedSubs = row.isolatedSubstations || [];
+                                                            const hasCriticalInside = isolatedSubs.some(id => criticalSubIds.has(id));
                                                             return (
                                                                 <motion.div
                                                                     key={`${row.stageId}-ph-${row.pocketId}`}
@@ -1342,33 +1409,76 @@ const LoadSheddingSchemeReviewer = () => {
                                                                     exit={{ opacity: 0 }}
                                                                     transition={{ duration: 0.15 }}
                                                                     style={{
-                                                                        display: 'flex',
+                                                                        display: 'grid',
+                                                                        gridTemplateColumns: COL_TEMPLATE,
+                                                                        gap: '0.75rem',
+                                                                        padding: '0.5rem 1rem',
+                                                                        paddingLeft: '1.5rem',
                                                                         alignItems: 'center',
-                                                                        gap: '0.6rem',
-                                                                        padding: '0.4rem 1rem 0.4rem 1.5rem',
                                                                         background: 'rgba(14, 165, 233, 0.04)',
                                                                         borderBottom: '1px solid #f1f5f9',
                                                                         borderLeft: '3px solid rgba(14, 165, 233, 0.35)',
                                                                     }}
                                                                 >
-                                                                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#0ea5e9', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
-                                                                        {row.pocketLabel}
-                                                                    </span>
-                                                                    <span style={{ fontSize: '0.62rem', color: '#cbd5e1', userSelect: 'none' }}>|</span>
-                                                                    <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
-                                                                        {row.boundaryCount} boundaries
-                                                                    </span>
-                                                                    {row.mw != null && (
-                                                                        <>
-                                                                            <span style={{ fontSize: '0.62rem', color: '#cbd5e1', userSelect: 'none' }}>|</span>
-                                                                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#10b981' }}>
-                                                                                {formatMW(row.mw)} MW
+                                                                    {/* Left content — spans all columns except MW */}
+                                                                    <div style={{ gridColumn: '1 / 8', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                                                        {/* Info bar */}
+                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                                                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#0ea5e9', letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+                                                                                {row.pocketLabel}
                                                                             </span>
-                                                                        </>
-                                                                    )}
-                                                                    {(row.boundarySubstationIds || []).some(id => criticalSubIds.has(id)) && (
-                                                                        <CriticalBadge label="Contains critical substation" style={{ marginLeft: '2px' }} />
-                                                                    )}
+                                                                            <span style={{ fontSize: '0.62rem', color: '#cbd5e1', userSelect: 'none' }}>|</span>
+                                                                            <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
+                                                                                {row.boundaryCount} boundaries
+                                                                            </span>
+                                                                            {isolatedSubs.length > 0 && (
+                                                                                <>
+                                                                                    <span style={{ fontSize: '0.62rem', color: '#cbd5e1', userSelect: 'none' }}>|</span>
+                                                                                    <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>
+                                                                                        {isolatedSubs.length} substations isolated
+                                                                                    </span>
+                                                                                </>
+                                                                            )}
+                                                                            {hasCriticalInside && (
+                                                                                <CriticalBadge label="Contains critical substation" style={{ marginLeft: '2px' }} />
+                                                                            )}
+                                                                        </div>
+                                                                        {/* Isolated substation chips */}
+                                                                        {isolatedSubs.length > 0 && (
+                                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                                                                                {isolatedSubs.map(subId => {
+                                                                                    const sub = substations?.find(s => s.substation_id === subId);
+                                                                                    const isCritical = criticalSubIds.has(subId);
+                                                                                    return (
+                                                                                        <span
+                                                                                            key={subId}
+                                                                                            title={sub?.name || subId}
+                                                                                            style={{
+                                                                                                fontSize: '0.62rem',
+                                                                                                padding: '1px 7px',
+                                                                                                background: isCritical ? 'rgba(239,68,68,0.07)' : 'rgba(14,165,233,0.07)',
+                                                                                                border: `1px solid ${isCritical ? 'rgba(239,68,68,0.22)' : 'rgba(14,165,233,0.2)'}`,
+                                                                                                borderRadius: '999px',
+                                                                                                color: isCritical ? '#dc2626' : '#0369a1',
+                                                                                                fontWeight: 500,
+                                                                                                whiteSpace: 'nowrap',
+                                                                                            }}
+                                                                                        >
+                                                                                            {subId}
+                                                                                        </span>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    {/* MW — aligned with MW column */}
+                                                                    <div style={{ textAlign: 'right' }}>
+                                                                        {row.mw != null && (
+                                                                            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#10b981' }}>
+                                                                                {formatMW(row.mw)}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </motion.div>
                                                             );
                                                         }
@@ -1409,6 +1519,20 @@ const LoadSheddingSchemeReviewer = () => {
                                                                     </div>
                                                                     {row.state && row.state !== '—' && (
                                                                         <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '1px' }}>{row.state}</div>
+                                                                    )}
+                                                                    {/* Isolated substations — single-boundary pocket only */}
+                                                                    {row.type === 'pocket' && (row.isolatedSubstations || []).length > 0 && (
+                                                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginTop: '4px' }}>
+                                                                            {row.isolatedSubstations.map(subId => {
+                                                                                const s = substations?.find(x => x.substation_id === subId);
+                                                                                const isCritical = criticalSubIds.has(subId);
+                                                                                return (
+                                                                                    <span key={subId} title={s?.name || subId} style={{ fontSize: '0.6rem', padding: '1px 6px', background: isCritical ? 'rgba(239,68,68,0.07)' : 'rgba(14,165,233,0.07)', border: `1px solid ${isCritical ? 'rgba(239,68,68,0.22)' : 'rgba(14,165,233,0.2)'}`, borderRadius: '999px', color: isCritical ? '#dc2626' : '#0369a1', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                                                                        {subId}
+                                                                                    </span>
+                                                                                );
+                                                                            })}
+                                                                        </div>
                                                                     )}
                                                                 </div>
 
@@ -2172,7 +2296,7 @@ const LoadSheddingSchemeReviewer = () => {
                                     </div>
 
                                     {/* Assignment columns — drag to reorder */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                                         {exportColOrder.map((key, idx) => {
                                             const col = colMap[key];
                                             if (!col) return null;
@@ -2197,7 +2321,7 @@ const LoadSheddingSchemeReviewer = () => {
                                                     title={disabled ? 'No previous published version available' : 'Drag to reorder'}
                                                     style={{
                                                         display: 'flex', alignItems: 'center', gap: '6px',
-                                                        padding: '0.45rem 0.65rem',
+                                                        padding: '0.3rem 0.65rem',
                                                         borderRadius: '7px',
                                                         background: disabled ? '#f1f5f9' : checked ? 'rgba(4, 125, 96, 0.06)' : '#f8fafc',
                                                         border: `1px solid ${disabled ? '#e2e8f0' : checked ? 'rgba(4, 125, 96, 0.25)' : '#e2e8f0'}`,

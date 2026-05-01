@@ -54,10 +54,13 @@ class SubstationViewSet(viewsets.ModelViewSet):
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
         if self.action == 'list':
-            from core.models import LoadSheddingTransformerBay
-            # relay__substation__substation_id is the live path (relay still exists);
-            # frozen_substation_id is the fallback when relay has been deleted (SET_NULL).
-            rows = (
+            from core.models import LoadSheddingTransformerBay, LoadSheddingPocketBay
+            scheme_types_map = {}
+            stages_map = {}
+
+            # Transformer bays — relay__substation__substation_id is the live path;
+            # frozen_substation_id is the fallback when the relay has been deleted (SET_NULL).
+            tx_rows = (
                 LoadSheddingTransformerBay.objects
                 .select_related('stage__version', 'relay__substation')
                 .values(
@@ -67,14 +70,29 @@ class SubstationViewSet(viewsets.ModelViewSet):
                     'stage__stage_number',
                 )
             )
-            scheme_types_map = {}
-            stages_map = {}
-            for row in rows:
+            for row in tx_rows:
                 sid = row['relay__substation__substation_id'] or row['frozen_substation_id']
                 if not sid:
                     continue
                 scheme_types_map.setdefault(sid, set()).add(row['stage__version__scheme_type'])
                 stages_map.setdefault(sid, set()).add(row['stage__stage_number'])
+
+            # Pocket bays — add every isolated substation (from topology_cache) to the
+            # same maps so pocket substations appear when filtering by stage or scheme type.
+            pocket_rows = (
+                LoadSheddingPocketBay.objects
+                .select_related('stage__version')
+                .values('stage__version__scheme_type', 'stage__stage_number', 'topology_cache')
+            )
+            for pb in pocket_rows:
+                cache = pb['topology_cache'] or {}
+                scheme_type = pb['stage__version__scheme_type']
+                stage_number = pb['stage__stage_number']
+                for sid in cache.get('isolated_substations', []):
+                    if sid:
+                        scheme_types_map.setdefault(sid, set()).add(scheme_type)
+                        stages_map.setdefault(sid, set()).add(stage_number)
+
             ctx['scheme_types_map'] = scheme_types_map
             ctx['stages_map'] = stages_map
         return ctx

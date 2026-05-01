@@ -29,7 +29,7 @@ const NAV_GROUPS = [
         icon: Radar,
         items: [
             { id: 'snapshots',  label: 'Snapshot',       icon: Activity,    requiresStaff: true },
-            { id: 'dashboard',  label: 'Load Analytics', icon: LayoutGrid },
+            { id: 'dashboard',  label: 'Network Map',    icon: LayoutGrid },
         ],
     },
     {

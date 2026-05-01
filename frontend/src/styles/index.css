@@ -156,6 +156,9 @@ a:focus:not(:focus-visible) {
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 229, 255, 0.15); border-radius: 10px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--fui-cyan); }
 
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
 .app-container {
   display: flex;

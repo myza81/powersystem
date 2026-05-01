@@ -333,9 +333,9 @@ const SnapshotManager = () => {
             </AnimatePresence>
 
             {/* Registry Table */}
-            <div style={{ 
-                background: '#fff', 
-                borderRadius: '12px', 
+            <div style={{
+                background: '#fff',
+                borderRadius: '12px',
                 overflow: 'hidden',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                 border: '1px solid #e2e8f0'
@@ -363,7 +363,7 @@ const SnapshotManager = () => {
                     <div style={{ textAlign: 'center' }}>Status</div>
                 </div>
                     
-                <div style={{ maxHeight: 'calc(100vh - 480px)', overflowY: 'auto' }}>
+                <div style={snapshots.length > 0 && !loading ? { maxHeight: 'calc(100vh - 320px)', overflowY: 'auto' } : {}}>
                 {loading ? (
                     <CardLoader show={true} message="Loading snapshots..." />
                 ) : snapshots.length === 0 ? (
