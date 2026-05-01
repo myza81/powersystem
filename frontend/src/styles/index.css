@@ -159,6 +159,8 @@ a:focus:not(:focus-visible) {
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
+.animate-spin { animation: spin 0.9s linear infinite; }
+
 /* ── Layout ─────────────────────────────────────────────────────────────────── */
 .app-container {
   display: flex;

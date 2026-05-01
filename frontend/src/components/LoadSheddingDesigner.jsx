@@ -53,6 +53,40 @@ const COMP_CHANGE_META = {
 
 const compactMnemonicComp = (subId) => String(subId || '').replace(/\d+$/, '');
 
+// Match a transformer from the snapshot list by its DB transformer_no.
+// Physical topology transformers are named "TX {ckt_id}" (e.g. "TX 1");
+// load-based ones are named "TX T{load_id}" (e.g. "TX T1"). Both need to resolve.
+const findTransformerByNo = (transformers, transformerNo) => {
+    if (!transformers) return null;
+    const n = transformerNo;
+    return (
+        transformers.find(t => t.name === `TX T${n}`) ||  // load-based: "TX T1"
+        transformers.find(t => t.name === `TX ${n}`)   || // physical topology: "TX 1"
+        transformers.find(t => t.name.split(' ').pop() === `T${n}`) // last-resort partial
+    );
+};
+
+// Return total MW for a transformer bay.
+// Prefers bay.mw_cache (pre-computed on save) over the live snapshot lookup,
+// which requires topology data that may not be loaded for all substations.
+const getBayMW = (bay, detail) => {
+    if (bay.mw_cache != null && bay.mw_cache.mw != null) {
+        return parseFloat(bay.mw_cache.mw);
+    }
+    // Fallback: snapshot-based per-transformer lookup (works for newly added bays)
+    if (!detail?.transformers?.length || !detail?.db_transformers) return 0;
+    let total = 0;
+    (bay.transformers || []).forEach(txObj => {
+        const tId = typeof txObj === 'object' ? txObj.id : txObj;
+        const dbTx = detail.db_transformers.find(t => String(t.id) === String(tId));
+        if (dbTx) {
+            const tx = findTransformerByNo(detail.transformers, dbTx.transformer_no);
+            if (tx?.load_mw != null) total += parseFloat(tx.load_mw);
+        }
+    });
+    return total;
+};
+
 const DrawerInfoTip = ({ text }) => {
     const [hovered, setHovered] = useState(false);
     return (
@@ -294,6 +328,10 @@ const LoadSheddingDesigner = () => {
     // --- Workspace Panel State ---
     const [showLibrary, setShowLibrary] = useState(true);
     const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
+    const [leftPanelWidth, setLeftPanelWidth] = useState(220);
+    const [rightPanelWidth, setRightPanelWidth] = useState(280);
+    const leftPanelRef = useRef(null);
+    const rightPanelRef = useRef(null);
     const [showProfilePopover, setShowProfilePopover] = useState(false);
     const [editingBayId, setEditingBayId] = useState(null);
     const [editingPocketId, setEditingPocketId] = useState(null);
@@ -358,29 +396,8 @@ const LoadSheddingDesigner = () => {
                 valA = detailA?.voltage || '';
                 valB = detailB?.voltage || '';
             } else if (baySortConfig.key === 'mw') {
-                let mwA = 0, mwB = 0;
-                if (detailA?.db_transformers) {
-                    (a.transformers || []).forEach(txObj => {
-                        const tId = typeof txObj === 'object' ? txObj.id : txObj;
-                        const dbTx = detailA.db_transformers.find(t => String(t.id) === String(tId));
-                        if (dbTx) {
-                            const tx = detailA.transformers?.find(t => t.name === `TX T${dbTx.transformer_no}`) || detailA.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
-                            if (tx?.load_mw != null) mwA += parseFloat(tx.load_mw);
-                        }
-                    });
-                }
-                if (detailB?.db_transformers) {
-                    (b.transformers || []).forEach(txObj => {
-                        const tId = typeof txObj === 'object' ? txObj.id : txObj;
-                        const dbTx = detailB.db_transformers.find(t => String(t.id) === String(tId));
-                        if (dbTx) {
-                            const tx = detailB.transformers?.find(t => t.name === `TX T${dbTx.transformer_no}`) || detailB.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
-                            if (tx?.load_mw != null) mwB += parseFloat(tx.load_mw);
-                        }
-                    });
-                }
-                valA = mwA;
-                valB = mwB;
+                valA = getBayMW(a, detailA);
+                valB = getBayMW(b, detailB);
             }
             if (valA < valB) return baySortConfig.direction === 'asc' ? -1 : 1;
             if (valA > valB) return baySortConfig.direction === 'asc' ? 1 : -1;
@@ -762,6 +779,31 @@ const LoadSheddingDesigner = () => {
                 skipDirtyRef.current = true;
                 setStages(detailedStages);
                 setIsDirty(false);
+
+                // Auto-recompute mw_cache if any bay is missing it (e.g. cloned or old version never published)
+                const hasMissingCache = detailedStages.some(s =>
+                    (s.transformer_bays || []).some(b => b.mw_cache == null)
+                );
+                if (hasMissingCache) {
+                    api.post('/load-shedding-transformer-bays/recompute/', { version_id: vId })
+                        .then(recompRes => {
+                            const mwByBayId = {};
+                            (recompRes.data.results || []).forEach(r => {
+                                if (r.status === 'success') mwByBayId[r.id] = r.mw;
+                            });
+                            const snapshotId = recompRes.data.snapshot_id;
+                            setStages(prev => prev.map(stage => ({
+                                ...stage,
+                                transformer_bays: (stage.transformer_bays || []).map(bay => ({
+                                    ...bay,
+                                    mw_cache: mwByBayId[bay.id] != null
+                                        ? { mw: mwByBayId[bay.id], snapshot_id: snapshotId }
+                                        : bay.mw_cache,
+                                })),
+                            })));
+                        })
+                        .catch(e => console.error('Auto-recompute on load failed', e));
+                }
 
                 // Fetch detailed substation data for all substations in all stages (for MW calculations)
                 const allSubIds = [...new Set(detailedStages.flatMap(s => 
@@ -1292,12 +1334,19 @@ const LoadSheddingDesigner = () => {
                 }
             }
             
-            // 4. Trigger backend recompute to sync mw_cache for Viewer
+            // 4. Trigger backend recompute to sync mw_cache, then reload bays so UI shows fresh MW
+            // (stages were deleted/recreated, so old local bay IDs no longer exist in DB)
             try {
                 await api.post('/load-shedding-transformer-bays/recompute/', { version_id: vId });
+                const freshRes = await api.get(`/load-shedding-stages/?version=${vId}&include_bays=true`);
+                const freshByStageNo = {};
+                (freshRes.data || []).forEach(s => { freshByStageNo[s.stage_number] = s.transformer_bays || []; });
+                setStages(prev => prev.map(stage => ({
+                    ...stage,
+                    transformer_bays: freshByStageNo[stage.stage_number] ?? stage.transformer_bays,
+                })));
             } catch (recompErr) {
                 console.error("Post-save recompute failed", recompErr);
-                // Non-blocking for the save itself
             }
 
             sessionStorage.removeItem('ls_draft_state');
@@ -1521,29 +1570,8 @@ const LoadSheddingDesigner = () => {
             stages,
             substations,
             (stage) => getEffectiveStagePockets(stage, stages.indexOf(stage)),
-            (bay) => {
-                let bayMW = 0;
-                const subId = bay.relay_substation_id;
-                const detail = detailedSubstations[subId];
-                if (detail && detail.transformers && detail.db_transformers) {
-                    bay.transformers?.forEach(transformerObj => {
-                        const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
-                        const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                        if (dbTx) {
-                            const expectedName = `TX T${dbTx.transformer_no}`;
-                            // Use exact match first, then fallback to includes but with word boundary or specific suffix
-                            const tx = detail.transformers.find(t => t.name === expectedName) || 
-                                       detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
-                            if (tx && tx.load_mw != null) bayMW += parseFloat(tx.load_mw);
-                        }
-                    });
-                }
-                return bayMW;
-            },
-            (bay) => {
-                const subId = bay.relay_substation_id;
-                return criticalAssets.some(ca => String(ca.substation_id) === String(subId));
-            },
+            (bay) => getBayMW(bay, detailedSubstations[bay.relay_substation_id]),
+            (bay) => criticalAssets.some(ca => String(ca.substation_id) === String(bay.relay_substation_id)),
             criticalAssets
         );
     }, [stages, substations, detailedSubstations, criticalAssets]);
@@ -1568,29 +1596,8 @@ const LoadSheddingDesigner = () => {
             [stage],
             substations,
             (s) => getEffectiveStagePockets(s, stageIdx),
-            (bay) => {
-                let bayMW = 0;
-                const subId = bay.relay_substation_id;
-                const detail = detailedSubstations[subId];
-                if (detail && detail.transformers && detail.db_transformers) {
-                    bay.transformers?.forEach(transformerObj => {
-                        const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
-                        const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                        if (dbTx) {
-                            const expectedName = `TX T${dbTx.transformer_no}`;
-                            // Use exact match first, then fallback to includes but with word boundary or specific suffix
-                            const tx = detail.transformers.find(t => t.name === expectedName) || 
-                                       detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
-                            if (tx && tx.load_mw != null) bayMW += parseFloat(tx.load_mw);
-                        }
-                    });
-                }
-                return bayMW;
-            },
-            (bay) => {
-                const subId = bay.relay_substation_id;
-                return criticalAssets.some(ca => String(ca.substation_id) === String(subId));
-            },
+            (bay) => getBayMW(bay, detailedSubstations[bay.relay_substation_id]),
+            (bay) => criticalAssets.some(ca => String(ca.substation_id) === String(bay.relay_substation_id)),
             criticalAssets
         );
         return metrics.totalMW;
@@ -1598,29 +1605,8 @@ const LoadSheddingDesigner = () => {
 
     const calculateTransformerMW = (stage) => {
         if (!stage) return 0;
-        let total = 0;
-
-        stage.transformer_bays?.forEach(bay => {
-            const subId = bay.relay_substation_id;
-            const detail = detailedSubstations[subId];
-
-            if (!detail || !detail.transformers || !detail.db_transformers) return;
-
-            bay.transformers?.forEach(transformerObj => {
-                const transformerId = typeof transformerObj === 'object' ? transformerObj.id : transformerObj;
-                const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                if (dbTx) {
-                    const expectedName = `TX T${dbTx.transformer_no}`;
-                    const tx = detail.transformers.find(t => t.name === expectedName) || 
-                               detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
-                    if (tx && tx.load_mw != null) {
-                        total += parseFloat(tx.load_mw);
-                    }
-                }
-            });
-        });
-
-        return total;
+        return (stage.transformer_bays || []).reduce((total, bay) =>
+            total + getBayMW(bay, detailedSubstations[bay.relay_substation_id]), 0);
     };
     const calculateRegionalMW = (stage, region) => {
         if (!stage) return 0;
@@ -1632,24 +1618,9 @@ const LoadSheddingDesigner = () => {
                 let bayMW = 0;
                 const subId = bay.relay_substation_id;
                 const detail = detailedSubstations[subId];
-                if (detail && detail.transformers && detail.db_transformers) {
-                    bay.transformers?.forEach(transformerId => {
-                        const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId));
-                        if (dbTx) {
-                            const expectedName = `TX T${dbTx.transformer_no}`;
-                            // Use exact match first, then fallback to includes but with word boundary or specific suffix
-                            const tx = detail.transformers.find(t => t.name === expectedName) || 
-                                       detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
-                            if (tx && tx.load_mw != null) bayMW += parseFloat(tx.load_mw);
-                        }
-                    });
-                }
-                return bayMW;
+                return getBayMW(bay, detail);
             },
-            (bay) => {
-                const subId = bay.relay_substation_id;
-                return criticalAssets.some(ca => String(ca.substation_id) === String(subId));
-            },
+            (bay) => criticalAssets.some(ca => String(ca.substation_id) === String(bay.relay_substation_id)),
             criticalAssets
         );
         return metrics.regionalAssigned[region] || 0;
@@ -1707,9 +1678,7 @@ const LoadSheddingDesigner = () => {
                         const tId = typeof tObj === 'object' ? tObj.id : tObj;
                         const dbTx = detail.db_transformers.find(t => String(t.id) === String(tId));
                         if (dbTx) {
-                            const expectedName = `TX T${dbTx.transformer_no}`;
-                            const tx = detail.transformers.find(t => t.name === expectedName) || 
-                                       detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
+                            const tx = findTransformerByNo(detail.transformers, dbTx.transformer_no);
                             if (tx && tx.load_mw != null) {
                                 subMW += parseFloat(tx.load_mw);
                             }
@@ -2310,11 +2279,11 @@ const LoadSheddingDesigner = () => {
                     {/* Publish / Unpublish */}
                     {activeVersionMeta?.status === 'active' ? (
                         <button onClick={handleUnpublishWorkspace} disabled={publishing} style={{ height: '28px', padding: '0 10px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '6px', cursor: 'pointer', opacity: publishing ? 0.6 : 1 }}>
-                            <RotateCcw size={11} /> {publishing ? 'Unpublishing...' : 'Unpublish'}
+                            <RotateCcw size={11} className={publishing ? 'animate-spin' : ''} /> {publishing ? 'Unpublishing...' : 'Unpublish'}
                         </button>
                     ) : (
                         <button onClick={handlePublishWorkspace} disabled={publishing} style={{ height: '28px', padding: '0 10px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#166534', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', cursor: 'pointer', opacity: publishing ? 0.6 : 1 }}>
-                            <FaShieldHalved size={11} /> {publishing ? 'Publishing...' : 'Publish'}
+                            {publishing ? <RotateCcw size={11} className="animate-spin" /> : <FaShieldHalved size={11} />} {publishing ? 'Publishing...' : 'Publish'}
                         </button>
                     )}
                     {/* Save */}
@@ -2355,7 +2324,7 @@ const LoadSheddingDesigner = () => {
 
             {/* ── LEFT: Scheme Metrics ──────────────────────── */}
             {isMetricsDrawerOpen && (
-                <div style={{ width: '220px', flexShrink: 0, borderRight: '1px solid #e2e8f0', overflowY: 'auto', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+                <div ref={leftPanelRef} style={{ width: leftPanelWidth + 'px', flexShrink: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', background: '#fff' }}>
                     {(() => {
                         const schemeTotalMW = calculateOverallAssignedMW();
                         const targetMW = calculateTargetMW();
@@ -2494,6 +2463,31 @@ const LoadSheddingDesigner = () => {
                 </div>
             )}
 
+            {/* Left resize handle */}
+            {isMetricsDrawerOpen && (
+                <div
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        const startX = e.clientX;
+                        const startW = leftPanelRef.current?.offsetWidth ?? leftPanelWidth;
+                        document.body.style.cursor = 'col-resize';
+                        document.body.style.userSelect = 'none';
+                        const onMove = (mv) => setLeftPanelWidth(Math.max(160, Math.min(420, startW + mv.clientX - startX)));
+                        const onUp = () => {
+                            document.body.style.cursor = '';
+                            document.body.style.userSelect = '';
+                            document.removeEventListener('mousemove', onMove);
+                            document.removeEventListener('mouseup', onUp);
+                        };
+                        document.addEventListener('mousemove', onMove);
+                        document.addEventListener('mouseup', onUp);
+                    }}
+                    style={{ width: '4px', flexShrink: 0, cursor: 'col-resize', background: '#e2e8f0', zIndex: 1, transition: 'background 0.15s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#94a3b8'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#e2e8f0'}
+                />
+            )}
+
             {/* ── CENTER: Assignment Canvas ──────────────────── */}
             <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
                 {stages.length === 0 ? (
@@ -2531,15 +2525,14 @@ const LoadSheddingDesigner = () => {
                                             const relayObj = relays.find(r => r.id === bay.relay);
                                             const relayLabel = relayObj?.relay_name?.replace(' System', '') || '—';
                                             const sub = substations.find(s => s.substation_id === subId);
-                                            let txLabels = [], bayMW = 0, hasCritical = false;
+                                            let txLabels = [], hasCritical = false;
+                                            const bayMW = getBayMW(bay, detail);
                                             if (detail?.db_transformers) {
                                                 (bay.transformers || []).forEach(txObj => {
                                                     const tId = typeof txObj === 'object' ? txObj.id : txObj;
                                                     const dbTx = detail.db_transformers.find(t => String(t.id) === String(tId));
                                                     if (dbTx) {
                                                         txLabels.push(`T${dbTx.transformer_no}`);
-                                                        const tx = detail.transformers?.find(t => t.name === `TX T${dbTx.transformer_no}`) || detail.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`);
-                                                        if (tx?.load_mw != null) bayMW += parseFloat(tx.load_mw);
                                                         const tidVal = typeof tId === 'object' ? tId.id : tId;
                                                         if (criticalAssets.some(ca => ca.load_transformers?.includes(Number(tidVal)))) hasCritical = true;
                                                     }
@@ -2575,7 +2568,7 @@ const LoadSheddingDesigner = () => {
                                                                     const transformerId = typeof txVal === 'object' ? txVal.id : txVal;
                                                                     const dbTx = detail?.db_transformers?.find(t => String(t.id) === String(transformerId));
                                                                     const txLabel = dbTx ? `T${dbTx.transformer_no}` : `#${transformerId}`;
-                                                                    const tx = dbTx ? (detail.transformers?.find(t => t.name === `TX T${dbTx.transformer_no}`) || detail.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`)) : null;
+                                                                    const tx = dbTx ? findTransformerByNo(detail.transformers, dbTx.transformer_no) : null;
                                                                     const txMw = tx?.load_mw != null ? parseFloat(tx.load_mw) : null;
                                                                     const isAssigned = bay.transformers.some(t => String(typeof t === 'object' ? t.id : t) === String(transformerId));
                                                                     return (
@@ -2786,9 +2779,34 @@ const LoadSheddingDesigner = () => {
                 )}
             </div>
 
+            {/* Right resize handle */}
+            {showLibrary && (
+                <div
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        const startX = e.clientX;
+                        const startW = rightPanelRef.current?.offsetWidth ?? rightPanelWidth;
+                        document.body.style.cursor = 'col-resize';
+                        document.body.style.userSelect = 'none';
+                        const onMove = (mv) => setRightPanelWidth(Math.max(200, Math.min(520, startW - (mv.clientX - startX))));
+                        const onUp = () => {
+                            document.body.style.cursor = '';
+                            document.body.style.userSelect = '';
+                            document.removeEventListener('mousemove', onMove);
+                            document.removeEventListener('mouseup', onUp);
+                        };
+                        document.addEventListener('mousemove', onMove);
+                        document.addEventListener('mouseup', onUp);
+                    }}
+                    style={{ width: '4px', flexShrink: 0, cursor: 'col-resize', background: '#e2e8f0', zIndex: 1, transition: 'background 0.15s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#94a3b8'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#e2e8f0'}
+                />
+            )}
+
             {/* ── RIGHT: Asset Library ───────────────────────── */}
             {showLibrary && (
-                <div style={{ width: '280px', flexShrink: 0, borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
+                <div ref={rightPanelRef} style={{ width: rightPanelWidth + 'px', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fff' }}>
                     <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
                         {['library', 'alerts'].map(tab => (
                             <button key={tab} onClick={() => setAssetLibraryTab(tab)} style={{ flex: 1, padding: '0.5rem', fontSize: '0.63rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: assetLibraryTab === tab ? '#0f172a' : '#94a3b8', background: 'none', border: 'none', borderBottom: `2px solid ${assetLibraryTab === tab ? '#0f172a' : 'transparent'}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
@@ -2860,7 +2878,7 @@ const LoadSheddingDesigner = () => {
                                         for (const stage of stages) { if (stage.transformer_bays?.some(bay => String(bay.relay) === String(relay.id))) { transformerAssignedStage = stage.label || `Stage ${stage.stage_number}`; break; } }
                                         let totalMw = 0;
                                         const detail = detailedSubstations[sub.substation_id];
-                                        (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).forEach(txVal => { const transformerId = typeof txVal === 'object' ? txVal.id : txVal; if (detail?.transformers && detail?.db_transformers) { const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId)); if (dbTx) { const tx = detail.transformers.find(t => t.name === `TX T${dbTx.transformer_no}`) || detail.transformers.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`); if (tx?.load_mw != null) totalMw += parseFloat(tx.load_mw); } } });
+                                        (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).forEach(txVal => { const transformerId = typeof txVal === 'object' ? txVal.id : txVal; if (detail?.transformers && detail?.db_transformers) { const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId)); if (dbTx) { const tx = findTransformerByNo(detail.transformers, dbTx.transformer_no); if (tx?.load_mw != null) totalMw += parseFloat(tx.load_mw); } } });
                                         const hasCriticalAsset = (Array.isArray(relay.load_transformers) ? relay.load_transformers : []).some(txVal => { const transformerId = typeof txVal === 'object' ? txVal.id : txVal; return criticalAssets.some(ca => ca.load_transformers?.includes(Number(transformerId))); });
                                         const relayBranches = relay.incoming_branches || [];
                                         const stageHasBranch = (stage, fullId) => stageContainsBranch(stage, fullId);
@@ -2894,7 +2912,7 @@ const LoadSheddingDesigner = () => {
                                                         {(Array.isArray(relay.load_transformers) ? relay.load_transformers : []).map(txVal => {
                                                             const transformerId = typeof txVal === 'object' ? txVal.id : txVal;
                                                             let txLabel = `T-Bay ${transformerId}`, txMw = 0;
-                                                            if (detail?.db_transformers) { const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId)); if (dbTx) { txLabel = `T${dbTx.transformer_no}`; const tx = detail.transformers?.find(t => t.name === `TX T${dbTx.transformer_no}`) || detail.transformers?.find(t => t.name.split(' ').pop() === `T${dbTx.transformer_no}`); if (tx?.load_mw != null) txMw = parseFloat(tx.load_mw); } }
+                                                            if (detail?.db_transformers) { const dbTx = detail.db_transformers.find(t => String(t.id) === String(transformerId)); if (dbTx) { txLabel = `T${dbTx.transformer_no}`; const tx = findTransformerByNo(detail.transformers, dbTx.transformer_no); if (tx?.load_mw != null) txMw = parseFloat(tx.load_mw); } }
                                                             const isTxAssigned = (stages[activeStageIdx]?.transformer_bays || []).some(tb => String(tb.relay) === String(relay.id) && tb.transformers.some(t => { const tId = typeof t === 'object' ? t.id : t; return String(tId) === String(transformerId); }));
                                                             return (
                                                                 <div key={transformerId} onClick={e => { e.stopPropagation(); toggleTransformerInStage(relay, transformerId); }} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.17rem 0.5rem', paddingLeft: `${1.35 + paddingLevel * 0.8}rem`, fontSize: '0.65rem', color: isTxAssigned ? '#166534' : '#64748b', cursor: 'pointer' }} className="hover-glow">
@@ -3196,7 +3214,13 @@ const LoadSheddingDesigner = () => {
                                 {/* Per-scheme config */}
                                 <div style={{ fontSize: '0.63rem', fontWeight: 700, color: '#374151', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Per-Scheme Configuration</div>
                                 {alertConfigLoading ? (
-                                    <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8', fontSize: '0.68rem' }}>Loading…</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2.5rem 1rem', gap: '0.85rem' }}>
+                                        <div style={{ position: 'relative', width: 36, height: 36 }}>
+                                            <div style={{ position: 'absolute', inset: 0, border: '3px solid #f1f5f9', borderRadius: '50%' }} />
+                                            <div style={{ position: 'absolute', inset: 0, border: '3px solid transparent', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                        </div>
+                                        <span style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 500 }}>Loading alert config…</span>
+                                    </div>
                                 ) : (
                                     ['UFLS', 'UVLS', 'EMLS'].map(s => renderSchemeSection(alertConfigs.find(c => c.scheme_type === s)))
                                 )}
@@ -3428,8 +3452,13 @@ const LoadSheddingDesigner = () => {
                             {/* Body */}
                             <div style={{ padding: '1.25rem 1.5rem 1.5rem', overflowY: 'auto', maxHeight: 'calc(88vh - 85px)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                 {compareLoading ? (
-                                    <div style={{ display: 'flex', height: '12rem', alignItems: 'center', justifyContent: 'center' }}>
-                                        <RefreshCw size={24} style={{ color: '#94a3b8' }} className="animate-spin" />
+                                    <div style={{ display: 'flex', flexDirection: 'column', height: '12rem', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+                                        <div style={{ position: 'relative', width: 40, height: 40 }}>
+                                            <div style={{ position: 'absolute', inset: 0, border: '3px solid #f1f5f9', borderRadius: '50%' }} />
+                                            <div style={{ position: 'absolute', inset: 0, border: '3px solid transparent', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                            <div style={{ position: 'absolute', inset: '8px', border: '2px solid transparent', borderTopColor: '#93c5fd', borderRadius: '50%', animation: 'spin 1.4s linear infinite reverse' }} />
+                                        </div>
+                                        <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 500 }}>Loading comparison…</span>
                                     </div>
                                 ) : !comparePublishedLabel ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '10rem', gap: '0.75rem' }}>

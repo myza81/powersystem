@@ -1294,8 +1294,16 @@ const LoadSheddingSchemeReviewer = () => {
                             )}
                             <div style={isTableFullscreen ? { flex: 1, overflowY: 'auto', padding: '2rem' } : {}}>
                                 {loadingStages ? (
-                                    <div style={{ display: 'flex', height: '12rem', alignItems: 'center', justifyContent: 'center' }}>
-                                        <RefreshCw className="animate-spin" size={24} style={{ color: '#94a3b8' }} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', height: '16rem', alignItems: 'center', justifyContent: 'center', gap: '1.25rem' }}>
+                                        <div style={{ position: 'relative', width: 44, height: 44 }}>
+                                            <div style={{ position: 'absolute', inset: 0, border: '3px solid #f1f5f9', borderRadius: '50%' }} />
+                                            <div style={{ position: 'absolute', inset: 0, border: '3px solid transparent', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                            <div style={{ position: 'absolute', inset: '8px', border: '2px solid transparent', borderTopColor: '#93c5fd', borderRadius: '50%', animation: 'spin 1.4s linear infinite reverse' }} />
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#475569' }}>Loading assignments</span>
+                                            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Fetching scheme data…</span>
+                                        </div>
                                     </div>
                                 ) : filteredRows.length === 0 ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '12rem', gap: '0.75rem' }}>
@@ -1625,7 +1633,10 @@ const LoadSheddingSchemeReviewer = () => {
 
                             {loadingCompliance ? (
                                 <div style={{ display: 'flex', height: '10rem', alignItems: 'center', justifyContent: 'center' }}>
-                                    <RefreshCw size={24} style={{ color: '#94a3b8' }} className="animate-spin" />
+                                    <div style={{ position: 'relative', width: 36, height: 36 }}>
+                                        <div style={{ position: 'absolute', inset: 0, border: '3px solid #f1f5f9', borderRadius: '50%' }} />
+                                        <div style={{ position: 'absolute', inset: 0, border: '3px solid transparent', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                    </div>
                                 </div>
                             ) : !complianceReport ? (
                                 <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
