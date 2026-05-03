@@ -138,6 +138,7 @@ const PieChart = ({ data, size = 120 }) => {
 const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [] }) => {
 
     const [activeRegStageIdx, setActiveRegStageIdx] = useState(0);
+    const [critStageFilter, setCritStageFilter] = useState('All');
 
     const subLookup = useMemo(() => {
         const m = {};
@@ -245,7 +246,7 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
         const critStageMap = new Map();
         critRows.forEach(r => {
             if (!critStageMap.has(r.stageId)) {
-                critStageMap.set(r.stageId, { stageId: r.stageId, label: r.stageLabel, color: r.stageColor, count: 0, mw: 0 });
+                critStageMap.set(r.stageId, { stageId: r.stageId, label: r.stageLabel, color: r.stageColor, stageOrder: r.stageOrder, count: 0, mw: 0 });
             }
             const s = critStageMap.get(r.stageId);
             s.count++;
@@ -731,7 +732,7 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                             {critByStage
                                 .slice()
-                                .sort((a, b) => b.mw - a.mw)
+                                .sort((a, b) => a.stageOrder - b.stageOrder)
                                 .map((s, i) => {
                                     const stageTotalMW = stages.find(st => st.id === s.stageId)?.mw || 0;
                                     const pct = stageTotalMW > 0 ? ((s.mw / stageTotalMW) * 100).toFixed(1) : '0.0';
@@ -765,7 +766,7 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
             </div>
 
             {/* ── Panel 5: Critical Substation Exposure ────────────────── */}
-            <SectionCard title="Critical Substation Exposure" desc="Lists all critical substations included in this scheme, showing which stage they are assigned to and the MW quantum involved.">
+            <SectionCard title="Critical Substation Exposure" desc="Lists critical substations included in this scheme by stage. Select a stage to filter, or view all at once.">
                 {critRows.length === 0 ? (
                     <div style={{
                         textAlign: 'center', padding: '1.25rem',
@@ -803,69 +804,141 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
                             ))}
                         </div>
 
-                        {/* Stage chips */}
-                        {critByStage.length > 0 && (
-                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                {critByStage.map(s => (
-                                    <div key={s.label} style={{
-                                        display: 'flex', alignItems: 'center', gap: '6px',
-                                        background: '#f8fafc', border: '1px solid #e2e8f0',
-                                        borderRadius: '6px', padding: '4px 10px',
-                                    }}>
-                                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color }} />
-                                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#334155' }}>{s.label}</span>
-                                        <span style={{ fontSize: '0.62rem', color: '#94a3b8' }}>·</span>
-                                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#ef4444' }}>{s.count}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                        {/* Stage filter buttons */}
+                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            {/* All Stages button */}
+                            {(() => {
+                                const isActive = critStageFilter === 'All';
+                                return (
+                                    <button
+                                        onClick={() => setCritStageFilter('All')}
+                                        style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                            padding: '4px 10px',
+                                            border: `1.5px solid ${isActive ? '#64748b' : '#e2e8f0'}`,
+                                            borderRadius: '6px',
+                                            background: isActive ? '#f1f5f9' : '#f8fafc',
+                                            cursor: 'pointer',
+                                            fontSize: '0.65rem',
+                                            fontWeight: isActive ? 700 : 500,
+                                            color: isActive ? '#334155' : '#94a3b8',
+                                            fontFamily: "'Poppins', sans-serif",
+                                        }}
+                                    >
+                                        All Stages
+                                        <span style={{
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                            minWidth: '16px', height: '16px', padding: '0 3px',
+                                            borderRadius: '999px',
+                                            background: isActive ? '#64748b' : '#e2e8f0',
+                                            color: isActive ? '#fff' : '#94a3b8',
+                                            fontSize: '0.55rem', fontWeight: 700,
+                                        }}>
+                                            {critRows.length}
+                                        </span>
+                                    </button>
+                                );
+                            })()}
+                            {/* Per-stage buttons */}
+                            {critByStage.slice().sort((a, b) => a.stageOrder - b.stageOrder).map(s => {
+                                const isActive = critStageFilter === s.stageId;
+                                return (
+                                    <button
+                                        key={s.stageId}
+                                        onClick={() => setCritStageFilter(s.stageId)}
+                                        style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: '5px',
+                                            padding: '4px 10px',
+                                            border: `1.5px solid ${isActive ? s.color : '#e2e8f0'}`,
+                                            borderRadius: '6px',
+                                            background: isActive ? `${s.color}18` : '#f8fafc',
+                                            cursor: 'pointer',
+                                            fontSize: '0.65rem',
+                                            fontWeight: isActive ? 700 : 500,
+                                            color: isActive ? s.color : '#64748b',
+                                            fontFamily: "'Poppins', sans-serif",
+                                        }}
+                                    >
+                                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, display: 'inline-block', flexShrink: 0 }} />
+                                        {s.label}
+                                        <span style={{
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                            minWidth: '16px', height: '16px', padding: '0 3px',
+                                            borderRadius: '999px',
+                                            background: isActive ? s.color : '#e2e8f0',
+                                            color: isActive ? '#fff' : '#94a3b8',
+                                            fontSize: '0.55rem', fontWeight: 700,
+                                        }}>
+                                            {s.count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
 
                         {/* Table */}
-                        <div style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid #f1f5f9' }}>
-                            {/* Header */}
-                            <div style={{
-                                display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.2fr 0.8fr 0.6fr 0.6fr',
-                                gap: '0.5rem', padding: '0.45rem 0.75rem',
-                                background: '#f8fafc', borderBottom: '1px solid #f1f5f9',
-                            }}>
-                                {['Substation', 'Feeder Bay', 'Voltage', 'Stage', 'Region', 'MW'].map(h => (
-                                    <div key={h} style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8' }}>
-                                        {h}
+                        {(() => {
+                            const visibleRows = critStageFilter === 'All'
+                                ? critRows
+                                : critRows.filter(r => r.stageId === critStageFilter);
+                            const activeStage = critStageFilter !== 'All'
+                                ? critByStage.find(s => s.stageId === critStageFilter)
+                                : null;
+                            return (
+                                <div style={{ borderRadius: '8px', overflow: 'hidden', border: `1px solid ${activeStage ? `${activeStage.color}44` : '#f1f5f9'}` }}>
+                                    {/* Header */}
+                                    <div style={{
+                                        display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.2fr 0.8fr 0.6fr 0.6fr',
+                                        gap: '0.5rem', padding: '0.45rem 0.75rem',
+                                        background: activeStage ? `${activeStage.color}10` : '#f8fafc',
+                                        borderBottom: `1px solid ${activeStage ? `${activeStage.color}30` : '#f1f5f9'}`,
+                                    }}>
+                                        {['Substation', 'Feeder Bay', 'Voltage', 'Stage', 'Region', 'MW'].map(h => (
+                                            <div key={h} style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8' }}>
+                                                {h}
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                            {/* Rows */}
-                            {critRows.map((r, i) => (
-                                <div key={i} style={{
-                                    display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.2fr 0.8fr 0.6fr 0.6fr',
-                                    gap: '0.5rem', padding: '0.5rem 0.75rem',
-                                    background: i % 2 === 0 ? '#fff' : '#fafafa',
-                                    borderBottom: i < critRows.length - 1 ? '1px solid #f8fafc' : 'none',
-                                    alignItems: 'center',
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>
-                                        <AlertCircle size={11} style={{ color: '#ef4444', flexShrink: 0 }} />
-                                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {r.substationName}
-                                        </span>
-                                    </div>
-                                    <div style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {r.feeder || '—'}
-                                    </div>
-                                    <div style={{ fontSize: '0.65rem', color: '#475569' }}>
-                                        {r.voltage && r.voltage !== '—' ? `${r.voltage} kV` : '—'}
-                                    </div>
-                                    <div style={{ fontSize: '0.65rem', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {r.stageLabel}
-                                    </div>
-                                    <div style={{ fontSize: '0.65rem', color: '#475569' }}>{r.region}</div>
-                                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#10b981' }}>
-                                        {r.mw != null ? fmt(r.mw) : '—'}
-                                    </div>
+                                    {/* Rows */}
+                                    {visibleRows.length === 0 ? (
+                                        <div style={{ padding: '1rem', textAlign: 'center', fontSize: '0.75rem', color: '#94a3b8' }}>
+                                            No critical substations in this stage.
+                                        </div>
+                                    ) : visibleRows.map((r, i) => (
+                                        <div key={i} style={{
+                                            display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.2fr 0.8fr 0.6fr 0.6fr',
+                                            gap: '0.5rem', padding: '0.5rem 0.75rem',
+                                            background: i % 2 === 0 ? '#fff' : '#fafafa',
+                                            borderBottom: i < visibleRows.length - 1 ? '1px solid #f8fafc' : 'none',
+                                            alignItems: 'center',
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>
+                                                <AlertCircle size={11} style={{ color: '#ef4444', flexShrink: 0 }} />
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {r.substationName}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {r.feeder || '—'}
+                                            </div>
+                                            <div style={{ fontSize: '0.65rem', color: '#475569' }}>
+                                                {r.voltage && r.voltage !== '—' ? `${r.voltage} kV` : '—'}
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: r.stageColor, flexShrink: 0 }} />
+                                                <span style={{ fontSize: '0.65rem', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {r.stageLabel}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: '0.65rem', color: '#475569' }}>{r.region}</div>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#10b981' }}>
+                                                {r.mw != null ? fmt(r.mw) : '—'}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
+                            );
+                        })()}
                     </div>
                 )}
             </SectionCard>
