@@ -699,8 +699,14 @@ class LoadSheddingPocketBay(models.Model):
     )
     topology_valid = models.BooleanField(default=True)
     topology_alert = models.TextField(null=True, blank=True)
+    manual_substations = models.JSONField(
+        default=list, blank=True,
+        help_text='User-defined list of substation IDs that override topology-computed island.'
+    )
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
 
     class Meta:
+        ordering = ['created_at']
         verbose_name = "Load Shedding Pocket Bay"
         verbose_name_plural = "Load Shedding Pocket Bays"
 
@@ -743,13 +749,18 @@ class LoadSheddingPocketBay(models.Model):
 
     def compute_topology(self, snapshot):
         """
-        1. Validates each boundary branch exists in the active TopologyBranch
-           for the snapshot's topology version (by substation→bus pair + ckt_id).
+        If manual_substations is set, bypasses topology computation and uses
+        the user-defined substation list to calculate MW directly.
+        Otherwise:
+        1. Validates each boundary branch exists in the active TopologyBranch.
         2. Calls compute_island(all_cuts) to find the isolated pocket.
         3. Validates the pocket is non-empty.
         4. Calls compute_load_totals() to sum the shed MW.
         5. Writes topology_cache, topology_valid, topology_alert.
         """
+        if self.manual_substations:
+            return self._compute_manual_topology(snapshot)
+
         from services.topology_service import TopologyService
         from core.models import TopologyBranch
 
@@ -824,6 +835,23 @@ class LoadSheddingPocketBay(models.Model):
         self.save(update_fields=['topology_cache', 'topology_valid', 'topology_alert'])
         return self.topology_cache
 
+
+    def _compute_manual_topology(self, snapshot):
+        from services.topology_service import TopologyService
+        service = TopologyService(snapshot)
+        totals = service.compute_load_totals(list(self.manual_substations))
+        self.topology_cache = {
+            "snapshot_id": str(snapshot.id),
+            "isolated_substations": list(self.manual_substations),
+            "mw": totals["isolated_total_p_mw"],
+            "substation_mw": totals.get("isolated_substation_load_totals", {}),
+            "computed_at": timezone.now().isoformat(),
+            "manual_override": True,
+        }
+        self.topology_valid = True
+        self.topology_alert = None
+        self.save(update_fields=['topology_cache', 'topology_valid', 'topology_alert'])
+        return self.topology_cache
 
     def get_mw(self, snapshot):
         if not self.topology_cache or self.topology_cache.get('snapshot_id') != str(snapshot.id):

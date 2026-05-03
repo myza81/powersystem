@@ -1,71 +1,138 @@
-# Agent Instructions
+# CLAUDE.md
 
-> This file is mirrored across CLAUDE.md, AGENTS.md, and GEMINI.md so the same instructions load in any AI environment.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-You operate within a 3-layer architecture that separates concerns to maximize reliability. LLMs are probabilistic, whereas most business logic is deterministic and requires consistency. This system fixes that mismatch.
+---
 
-## The 3-Layer Architecture
+A Django + React platform for managing and analysing the Malaysian power grid (TNB). It handles network topology imports (PSS/E cases), load-shedding scheme design (UFLS/UVLS/EMLS), critical-asset tracking, and geographic visualisation.
 
-**Layer 1: Directive (What to do)**
-- Basically just SOPs written in Markdown, live in `directives/`
-- Define the goals, inputs, tools/scripts to use, outputs, and edge cases
-- Natural language instructions, like you'd give a mid-level employee
+---
 
-**Layer 2: Orchestration (Decision making)**
-- This is you. Your job: intelligent routing.
-- Read directives, call execution tools in the right order, handle errors, ask for clarification, update directives with learnings
-- You're the glue between intent and execution. E.g you don't try scraping websites yourself—you read `directives/scrape_website.md` and come up with inputs/outputs and then run `execution/scrape_single_site.py`
+## Commands
 
-**Layer 3: Execution (Doing the work)**
-- Deterministic Python scripts in `execution/`
-- Environment variables, api tokens, etc are stored in `.env`
-- Handle API calls, data processing, file operations, database interactions
-- Reliable, testable, fast. Use scripts instead of manual work. Commented well.
+```bash
+# Backend (from repo root)
+python manage.py migrate
+python manage.py runserver
 
-**Why this works:** if you do everything yourself, errors compound. 90% accuracy per step = 59% success over 5 steps. The solution is push complexity into deterministic code. That way you just focus on decision-making.
+# Frontend
+cd frontend && npm install && npm run dev
 
-## Operating Principles
+# Celery (async tasks — optional)
+celery -A powersystem worker -l info
 
-**1. Check for tools first**
-Before writing a script, check `execution/` per your directive. Only create new scripts if none exist.
+# After any model change — always commit the generated file
+python manage.py makemigrations
+```
 
-**2. Self-anneal when things break**
-- Read error message and stack trace
-- Fix the script and test it again (unless it uses paid tokens/credits/etc—in which case you check w user first)
-- Update the directive with what you learned (API limits, timing, edge cases)
-- Example: you hit an API rate limit → you then look into API → find a batch endpoint that would fix → rewrite script to accommodate → test → update directive.
+API: `http://localhost:8000/api/v1/` · Frontend dev server proxies to the backend.
 
-**3. Update directives as you learn**
-Directives are living documents. When you discover API constraints, better approaches, common errors, or timing expectations—update the directive. But don't create or overwrite directives without asking unless explicitly told to. Directives are your instruction set and must be preserved (and improved upon over time, not extemporaneously used and then discarded).
+---
 
-## Self-annealing loop
+## Project Layout
 
-Errors are learning opportunities. When something breaks:
-1. Fix it
-2. Update the tool
-3. Test tool, make sure it works
-4. Update directive to include new flow
-5. System is now stronger
+```
+powersystem_core/   Django project (settings.py, urls.py)
+api/v1/             REST API — views/, serializers/
+core/               Django app — models/, migrations/, fixtures/
+  models/
+    core_models.py  All operational models (Substation, LoadShedding*, Critical*)
+    snapshot_models.py  PSS/E topology models (NetworkSnapshot, TopologyBus, etc.)
+services/           Business logic (TopologyService — island detection)
+frontend/src/
+  App.jsx           Root: auth gate, view routing, top-level state
+  api.js            Axios instance with CSRF + session auth
+  components/       One component per feature — no global store
+```
 
-## File Organization
+---
 
-**Deliverables vs Intermediates:**
-- **Deliverables**: Google Sheets, Google Slides, or other cloud-based outputs that the user can access
-- **Intermediates**: Temporary files needed during processing
+## URL / Router
 
-**Directory structure:**
-- `.tmp/` - All intermediate files (dossiers, scraped data, temp exports). Never commit, always regenerated.
-- `execution/` - Python scripts (the deterministic tools)
-- `directives/` - SOPs in Markdown (the instruction set)
-- `.env` - Environment variables and API keys
-- `credentials.json`, `token.json` - Google OAuth credentials (required files, in `.gitignore`)
+All API endpoints are registered in `powersystem_core/urls.py` using `DefaultRouter`. Auth endpoints (`/users/me/`, `/users/login/`, `/users/logout/`) are declared separately before the router include. Dev-only export/import endpoints are gated behind `settings.DEBUG`.
 
-**Key principle:** Local files are only for processing. Deliverables live in cloud services (Google Sheets, Slides, etc.) where the user can access them. Everything in `.tmp/` can be deleted and regenerated.
+---
 
-## Summary
+## Key Data Models (`core/models/core_models.py`)
 
-You sit between human intent (directives) and deterministic execution (Python scripts). Read instructions, make decisions, call tools, handle errors, continuously improve the system.
+**Grid master data**
+- `Substation` — physical node; `substation_id` = mnemonic + voltage (e.g. `MWTA132`); auto-derived `region` from `grid`.
+- `LoadTransformer`, `AutoTransformer`, `IncomingBranch` — equipment at or between substations.
+- `LoadSheddingRelay` — relay device at a substation; links to transformers + branches it controls.
 
-Be pragmatic. Be reliable. Self-anneal.
+**Load shedding hierarchy** (Version → Stage → Bays)
+- `LoadSheddingVersion` — scheme draft/active/deactivated. Only one `is_active=True` per `scheme_type` at a time; `publish()` auto-deactivates the old one.
+- `LoadSheddingStage` — ordered step within a version; UFLS/UVLS stages require at least one `LoadSheddingSetting`.
+- `LoadSheddingTransformerBay` — direct relay-based load assignment per stage; `mw_cache` stores last computed MW.
+- `LoadSheddingPocketBay` — topology-defined isolated island per stage; `topology_cache` holds `isolated_substations`, `mw`, `substation_mw`; `manual_substations` + `manual_override` flag for operator overrides.
+- `LoadSheddingAlertConfig` — per-scheme-type rule enforcement settings (Rule 1 / Rule 2 enforcement mode, protected stages).
 
+**Critical infrastructure**
+- `CriticalCategory` / `CriticalSource` / `CriticalAsset` — links critical loads to substations and transformers.
 
+**Snapshot / topology** (`snapshot_models.py`)
+- `NetworkSnapshot` — imported PSS/E `.raw` case.
+- `TopologyBus`, `TopologyBranch`, `TopologyTransformer` — parsed network elements.
+- `SnapshotBusState` — energisation state per bus per snapshot.
+
+---
+
+## API Patterns
+
+- Standard CRUD: `ModelViewSet` + `DefaultRouter`. Read-only is public (`AllowAny`); writes require `IsStaffOrSuperuser`.
+- `SubstationViewSet.get_serializer_context()` injects `scheme_types_map` and `stages_map` on list actions — these are computed from `LoadSheddingTransformerBay` and `LoadSheddingPocketBay` rows, not from the version model directly.
+- `SubstationViewSet.perform_create()` auto-generates `substation_id` = mnemonic + voltage string.
+
+**Key custom actions on `LoadSheddingVersionViewSet`:**
+- `POST /{id}/bulk_save_stages/` — the designer's primary save; creates/updates all stages, bays, and boundaries in one transaction; also recomputes MW cache. Enforces Rule 3 server-side.
+- `GET /{id}/active_protected_bays/` — returns substations locked by the active published version (for cross-scheme Rule 1 checks).
+- `GET /{id}/compliance_report/` — runs Rule 1, Rule 2, and Rule 3 checks against a version; used by the Reviewer.
+- `GET /{id}/pre_publish_diff/` — returns the active version ID so the frontend can build a diff before publishing.
+
+**Key custom actions on `LoadSheddingPocketBayViewSet`:**
+- `PATCH /{id}/manual-override/` — saves `manual_substations` list for a pocket bay.
+- `GET /substation-mw/` — returns MW per substation (for the Manual Island Override picker).
+- `POST /recompute/` — triggers topology recompute for listed pocket bay IDs.
+
+---
+
+## Frontend Architecture
+
+**No global state manager.** All state lives in component `useState`/`useMemo`. Draft workspace state is persisted to `sessionStorage` under the key `ls_draft_state` (debounced).
+
+**View routing** is handled in `App.jsx` via a `view` string synced to the URL `?view=` param. `MainLayout` + `Sidebar` wrap all views. Access control: staff views include `load-shedding-designer`, `snapshots`, `create`/`edit`; admin-only: `dev-tools`.
+
+**`LoadSheddingDesigner.jsx`** (~3900 lines) is the most complex component:
+- Manages the full designer workspace: version metadata, stages array, transformer bays, pocket bays, pocket preview.
+- `stages` state shape: `[{ id, stage_number, label, target_mw, transformer_bays, computed_pockets, pocket_branches, setting_ids }]`
+- `computed_pockets` shape: `{ id, branches, branchGroups, pocket_substations, manual_substations, manual_override, total_p_mw, substation_mw }`
+- `PublishReasonModal` is a `React.memo` component defined at the top of the file to prevent re-renders from reason-field keystrokes propagating to the full designer.
+- `reasonInputsRef` holds DOM refs to reason `<input>` nodes so the publish handler reads values without controlled-state re-renders.
+- `skipDirtyRef` prevents the `isDirty` flag from firing on initial hydration.
+
+**`LoadSheddingSchemeReviewer.jsx`** — read-only compliance viewer. Fetches `compliance_report` from the API and displays Rule 1 / Rule 2 / Rule 3 violations.
+
+---
+
+## Design Rules (Load Shedding)
+
+Three rules are enforced at design time in the designer and validated server-side in `bulk_save_stages`:
+
+| Rule | Description | Enforcement |
+|------|-------------|-------------|
+| Rule 1 — No Cross-Scheme Overlap | A substation in UFLS protected stages cannot appear in UVLS/EMLS and vice versa. | Configurable per scheme (`rule1_enforcement`: `warn`/`block`) |
+| Rule 2 — Critical Substation Protection | Critical substations must not be in restricted stages for their scheme type. | Configurable per scheme (`rule2_enforcement`: `warn`/`block`) |
+| Rule 3 — No Direct/Pocket Overlap | A substation cannot be both a direct `TransformerBay` and inside a `PocketBay` (topology-derived or manual) in the same version. | Always hard block, version-wide |
+
+Rule 3 is enforced at three trigger points in the frontend: `addTransformerToStage`, `handleLockPocket`, and `ManualIslandModal.handleSave`.
+
+---
+
+## Conventions
+
+- **Migrations**: every model edit ships with `makemigrations`. Always commit the generated file.
+- **API versioning**: all endpoints live under `api/v1/`. Add new ViewSets to `powersystem_core/urls.py`.
+- **Frontend API calls**: use the `api` Axios instance from `frontend/src/api.js` (handles CSRF automatically).
+- **Media files**: uploads go to `media/`. Never commit.
+- **Substation ID**: generated as `{mnemonic}{voltage}` (e.g. `JNKA132`). The `mnemonic` is a 4-letter site code.
+- **PSS/E import is the source of truth**: network topology comes from parsed `.raw` files via `SnapshotManager`; never hard-code grid topology.

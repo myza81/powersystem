@@ -9,7 +9,6 @@ from core.models import (
     LoadSheddingPocketBoundary,
     LoadSheddingAlertConfig,
     LoadSheddingChangeLog,
-    NetworkSnapshot
 )
 
 class LoadSheddingSettingSerializer(serializers.ModelSerializer):
@@ -91,13 +90,6 @@ class LoadSheddingStageSerializer(serializers.ModelSerializer):
                 )
         return instance
 
-    def validate(self, attrs):
-        if self.instance is None:
-            setting_ids = attrs.get('settings')
-            if not setting_ids:
-                pass
-        return attrs
-
 
 class LoadSheddingPocketBoundarySerializer(serializers.ModelSerializer):
     relay_substation_id = serializers.SerializerMethodField()
@@ -149,14 +141,19 @@ class LoadSheddingPocketBoundarySerializer(serializers.ModelSerializer):
 
 class LoadSheddingPocketBaySerializer(serializers.ModelSerializer):
     boundaries = LoadSheddingPocketBoundarySerializer(many=True, read_only=True)
+    manual_override = serializers.SerializerMethodField()
 
     class Meta:
         model = LoadSheddingPocketBay
         fields = [
-            'id', 'stage', 'boundaries', 'topology_cache', 
-            'topology_valid', 'topology_alert'
+            'id', 'stage', 'boundaries', 'topology_cache',
+            'topology_valid', 'topology_alert',
+            'manual_substations', 'manual_override',
         ]
-        read_only_fields = ['topology_cache', 'topology_valid', 'topology_alert']
+        read_only_fields = ['topology_cache', 'topology_valid', 'topology_alert', 'manual_override']
+
+    def get_manual_override(self, obj):
+        return bool(obj.manual_substations)
 
 
 class LoadSheddingTransformerBaySerializer(serializers.ModelSerializer):

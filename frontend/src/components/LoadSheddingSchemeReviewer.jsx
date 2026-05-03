@@ -319,7 +319,7 @@ const EXPORT_COLUMNS = [
     { key: 'voltage', label: 'Voltage (kV)', defaultOn: true, getValue: r => r.voltage },
     { key: 'feeder', label: 'Feeder Bay', defaultOn: true, getValue: r => r.feeder },
     { key: 'breaker', label: 'Breaker No.', defaultOn: true, getValue: r => r.breakerNumber },
-    { key: 'mw', label: 'MW', defaultOn: true, getValue: r => r.mw != null ? Math.round(r.mw) : '' },
+    { key: 'mw', label: 'MW', defaultOn: false, getValue: r => r.mw != null ? Math.round(r.mw) : '' },
     { key: 'involved', label: 'Impacted Substation', defaultOn: false, getValue: r => {
         if (r.type === 'transformer') {
             const vid = r.voltage && r.voltage !== '—' ? String(r.voltage) : '';
@@ -336,8 +336,8 @@ const EXPORT_COLUMNS = [
     { key: 'type', label: 'Type', defaultOn: false, getValue: r => r.type === 'transformer' ? 'TX Bay' : 'Network Pocket' },
     { key: 'thresh1', label: 'Threshold 1 (Hz)', defaultOn: true, getValue: r => r.threshold1 },
     { key: 'delay1', label: 'Delay 1 (s)', defaultOn: true, getValue: r => r.delay1 },
-    { key: 'thresh2', label: 'Threshold 2 (Hz)', defaultOn: false, getValue: r => r.threshold2 },
-    { key: 'delay2', label: 'Delay 2 (s)', defaultOn: false, getValue: r => r.delay2 },
+    { key: 'thresh2', label: 'Threshold 2 (Hz)', defaultOn: true, getValue: r => r.threshold2 },
+    { key: 'delay2', label: 'Delay 2 (s)', defaultOn: true, getValue: r => r.delay2 },
     { key: 'critical', label: 'Critical Subs', defaultOn: false, getValue: r => r.isCritical ? 'Yes' : '' },
     { key: 'comparison', label: 'Comparison', defaultOn: false, getValue: r => r._compRow ? `${CHANGE_META[r._compRow.changeType]?.label || r._compRow.changeType}: ${r._compRow.oldStageLabel || '—'} --> ${r._compRow.changeType === 'defeated' ? '—' : r._compRow.stageLabel}` : '—' },
     { key: 'changelog', label: 'Change Log Reason', defaultOn: false, getValue: r => {
@@ -509,8 +509,9 @@ const LoadSheddingSchemeReviewer = () => {
 
     const fetchStages = async (scheme) => {
         setSelectedScheme(scheme);
-        if (!scheme) { setStageDetails([]); return; }
+        if (!scheme) { setStageDetails([]); setChangeLog([]); return; }
         setLoadingStages(true);
+        fetchChangeLog(scheme.id);   // fire in parallel — needed for export even if tab not visited
         try {
             const res = await api.get(`/load-shedding-stages/?version=${scheme.id}&include_bays=true`);
             setStageDetails(res.data || []);
@@ -593,7 +594,11 @@ const LoadSheddingSchemeReviewer = () => {
             ]);
             const curRows = buildRows(curRes.data, substations, relays);
             const prevRows = buildRows(prevRes.data, substations, relays);
-            const diff = buildComparisonRows(curRows, prevRows).filter(r => r.changeType !== 'unchanged');
+            // Exclude rows that already have a log entry so reopening the modal never creates duplicates.
+            const existingLogKeys = new Set(changeLog.map(e => `${e.substation_id}||${e.feeder}||${e.change_type}`));
+            const diff = buildComparisonRows(curRows, prevRows)
+                .filter(r => r.changeType !== 'unchanged')
+                .filter(r => !existingLogKeys.has(`${r.substationId}||${r.feeder}||${r.changeType}`));
             setAddLogDiff(diff);
             setAddLogComparedVersionId(previousVersion.id);
             setAddLogComparedLabel(`${previousVersion.scheme_type} ${previousVersion.review_year} v${previousVersion.version}`);
@@ -668,7 +673,6 @@ const LoadSheddingSchemeReviewer = () => {
 
     useEffect(() => {
         if (activeTab === 'alert-report' && !complianceReport) fetchComplianceReport();
-        if (activeTab === 'change-log' && selectedScheme) fetchChangeLog(selectedScheme.id);
     }, [activeTab]);
 
     useEffect(() => {
@@ -886,17 +890,27 @@ const LoadSheddingSchemeReviewer = () => {
             changeLogMap.set(`${e.substation_id}||${e.feeder}`, e);
         });
 
+        // pocket_header rows are excluded from export but carry mw + isolatedSubstations
+        // for multi-boundary pockets — back-fill those onto each boundary row
+        const pocketHeaderMap = new Map(
+            filteredRows.filter(r => r.type === 'pocket_header').map(r => [r.pocketId, r])
+        );
+
+        const enrichRow = (r) => {
+            const header = r.pocketId ? pocketHeaderMap.get(r.pocketId) : null;
+            return {
+                ...r,
+                mw: r.mw ?? header?.mw ?? null,
+                isolatedSubstations: r.isolatedSubstations?.length ? r.isolatedSubstations : (header?.isolatedSubstations || []),
+                _compRow: compMap.get(`${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`) || null,
+                _changeLogRow: changeLogMap.get(`${r.substationId}||${r.feeder}`) || null,
+            };
+        };
+
         const headers = cols.map(c => c.label);
         const data = filteredRows
             .filter(r => r.type !== 'pocket_header')
-            .map(r => {
-                const enriched = {
-                    ...r,
-                    _compRow: compMap.get(`${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`) || null,
-                    _changeLogRow: changeLogMap.get(`${r.substationId}||${r.feeder}`) || null,
-                };
-                return cols.map(c => c.getValue(enriched));
-            });
+            .map(r => cols.map(c => c.getValue(enrichRow(r))));
 
         const includeComp = selectedExportCols.has('comparison');
         const defeatedRows = includeComp ? exportCompRows.filter(r => r.changeType === 'defeated') : [];
@@ -904,7 +918,7 @@ const LoadSheddingSchemeReviewer = () => {
             data.push(new Array(cols.length).fill(''));
             data.push([`DEFEATED — Removed in current scheme (${defeatedRows.length} entr${defeatedRows.length === 1 ? 'y' : 'ies'})`]);
             data.push(headers);
-            defeatedRows.forEach(r => data.push(cols.map(c => c.getValue({ ...r, _compRow: r, _changeLogRow: changeLogMap.get(`${r.substationId}||${r.feeder}`) || null }))));
+            defeatedRows.forEach(r => data.push(cols.map(c => c.getValue(enrichRow({ ...r, _compRow: r })))));
         }
 
         const wb = XLSX.utils.book_new();
@@ -1649,6 +1663,7 @@ const LoadSheddingSchemeReviewer = () => {
                                         {[
                                             { label: 'Rule 1 Violations', desc: 'Cross-scheme overlap', count: complianceReport.summary.rule1_count, color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
                                             { label: 'Rule 2 Violations', desc: 'Critical in restricted stage', count: complianceReport.summary.rule2_count, color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
+                                            { label: 'Rule 3 Violations', desc: 'Direct/pocket overlap', count: complianceReport.summary.rule3_count ?? 0, color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
                                             { label: 'Total Violations', desc: 'All rules combined', count: complianceReport.summary.total, color: complianceReport.summary.total === 0 ? '#22c55e' : '#ef4444', bg: complianceReport.summary.total === 0 ? '#f0fdf4' : '#fef2f2', border: complianceReport.summary.total === 0 ? '#bbf7d0' : '#fecaca' },
                                         ].map(({ label, desc, count, color, bg, border }) => (
                                             <div key={label} style={{ flex: '1 1 160px', padding: '1rem 1.25rem', borderRadius: '10px', background: bg, border: `1px solid ${border}` }}>
@@ -1740,6 +1755,39 @@ const LoadSheddingSchemeReviewer = () => {
                                                         >
                                                             <td style={{ padding: '0.65rem 1rem', fontWeight: 600, color: '#0f172a' }}>{v.substation_id}</td>
                                                             <td style={{ padding: '0.65rem 1rem', color: '#b45309' }}>{v.stages.map(s => s.stage_label).join(', ')}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        )}
+                                    </div>
+
+                                    {/* Rule 3 table */}
+                                    <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                        <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '0.6rem', background: '#f8fafc' }}>
+                                            <FaShieldHalved size={13} color="#ef4444" />
+                                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Rule 3 — Direct/Pocket Assignment Overlap</span>
+                                        </div>
+                                        {(complianceReport.rule3_violations || []).length === 0 ? (
+                                            <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.78rem' }}>No violations</div>
+                                        ) : (
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                                                <thead>
+                                                    <tr style={{ background: '#f8fafc' }}>
+                                                        {['Substation', 'Direct Bay Stage(s)', 'Pocket Stage(s)'].map(h => (
+                                                            <th key={h} style={{ padding: '0.6rem 1rem', textAlign: 'left', color: '#64748b', fontWeight: 600, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {(complianceReport.rule3_violations || []).map((v, i) => (
+                                                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}
+                                                            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                        >
+                                                            <td style={{ padding: '0.65rem 1rem', fontWeight: 600, color: '#0f172a' }}>{v.substation_id}</td>
+                                                            <td style={{ padding: '0.65rem 1rem', color: '#dc2626' }}>{(v.direct_stages || []).map(s => s.stage_label).join(', ')}</td>
+                                                            <td style={{ padding: '0.65rem 1rem', color: '#dc2626' }}>{(v.pocket_stages || []).map(s => s.stage_label).join(', ')}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -2148,7 +2196,7 @@ const LoadSheddingSchemeReviewer = () => {
                             <div style={{ overflowY: 'auto', flex: 1 }}>
                                 {addLogDiff.length === 0 ? (
                                     <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
-                                        No differences found between these two versions.
+                                        All changes between these two versions have already been recorded.
                                     </div>
                                 ) : addLogDiff.map((row, i) => {
                                     const key = `${row.substationId}||${row.feeder}||${row.changeType}`;
@@ -2234,12 +2282,27 @@ const LoadSheddingSchemeReviewer = () => {
             {showExportModal && (() => {
                 const colMap = Object.fromEntries(EXPORT_COLUMNS.map(c => [c.key, c]));
                 const activeCols = exportColOrder.filter(k => selectedExportCols.has(k)).map(k => colMap[k]);
-                const previewRows = filteredRows.filter(r => r.type !== 'pocket_header').slice(0, 5);
+                const previewRows = filteredRows.filter(r => r.type !== 'pocket_header');
                 const totalRows = filteredRows.filter(r => r.type !== 'pocket_header').length;
                 const compMap = new Map();
                 exportCompRows.forEach(r => {
                     compMap.set(`${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`, r);
                 });
+                const previewChangeLogMap = new Map();
+                changeLog.forEach(e => previewChangeLogMap.set(`${e.substation_id}||${e.feeder}`, e));
+                const previewPocketHeaderMap = new Map(
+                    filteredRows.filter(r => r.type === 'pocket_header').map(r => [r.pocketId, r])
+                );
+                const enrichPreviewRow = (r) => {
+                    const header = r.pocketId ? previewPocketHeaderMap.get(r.pocketId) : null;
+                    return {
+                        ...r,
+                        mw: r.mw ?? header?.mw ?? null,
+                        isolatedSubstations: r.isolatedSubstations?.length ? r.isolatedSubstations : (header?.isolatedSubstations || []),
+                        _compRow: compMap.get(`${r.substationId}||${r.feeder}||${r.type === 'pocket_boundary' ? 'pocket' : r.type}`) || null,
+                        _changeLogRow: previewChangeLogMap.get(`${r.substationId}||${r.feeder}`) || null,
+                    };
+                };
                 const defeatedPreviewRows = selectedExportCols.has('comparison')
                     ? exportCompRows.filter(r => r.changeType === 'defeated')
                     : [];
@@ -2381,13 +2444,13 @@ const LoadSheddingSchemeReviewer = () => {
                                 </div>
 
                                 {/* Right panel — live preview */}
-                                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '1.25rem', gap: '0.6rem', overflow: 'hidden' }}>
+                                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '1.25rem', gap: '0.6rem', minHeight: 0 }}>
                                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexShrink: 0 }}>
                                         <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8' }}>
                                             Preview
                                         </span>
                                         <span style={{ fontSize: '0.68rem', color: '#cbd5e1' }}>
-                                            (first {Math.min(5, totalRows)} of {totalRows} rows)
+                                            ({totalRows} row{totalRows !== 1 ? 's' : ''})
                                         </span>
                                     </div>
 
@@ -2409,7 +2472,7 @@ const LoadSheddingSchemeReviewer = () => {
                                                 </thead>
                                                 <tbody>
                                                     {previewRows.map((row, i) => {
-                                                        const enriched = { ...row, _compRow: compMap.get(`${row.substationId}||${row.feeder}||${row.type === 'pocket_boundary' ? 'pocket' : row.type}`) || null };
+                                                        const enriched = enrichPreviewRow(row);
                                                         return (
                                                             <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
                                                                 {activeCols.map(col => {

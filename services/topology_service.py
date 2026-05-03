@@ -846,7 +846,7 @@ class TopologyService:
 
         all_nodes = set(
             SnapshotBusState.objects.filter(snapshot=self.snapshot, bus__substation_id__isnull=False)
-            .values_list('substation_id', flat=True)
+            .values_list('bus__substation_id', flat=True)
         )
 
         visited = set()

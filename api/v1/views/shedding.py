@@ -1,8 +1,12 @@
+import logging
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
+from django.db import transaction as db_transaction
 from api.v1.permissions import IsStaffOrSuperuser, IsSuperuser
+
+logger = logging.getLogger(__name__)
 
 from core.models import (
     LoadSheddingSetting,
@@ -40,16 +44,6 @@ class LoadSheddingSettingViewSet(BaseSheddingViewSet):
 
     def get_permissions(self):
         return [IsStaffOrSuperuser()]
-
-    def _check_in_use(self, instance):
-        from core.models import LoadSheddingStageSetting
-        in_use = LoadSheddingStageSetting.objects.filter(
-            setting=instance,
-            version__status__in=['active', 'deactivated']
-        ).exists()
-        if in_use:
-            raise Response({"error": "This setting is in use by a published version and cannot be modified or deleted."}, status=status.HTTP_400_BAD_VALUE_BASED_LOGIC)
-        return False
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -91,11 +85,15 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
         if user and user.is_authenticated and user.is_superuser:
             return LoadSheddingVersion.objects.all()
 
-        # Staff sees own drafts + all published versions
+        # Staff sees own drafts + null-owner drafts + all published versions.
+        # Null-owner drafts exist when a version was created outside a normal request context
+        # (e.g. a direct DB seed); without this, staff get 404 trying to delete them.
         if user and user.is_authenticated and user.is_staff:
             from django.db.models import Q
             return LoadSheddingVersion.objects.filter(
-                Q(status__in=['active', 'deactivated']) | Q(status='draft', created_by=user)
+                Q(status__in=['active', 'deactivated'])
+                | Q(status='draft', created_by=user)
+                | Q(status='draft', created_by__isnull=True)
             )
 
         # Guest / anonymous: published versions only
@@ -255,19 +253,22 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
 
         created = []
         for entry in change_reasons:
-            log = LoadSheddingChangeLog.objects.create(
+            log, was_created = LoadSheddingChangeLog.objects.get_or_create(
                 version=version,
-                compared_to_version=compared_to,
-                change_type=entry.get('change_type', 'new'),
                 substation_id=entry.get('substation_id', ''),
-                substation_name=entry.get('substation_name', ''),
                 feeder=entry.get('feeder', ''),
-                old_stage_label=entry.get('old_stage_label', ''),
-                new_stage_label=entry.get('new_stage_label', ''),
-                reason=str(entry.get('reason', '')).strip(),
-                created_by=user,
+                change_type=entry.get('change_type', 'new'),
+                defaults={
+                    'compared_to_version': compared_to,
+                    'substation_name': entry.get('substation_name', ''),
+                    'old_stage_label': entry.get('old_stage_label', ''),
+                    'new_stage_label': entry.get('new_stage_label', ''),
+                    'reason': str(entry.get('reason', '')).strip(),
+                    'created_by': user,
+                },
             )
-            created.append(log)
+            if was_created:
+                created.append(log)
 
         return Response(
             LoadSheddingChangeLogSerializer(created, many=True).data,
@@ -343,7 +344,8 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
                     stage=new_stage,
                     topology_cache=pb.topology_cache,
                     topology_valid=pb.topology_valid,
-                    topology_alert=pb.topology_alert
+                    topology_alert=pb.topology_alert,
+                    manual_substations=pb.manual_substations or [],
                 )
                 
                 from core.models import LoadSheddingPocketBoundary
@@ -356,6 +358,200 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
                     new_boundary.branches.set(old_branches)
 
         return Response(self.get_serializer(new_version).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='bulk-save-stages')
+    def bulk_save_stages(self, request, pk=None):
+        """
+        Single-request save of all stages for a draft version.
+        Replaces the ~100-request sequential save flow with one atomic write + post-commit compute.
+
+        Payload:
+        {
+          "stages": [{
+            "stage_number": 1, "label": "Stage 1", "target_mw": 0, "setting_ids": [...],
+            "transformer_bays": [{"relay": "<id>", "transformers": ["<id>", ...]}],
+            "computed_pockets": [{
+              "relay_groups": [{"relay": "<id>", "branches": ["<id>", ...]}]
+            }]
+          }]
+        }
+        Returns: LoadSheddingStageDetailSerializer list (same shape as ?include_bays=true).
+        """
+        from core.models import (
+            LoadSheddingStage, LoadSheddingStageSetting, LoadSheddingSetting,
+            LoadSheddingTransformerBay, LoadSheddingPocketBay, LoadSheddingPocketBoundary,
+            LoadSheddingRelay, LoadTransformer, IncomingBranch, NetworkSnapshot,
+        )
+        from api.v1.serializers.shedding import LoadSheddingStageDetailSerializer
+
+        version = self.get_object()
+        if version.status != 'draft':
+            return Response({"error": "Only draft versions can be bulk-saved."}, status=status.HTTP_400_BAD_REQUEST)
+
+        stages_data = request.data.get('stages', [])
+        created_tbs = []  # compute_mw after commit
+        created_pbs = []  # compute_topology after commit
+
+        with db_transaction.atomic():
+            version.stages.all().delete()
+
+            for sdata in stages_data:
+                stage = LoadSheddingStage.objects.create(
+                    version=version,
+                    stage_number=sdata['stage_number'],
+                    label=sdata.get('label', ''),
+                    target_mw=sdata.get('target_mw') or 0,
+                )
+
+                for idx, sid in enumerate(sdata.get('setting_ids') or []):
+                    sid = str(sid) if not isinstance(sid, str) else sid
+                    try:
+                        setting = LoadSheddingSetting.objects.get(id=sid)
+                        LoadSheddingStageSetting.objects.create(
+                            stage=stage, setting=setting, version=version, order=idx
+                        )
+                    except LoadSheddingSetting.DoesNotExist:
+                        logger.warning("bulk_save_stages: setting %s not found, skipped", sid)
+
+                for tb_data in sdata.get('transformer_bays') or []:
+                    tx_ids = [
+                        t if isinstance(t, (str, int)) else t.get('id')
+                        for t in (tb_data.get('transformers') or [])
+                    ]
+                    tx_ids = [t for t in tx_ids if t]
+                    if not tx_ids:
+                        continue
+                    try:
+                        relay = LoadSheddingRelay.objects.select_related('substation').get(
+                            id=tb_data.get('relay')
+                        )
+                    except LoadSheddingRelay.DoesNotExist:
+                        logger.warning("bulk_save_stages: relay %s not found, skipped", tb_data.get('relay'))
+                        continue
+
+                    tb = LoadSheddingTransformerBay.objects.create(stage=stage, relay=relay)
+                    tb.transformers.set(LoadTransformer.objects.filter(id__in=tx_ids))
+
+                    # Replicate LoadSheddingTransformerBaySerializer._freeze_metadata exactly
+                    tb.frozen_relay_name = relay.relay_name or ''
+                    sub = relay.substation
+                    if sub:
+                        tb.frozen_substation_id = sub.substation_id
+                        tb.frozen_substation_name = sub.name
+                    assets = []
+                    for bid in tb.transformers.values_list('bay_id', flat=True):
+                        parts = str(bid).split('_', 1)
+                        assets.append(parts[1] if len(parts) > 1 else bid)
+                    tb.frozen_assets = assets
+                    tb.save(update_fields=[
+                        'frozen_relay_name', 'frozen_substation_id',
+                        'frozen_substation_name', 'frozen_assets',
+                    ])
+                    created_tbs.append(tb)
+
+                for pocket_data in sdata.get('computed_pockets') or []:
+                    relay_groups = pocket_data.get('relay_groups') or []
+                    manual_subs = pocket_data.get('manual_substations') or []
+                    if not relay_groups and not manual_subs:
+                        continue  # skip empty ghost pockets
+                    pb = LoadSheddingPocketBay.objects.create(
+                        stage=stage,
+                        manual_substations=manual_subs,
+                    )
+                    has_boundaries = False
+
+                    for rg in relay_groups:
+                        branch_ids = rg.get('branches') or []
+                        if not branch_ids:
+                            continue
+                        try:
+                            relay = LoadSheddingRelay.objects.select_related('substation').get(
+                                id=rg.get('relay')
+                            )
+                        except LoadSheddingRelay.DoesNotExist:
+                            logger.warning("bulk_save_stages: relay %s not found for pocket boundary", rg.get('relay'))
+                            continue
+
+                        boundary = LoadSheddingPocketBoundary.objects.create(pocket=pb, relay=relay)
+                        branches = list(
+                            IncomingBranch.objects.select_related('substation', 'to_substation')
+                            .filter(id__in=branch_ids)
+                        )
+                        boundary.branches.set(branches)
+
+                        # Replicate LoadSheddingPocketBoundarySerializer._freeze_metadata exactly
+                        boundary.frozen_relay_name = relay.relay_name or ''
+                        sub = relay.substation
+                        if sub:
+                            boundary.frozen_substation_id = sub.substation_id
+                            boundary.frozen_substation_name = sub.name
+                        boundary.frozen_assets = [
+                            {
+                                'from_sub': b.substation.substation_id if b.substation else '',
+                                'to_sub': b.to_substation.substation_id if b.to_substation else '',
+                                'ckt_id': b.ckt_id,
+                            }
+                            for b in branches
+                        ]
+                        boundary.save(update_fields=[
+                            'frozen_relay_name', 'frozen_substation_id',
+                            'frozen_substation_name', 'frozen_assets',
+                        ])
+                        has_boundaries = True
+
+                    if has_boundaries or pb.manual_substations:
+                        created_pbs.append(pb)
+
+        # Rule 3 server-side validation: no substation can appear as both a direct bay and a pocket substation
+        # within the same version (version-wide, all stages).
+        direct_sub_ids = set()
+        pocket_sub_ids = set()
+        for sdata in stages_data:
+            for tb_data in sdata.get('transformer_bays') or []:
+                try:
+                    relay = LoadSheddingRelay.objects.select_related('substation').get(id=tb_data.get('relay'))
+                    if relay.substation:
+                        direct_sub_ids.add(relay.substation.substation_id)
+                except LoadSheddingRelay.DoesNotExist:
+                    pass
+            for pocket_data in sdata.get('computed_pockets') or []:
+                pocket_sub_ids.update(pocket_data.get('manual_substations') or [])
+        overlap = direct_sub_ids & pocket_sub_ids
+        if overlap:
+            return Response(
+                {
+                    'error': 'Rule 3 violation: the following substations appear as both a direct bay and a manual pocket substation: '
+                             + ', '.join(sorted(overlap))
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Compute MW and topology outside the atomic block so exceptions don't mask writes
+        snapshot = NetworkSnapshot.objects.order_by('-timestamp').first()
+        if snapshot:
+            for tb in created_tbs:
+                try:
+                    tb.compute_mw(snapshot)
+                except Exception as e:
+                    logger.warning("bulk_save_stages: compute_mw failed for TB %s: %s", tb.id, e)
+            for pb in created_pbs:
+                try:
+                    pb.compute_topology(snapshot)  # respects manual_substations internally
+                except Exception as e:
+                    logger.warning("bulk_save_stages: compute_topology failed for PB %s: %s", pb.id, e)
+
+        stages = (
+            version.stages
+            .prefetch_related(
+                'transformer_bays__relay__substation',
+                'transformer_bays__transformers',
+                'pocket_bays__boundaries__relay__substation',
+                'pocket_bays__boundaries__branches',
+                'loadsheddingstagesetting_set__setting',
+            )
+            .order_by('stage_number')
+        )
+        return Response(LoadSheddingStageDetailSerializer(stages, many=True).data)
 
     @action(detail=False, methods=['get'], url_path='active-protected-bays')
     def active_protected_bays(self, request):
@@ -558,6 +754,41 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
                     'stages': violating,
                 })
 
+        # --- Rule 3: Direct bay / pocket substation overlap — version-wide, same scheme ---
+        rule3_violations = []
+        # Build direct bay map: substation_id → [stage info]
+        direct_bay_map = {}
+        for stage in subject_version.stages.prefetch_related('transformer_bays__relay__substation').all():
+            for bay in stage.transformer_bays.all():
+                sub_id = bay.relay.substation.substation_id if bay.relay and bay.relay.substation else None
+                if sub_id:
+                    direct_bay_map.setdefault(sub_id, []).append({
+                        'stage_number': stage.stage_number,
+                        'stage_label': stage.label,
+                    })
+
+        # Build pocket substation map: substation_id → [stage info]
+        pocket_sub_map = {}
+        for stage in subject_version.stages.prefetch_related('pocket_bays').all():
+            for pb in stage.pocket_bays.all():
+                cache = pb.topology_cache or {}
+                isolated = cache.get('isolated_substations', [])
+                manual = pb.manual_substations or []
+                for sub_id in set(isolated) | set(manual):
+                    if sub_id:
+                        info = {'stage_number': stage.stage_number, 'stage_label': stage.label}
+                        existing = pocket_sub_map.setdefault(sub_id, [])
+                        if not any(e['stage_number'] == stage.stage_number for e in existing):
+                            existing.append(info)
+
+        for sub_id, direct_stages in direct_bay_map.items():
+            if sub_id in pocket_sub_map:
+                rule3_violations.append({
+                    'substation_id': sub_id,
+                    'direct_stages': direct_stages,
+                    'pocket_stages': pocket_sub_map[sub_id],
+                })
+
         active_version_info = {
             scheme: {
                 'version_id': str(v.id),
@@ -572,10 +803,12 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
             'protected_stage_numbers': sorted(protected_stage_numbers),
             'rule1_violations': rule1_violations,
             'rule2_violations': rule2_violations,
+            'rule3_violations': rule3_violations,
             'summary': {
                 'rule1_count': len(rule1_violations),
                 'rule2_count': len(rule2_violations),
-                'total': len(rule1_violations) + len(rule2_violations),
+                'rule3_count': len(rule3_violations),
+                'total': len(rule1_violations) + len(rule2_violations) + len(rule3_violations),
             },
         })
 
@@ -654,6 +887,81 @@ class LoadSheddingPocketBayViewSet(BaseSheddingViewSet):
         if stage:
             queryset = queryset.filter(stage_id=stage)
         return queryset
+
+    @action(detail=True, methods=['patch'], url_path='manual-override')
+    def manual_override(self, request, pk=None):
+        """
+        Set or clear the manual substation override for a pocket bay.
+        PATCH /api/v1/load-shedding-pocket-bays/{id}/manual-override/
+        Body: { "manual_substations": ["SUB1", "SUB2", ...] }
+              (empty list clears the override and restores topology-based computation)
+        Returns: updated LoadSheddingPocketBaySerializer data.
+        """
+        from core.models import NetworkSnapshot, Substation
+        from api.v1.serializers.shedding import LoadSheddingPocketBaySerializer
+
+        pocket = self.get_object()
+        if pocket.stage.version.status != 'draft':
+            return Response(
+                {"error": "Manual override can only be set on draft versions."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw_ids = request.data.get('manual_substations', [])
+        if not isinstance(raw_ids, list):
+            return Response({"error": "manual_substations must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate all provided IDs exist
+        if raw_ids:
+            existing = set(Substation.objects.filter(substation_id__in=raw_ids).values_list('substation_id', flat=True))
+            unknown = [s for s in raw_ids if s not in existing]
+            if unknown:
+                return Response({"error": f"Unknown substation IDs: {unknown}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        pocket.manual_substations = raw_ids
+        pocket.save(update_fields=['manual_substations'])
+
+        snapshot = NetworkSnapshot.objects.order_by('-timestamp').first()
+        if snapshot:
+            try:
+                pocket.compute_topology(snapshot)
+            except Exception as e:
+                logger.warning("manual_override: compute_topology failed for PB %s: %s", pocket.id, e)
+
+        pocket.refresh_from_db()
+        return Response(LoadSheddingPocketBaySerializer(pocket).data)
+
+    @action(detail=False, methods=['get'], url_path='substation-mw')
+    def substation_mw(self, request):
+        """
+        GET /api/v1/load-shedding-pocket-bays/substation-mw/
+        Returns all substations with their current MW load from the latest snapshot.
+        Used to populate the manual island override picker.
+        """
+        from core.models import NetworkSnapshot, Substation
+        from services.topology_service import TopologyService
+
+        snapshot = NetworkSnapshot.objects.order_by('-timestamp').first()
+        mw_map = {}
+        if snapshot:
+            try:
+                service = TopologyService(snapshot)
+                load_map = service.get_load_transformers_by_substation()
+                mw_map = {sub_id: data.get('total_p_mw', 0.0) for sub_id, data in load_map.items()}
+            except Exception as e:
+                logger.warning("substation_mw: failed to load topology data: %s", e)
+
+        substations = Substation.objects.values('substation_id', 'name', 'voltage').order_by('substation_id')
+        result = [
+            {
+                'substation_id': s['substation_id'],
+                'name': s['name'],
+                'voltage': s['voltage'],
+                'mw': round(mw_map.get(s['substation_id'], 0.0), 2),
+            }
+            for s in substations
+        ]
+        return Response(result)
 
     @action(detail=False, methods=['post'])
     def recompute(self, request):

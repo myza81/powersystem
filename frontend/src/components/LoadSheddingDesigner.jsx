@@ -250,6 +250,141 @@ const DrawerInfoTip = ({ text }) => {
     );
 };
 
+function ManualIslandModal({ pocket, stageIdx, substationMwList, substationMwLoading, onClose, onSave, blockedSubIds }) {
+    const [search, setSearch] = React.useState('');
+    const [selected, setSelected] = React.useState(() => new Set(pocket.manual_substations || []));
+    const [saving, setSaving] = React.useState(false);
+
+    const blocked = blockedSubIds || new Set();
+    const q = search.toLowerCase();
+    const filtered = substationMwList.filter(s =>
+        !q || s.substation_id.toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q)
+    );
+    const totalMwRaw = substationMwList.filter(s => selected.has(s.substation_id)).reduce((sum, s) => sum + (s.mw || 0), 0);
+    const totalMw = totalMwRaw.toFixed(1);
+    const hasBlockedSelection = [...selected].some(id => blocked.has(id));
+
+    const handleSave = async () => {
+        if (hasBlockedSelection) {
+            const blockedSelected = [...selected].filter(id => blocked.has(id));
+            alert(`Blocked: ${blockedSelected.join(', ')} ${blockedSelected.length > 1 ? 'are' : 'is'} already assigned as a direct bay. Rule 3 prevents the same substation from being both a direct bay and a pocket substation. Please deselect them before saving.`);
+            return;
+        }
+        setSaving(true);
+        try {
+            await onSave(pocket, stageIdx, [...selected]);
+        } catch (e) {
+            console.error('Failed to save manual override', e);
+            alert('Failed to save manual override. Please try again.');
+            setSaving(false);
+        }
+    };
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
+        >
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.45)' }} onClick={onClose} />
+            <motion.div
+                initial={{ scale: 0.97, y: 8 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, opacity: 0 }}
+                style={{ position: 'relative', zIndex: 1, background: '#fff', borderRadius: '12px', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', width: '520px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            >
+                {/* Header */}
+                <div style={{ padding: '1.1rem 1.5rem 0.9rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Building2 size={15} style={{ color: '#ea580c' }} />
+                                <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a' }}>Manual Island Override</span>
+                            </div>
+                            <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px' }}>
+                                Select substations that form the isolated island. Their MW load will be aggregated.
+                            </div>
+                        </div>
+                        <button onClick={onClose} style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', color: '#64748b' }}><X size={14} /></button>
+                    </div>
+                </div>
+
+                {/* Search */}
+                <div style={{ padding: '0.75rem 1.5rem', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
+                    <div style={{ position: 'relative' }}>
+                        <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                        <input
+                            autoFocus
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            placeholder="Search by substation ID or name…"
+                            style={{ width: '100%', padding: '0.45rem 0.75rem 0.45rem 2rem', fontSize: '0.75rem', fontFamily: "'Poppins',sans-serif", border: '1px solid #e2e8f0', borderRadius: '7px', outline: 'none', boxSizing: 'border-box' }}
+                        />
+                    </div>
+                </div>
+
+                {/* Substation list */}
+                <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                    {substationMwLoading ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', gap: '0.5rem', color: '#94a3b8', fontSize: '0.75rem' }}>
+                            <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />Loading…
+                        </div>
+                    ) : filtered.length === 0 ? (
+                        <div style={{ padding: '2rem', textAlign: 'center', fontSize: '0.75rem', color: '#94a3b8' }}>No substations found.</div>
+                    ) : filtered.map(s => {
+                        const checked = selected.has(s.substation_id);
+                        const isBlocked = blocked.has(s.substation_id);
+                        return (
+                            <div
+                                key={s.substation_id}
+                                onClick={() => {
+                                    if (isBlocked) return;
+                                    setSelected(prev => { const next = new Set(prev); if (next.has(s.substation_id)) next.delete(s.substation_id); else next.add(s.substation_id); return next; });
+                                }}
+                                title={isBlocked ? `Rule 3: ${s.substation_id} is already a direct bay in another stage` : undefined}
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1.5rem', cursor: isBlocked ? 'not-allowed' : 'pointer', background: isBlocked ? '#fef2f2' : checked ? '#fff7ed' : 'transparent', borderBottom: '1px solid #f8fafc', opacity: isBlocked ? 0.7 : 1 }}
+                                onMouseEnter={e => { if (!checked && !isBlocked) e.currentTarget.style.background = '#f8fafc'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = isBlocked ? '#fef2f2' : checked ? '#fff7ed' : 'transparent'; }}
+                            >
+                                <div style={{ width: '16px', height: '16px', flexShrink: 0, borderRadius: '4px', border: `2px solid ${isBlocked ? '#fca5a5' : checked ? '#ea580c' : '#cbd5e1'}`, background: isBlocked ? '#fef2f2' : checked ? '#ea580c' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    {isBlocked ? <FaLock size={7} color="#ef4444" /> : checked ? <Check size={10} color="#fff" /> : null}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: isBlocked ? '#ef4444' : '#0f172a' }}>{s.substation_id}</div>
+                                    <div style={{ fontSize: '0.62rem', color: isBlocked ? '#fca5a5' : '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {isBlocked ? 'Rule 3: already a direct bay' : `${s.name}${s.voltage ? ` · ${s.voltage}kV` : ''}`}
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 600, color: isBlocked ? '#fca5a5' : s.mw > 0 ? '#0f172a' : '#cbd5e1', flexShrink: 0 }}>
+                                    {s.mw > 0 ? `${Math.round(s.mw)} MW` : '—'}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Footer */}
+                <div style={{ padding: '0.9rem 1.5rem', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexShrink: 0, background: '#f8fafc' }}>
+                    <div style={{ fontSize: '0.72rem', color: '#475569' }}>
+                        <span style={{ fontWeight: 700, color: '#0f172a' }}>{selected.size}</span> selected ·{' '}
+                        <span style={{ fontWeight: 700, color: '#ea580c' }}>{totalMw} MW</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {pocket.manual_override && (
+                            <button onClick={() => setSelected(new Set())} style={{ padding: '0.4rem 0.85rem', fontSize: '0.75rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, background: '#fff', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '7px', cursor: 'pointer' }}>
+                                Clear Override
+                            </button>
+                        )}
+                        <button onClick={onClose} style={{ padding: '0.4rem 0.85rem', fontSize: '0.75rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, background: '#fff', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '7px', cursor: 'pointer' }}>
+                            Cancel
+                        </button>
+                        <button onClick={handleSave} disabled={saving || hasBlockedSelection} style={{ padding: '0.4rem 0.85rem', fontSize: '0.75rem', fontFamily: "'Poppins',sans-serif", fontWeight: 700, background: hasBlockedSelection ? '#ef4444' : '#ea580c', color: '#fff', border: 'none', borderRadius: '7px', cursor: saving || hasBlockedSelection ? 'not-allowed' : 'pointer', opacity: saving || hasBlockedSelection ? 0.6 : 1 }} title={hasBlockedSelection ? 'Deselect Rule 3 blocked substations before saving' : undefined}>
+                            {saving ? 'Saving…' : hasBlockedSelection ? 'Rule 3 Conflict' : 'Save Override'}
+                        </button>
+                    </div>
+                </div>
+            </motion.div>
+        </motion.div>
+    );
+}
+
 const buildPublishedRows = (stageDetails, substations, relays) => {
     const subLookup = {};
     substations.forEach(s => { subLookup[s.substation_id] = s; });
@@ -456,6 +591,9 @@ const LoadSheddingDesigner = () => {
     const [editingBayId, setEditingBayId] = useState(null);
     const [editingPocketId, setEditingPocketId] = useState(null);
     const [hoveredPocketId, setHoveredPocketId] = useState(null);
+    const [manualIslandPocket, setManualIslandPocket] = useState(null); // { pocket, stageIdx }
+    const [substationMwList, setSubstationMwList] = useState([]);
+    const [substationMwLoading, setSubstationMwLoading] = useState(false);
     const [baySortConfig, setBaySortConfig] = useState({ key: null, direction: 'asc' });
 
     // --- Settings Tab State ---
@@ -597,6 +735,41 @@ const LoadSheddingDesigner = () => {
                         });
                     }
                 });
+            });
+        }
+
+        // Rule 3: Direct bay vs pocket substation overlap — version-wide, always error
+        {
+            const directBayMap = {}; // subId → [stage labels]
+            const pocketSubMap = {}; // subId → [stage labels]
+            stages.forEach(stage => {
+                (stage.transformer_bays || []).forEach(bay => {
+                    const subId = bay.relay_substation_id;
+                    if (subId) {
+                        if (!directBayMap[subId]) directBayMap[subId] = [];
+                        directBayMap[subId].push(stage.label);
+                    }
+                });
+                (stage.computed_pockets || []).forEach(pocket => {
+                    [
+                        ...(pocket.pocket_substations || []),
+                        ...(pocket.manual_substations || []),
+                    ].forEach(subId => {
+                        if (!pocketSubMap[subId]) pocketSubMap[subId] = [];
+                        if (!pocketSubMap[subId].includes(stage.label)) pocketSubMap[subId].push(stage.label);
+                    });
+                });
+            });
+            Object.keys(directBayMap).forEach(subId => {
+                if (pocketSubMap[subId]) {
+                    violations.push({
+                        rule: 3,
+                        severity: 'error',
+                        substation_id: subId,
+                        stage_label: directBayMap[subId].join(', '),
+                        message: `${subId} is a direct bay in ${directBayMap[subId].join(', ')} but also appears inside a pocket in ${pocketSubMap[subId].join(', ')}.`,
+                    });
+                }
             });
         }
 
@@ -916,7 +1089,9 @@ const LoadSheddingDesigner = () => {
                                     pocket_substations: cache.isolated_substations || [],
                                     total_p_mw: cache.mw || 0,
                                     substation_mw: cache.substation_mw || {},
-                                    total_q_mvar: 0
+                                    total_q_mvar: 0,
+                                    manual_substations: pb.manual_substations || [],
+                                    manual_override: pb.manual_override || false,
                                 };
                             }),
                             pocket_branches: [] // Do NOT reconstruct from saved pockets — branches are already in computed_pockets[].branches
@@ -1171,6 +1346,20 @@ const LoadSheddingDesigner = () => {
                     return;
                 }
             }
+
+            // Rule 3: Direct/pocket overlap — hard block, version-wide
+            {
+                const conflictingStages = stages.filter(stage =>
+                    (stage.computed_pockets || []).some(p =>
+                        (p.pocket_substations || []).includes(subId) ||
+                        (p.manual_substations || []).includes(subId)
+                    )
+                );
+                if (conflictingStages.length > 0) {
+                    alert(`Blocked: ${subId} already appears inside a pocket in ${conflictingStages.map(s => s.label).join(', ')}. Rule 3 prevents the same substation from being both a direct bay and a pocket substation.`);
+                    return;
+                }
+            }
         }
 
         const activeBays = [...active.transformer_bays, {
@@ -1381,6 +1570,101 @@ const LoadSheddingDesigner = () => {
                 console.error(`Failed to refresh sub data mapping for ${subId}`, err);
             }
         }
+    };
+
+    const handleLockPocket = () => {
+        const pocketSubs = pocketPreview?.pocket_substations || [];
+
+        // Rule 3: block if any isolated pocket substations are already direct bays (version-wide)
+        const directBaySubIds = new Set(
+            stages.flatMap(stage =>
+                (stage.transformer_bays || []).map(bay => bay.relay_substation_id).filter(Boolean)
+            )
+        );
+        const overlapping = pocketSubs.filter(subId => directBaySubIds.has(subId));
+        if (overlapping.length > 0) {
+            const conflictStageLabels = stages
+                .filter(stage => (stage.transformer_bays || []).some(bay => overlapping.includes(bay.relay_substation_id)))
+                .map(s => s.label);
+            alert(`Blocked: ${overlapping.join(', ')} ${overlapping.length > 1 ? 'are' : 'is'} already assigned as a direct bay in ${conflictStageLabels.join(', ')}. Rule 3 prevents the same substation from being both a direct bay and a pocket substation.`);
+            return;
+        }
+
+        const brs2 = stages[activeStageIdx].pocket_branches || [];
+        const gk = (s, v) => `${s}||${v || ''}`;
+        const grps = {};
+        brs2.forEach(fullId => {
+            const pts = fullId.split('_');
+            if (pts.length >= 3) {
+                const ls = pts[0];
+                const vv = substations.find(s => s.substation_id === ls)?.voltage;
+                const k = gk(ls, vv);
+                if (!grps[k]) grps[k] = { subId: ls, voltage: vv ? `${vv}kV` : '', branches: [] };
+                grps[k].branches.push(pts.slice(1).join('_'));
+            }
+        });
+        const np = {
+            id: Date.now(),
+            branches: [...brs2],
+            branchGroups: Object.values(grps),
+            pocket_substations: pocketPreview.pocket_substations || [],
+            pocket_substation_details: pocketPreview.pocket_substation_details || [],
+            total_p_mw: pocketPreview.total_p_mw || 0,
+            substation_mw: (pocketPreview.pocket_substation_details || []).reduce((acc, s) => {
+                acc[s.substation_id] = { total_p_mw: s.p_mw, total_q_mvar: s.q_mvar };
+                return acc;
+            }, {}),
+            total_q_mvar: pocketPreview.total_q_mvar || 0,
+        };
+        const ns = [...stages];
+        const a = { ...ns[activeStageIdx] };
+        a.computed_pockets = [...(a.computed_pockets || []), np];
+        a.pocket_branches = [];
+        ns[activeStageIdx] = a;
+        setStages(ns);
+        setPocketPreview(null);
+    };
+
+    const openManualIslandModal = async (pocket, stageIdx) => {
+        setManualIslandPocket({ pocket, stageIdx });
+        if (substationMwList.length === 0) {
+            setSubstationMwLoading(true);
+            try {
+                const res = await api.get('/load-shedding-pocket-bays/substation-mw/');
+                setSubstationMwList(res.data || []);
+            } catch (e) {
+                console.error('Failed to load substation MW list', e);
+            } finally {
+                setSubstationMwLoading(false);
+            }
+        }
+    };
+
+    const handleSaveManualOverride = async (pocket, stageIdx, selectedList) => {
+        const res = await api.patch(
+            `/load-shedding-pocket-bays/${pocket.id}/manual-override/`,
+            { manual_substations: selectedList }
+        );
+        const updated = res.data;
+        const cache = updated.topology_cache || {};
+        setStages(prev => prev.map((stage, idx) => {
+            if (idx !== stageIdx) return stage;
+            return {
+                ...stage,
+                computed_pockets: (stage.computed_pockets || []).map(p => {
+                    if (p.id !== pocket.id) return p;
+                    return {
+                        ...p,
+                        manual_substations: updated.manual_substations || [],
+                        manual_override: updated.manual_override || false,
+                        pocket_substations: cache.isolated_substations || p.pocket_substations,
+                        total_p_mw: cache.mw ?? p.total_p_mw,
+                        substation_mw: cache.substation_mw || p.substation_mw,
+                    };
+                }),
+            };
+        }));
+        setManualIslandPocket(null);
     };
 
     const handleSaveWorkspace = async () => {
@@ -2823,6 +3107,7 @@ const LoadSheddingDesigner = () => {
                                                                 {isFirst && (
                                                                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '3px' }}>
                                                                         <button onClick={() => setEditingPocketId(isEditingPocket ? null : pocket.id)} title="Edit" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isEditingPocket ? '#f1f5f9' : '#fff', border: `1px solid ${isEditingPocket ? '#cbd5e1' : '#e2e8f0'}`, borderRadius: '4px', cursor: 'pointer', color: isEditingPocket ? '#0f172a' : '#64748b' }} onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#cbd5e1'; }} onMouseLeave={e => { if (!isEditingPocket) { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e2e8f0'; } }}><FiEdit2 size={10} /></button>
+                                                                        {(() => { const isSaved = typeof pocket.id === 'string' && pocket.id.includes('-'); return (<button onClick={() => isSaved && openManualIslandModal(pocket, activeStageIdx)} title={isSaved ? (pocket.manual_override ? 'Edit Manual Island Override' : 'Set Manual Island Override') : 'Save draft first to enable manual override'} style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: pocket.manual_override ? '#fff7ed' : '#fff', border: `1px solid ${pocket.manual_override ? '#fed7aa' : '#e2e8f0'}`, borderRadius: '4px', cursor: isSaved ? 'pointer' : 'not-allowed', color: pocket.manual_override ? '#ea580c' : '#94a3b8', opacity: isSaved ? 1 : 0.4 }} onMouseEnter={e => { if (isSaved) { e.currentTarget.style.background = pocket.manual_override ? '#ffedd5' : '#f8fafc'; } }} onMouseLeave={e => { e.currentTarget.style.background = pocket.manual_override ? '#fff7ed' : '#fff'; }}><Building2 size={10} /></button>); })()}
                                                                         <button onClick={() => { const ns = [...stages]; const a = { ...ns[activeStageIdx] }; a.computed_pockets = (a.computed_pockets || []).filter(c => c.id !== pocket.id); ns[activeStageIdx] = a; setStages(ns); }} title="Remove" style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }} onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}><X size={10} /></button>
                                                                     </div>
                                                                 )}
@@ -2900,7 +3185,7 @@ const LoadSheddingDesigner = () => {
                                         {pocketPreview?.error && <div style={{ margin: '0 0.75rem 0.5rem', fontSize: '0.63rem', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '0.35rem 0.5rem', borderRadius: '5px' }}>{pocketPreview.error}</div>}
                                         {pocketPreview && !pocketPreview.error && (
                                             <div style={{ padding: '0 0.75rem 0.6rem' }}>
-                                                <button onClick={() => { const brs2 = stages[activeStageIdx].pocket_branches || []; const gk = (s, v) => `${s}||${v||''}`; const grps = {}; brs2.forEach(fullId => { const pts = fullId.split('_'); if (pts.length >= 3) { const ls = pts[0]; const vv = substations.find(s => s.substation_id === ls)?.voltage; const k = gk(ls, vv); if (!grps[k]) grps[k] = { subId: ls, voltage: vv ? `${vv}kV` : '', branches: [] }; grps[k].branches.push(pts.slice(1).join('_')); } }); const np = { id: Date.now(), branches: [...brs2], branchGroups: Object.values(grps), pocket_substations: pocketPreview.pocket_substations || [], pocket_substation_details: pocketPreview.pocket_substation_details || [], total_p_mw: pocketPreview.total_p_mw || 0, substation_mw: (pocketPreview.pocket_substation_details || []).reduce((acc, s) => { acc[s.substation_id] = { total_p_mw: s.p_mw, total_q_mvar: s.q_mvar }; return acc; }, {}), total_q_mvar: pocketPreview.total_q_mvar || 0 }; const ns = [...stages]; const a = { ...ns[activeStageIdx] }; a.computed_pockets = [...(a.computed_pockets || []), np]; a.pocket_branches = []; ns[activeStageIdx] = a; setStages(ns); setPocketPreview(null); }} style={{ width: '100%', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#166534', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '5px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'} onMouseLeave={e => e.currentTarget.style.background = '#f0fdf4'}>
+                                                <button onClick={handleLockPocket} style={{ width: '100%', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.68rem', fontFamily: "'Poppins',sans-serif", fontWeight: 600, color: '#166534', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '5px', cursor: 'pointer' }} onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'} onMouseLeave={e => e.currentTarget.style.background = '#f0fdf4'}>
                                                     <FaLock size={10} />
                                                     {pocketPreview.pocket_substations?.length > 0 && !pocketPreview.warning ? `Lock Pocket · ${pocketPreview.pocket_substations.length} sub${pocketPreview.pocket_substations.length > 1 ? 's' : ''}` : 'Lock Anyway'}
                                                 </button>
@@ -3340,8 +3625,11 @@ const LoadSheddingDesigner = () => {
                                         <div style={{ marginBottom: '0.45rem' }}>
                                             <strong>Rule 1 — No Cross-Scheme Overlap:</strong> Substations assigned to UFLS protected stages (active published version) must not appear in any other load shedding scheme (UVLS or EMLS), in any stage. Default protected stages: 1, 2, 3.
                                         </div>
-                                        <div>
+                                        <div style={{ marginBottom: '0.45rem' }}>
                                             <strong>Rule 2 — Critical Substation Protection:</strong> Critical substations must not be assigned to designated restricted stages per scheme type. This ensures critical infrastructure remains available during early-stage load shedding. Default: UFLS stages 1–3 restricted; UVLS and EMLS unrestricted.
+                                        </div>
+                                        <div>
+                                            <strong>Rule 3 — No Direct/Pocket Overlap:</strong> A substation cannot be assigned as both a direct load transformer bay and as an isolated substation inside a pocket bay (topology-derived or manual override) within the same version. Scope: version-wide across all stages. This rule is always a hard block with no configurable enforcement.
                                         </div>
                                     </div>
                                 </div>
@@ -3888,6 +4176,25 @@ const LoadSheddingDesigner = () => {
             onClose={() => setShowPublishModal(false)}
             onSubmit={handleSubmitPublish}
         />
+
+        {/* ── Manual Island Override Modal ─────────────────────────────── */}
+        <AnimatePresence>
+            {manualIslandPocket && (
+                <ManualIslandModal
+                    pocket={manualIslandPocket.pocket}
+                    stageIdx={manualIslandPocket.stageIdx}
+                    substationMwList={substationMwList}
+                    substationMwLoading={substationMwLoading}
+                    onClose={() => setManualIslandPocket(null)}
+                    onSave={handleSaveManualOverride}
+                    blockedSubIds={new Set(
+                        stages.flatMap(stage =>
+                            (stage.transformer_bays || []).map(bay => bay.relay_substation_id).filter(Boolean)
+                        )
+                    )}
+                />
+            )}
+        </AnimatePresence>
         </>
     );
 };

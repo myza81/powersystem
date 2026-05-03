@@ -10,8 +10,8 @@ const AUTO_LV = [275, 132];
 
 const tabButtonStyle = (isActive) => {
     return {
-        padding: '0.75rem 1rem',
-        borderRadius: '8px',
+        padding: '0.5rem 0.75rem',
+        borderRadius: '7px',
         border: 'none',
         background: isActive ? '#047d60' : 'transparent',
         color: isActive ? '#fff' : '#64748b',
@@ -19,9 +19,9 @@ const tabButtonStyle = (isActive) => {
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',
-        gap: '12px',
-        transition: 'all 0.2s ease',
-        fontSize: '0.85rem',
+        gap: '8px',
+        transition: 'all 0.15s ease',
+        fontSize: '0.75rem',
         textAlign: 'left',
         fontFamily: "'Poppins', sans-serif"
     };
@@ -329,6 +329,7 @@ const AutoTransformerRow = ({ asset, onSave, onDelete, onCancel, isNew }) => {
     const [form, setForm] = useState({});
     const [saving, setSaving] = useState(false);
     const [hovering, setHovering] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
 
     useEffect(() => { if (asset) setForm(asset); }, [asset]);
 
@@ -1713,9 +1714,9 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                     exit={{ opacity: 0, scale: 0.95 }}
                     style={{
                         width: '100%',
-                        maxWidth: '1000px',
+                        maxWidth: '1020px',
                         height: '100%',
-                        maxHeight: '60vh',
+                        maxHeight: '90vh',
                         display: 'flex',
                         flexDirection: 'column',
                         padding: 0,
@@ -1728,29 +1729,31 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                 >
                     {/* Header */}
                     <div style={{
-                        padding: '1.25rem 2rem',
+                        padding: '0.9rem 1.5rem',
                         borderBottom: '1px solid #e2e8f0',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        background: '#fff'
+                        background: '#fff',
+                        flexShrink: 0,
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <div style={{
-                                padding: '10px',
-                                background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))',
-                                borderRadius: '10px',
-                                border: '1px solid rgba(4, 125, 96, 0.2)'
+                                width: '34px', height: '34px', flexShrink: 0,
+                                background: 'linear-gradient(135deg, rgba(4,125,96,0.1), rgba(5,150,105,0.05))',
+                                borderRadius: '9px',
+                                border: '1px solid rgba(4,125,96,0.2)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}>
-                                {substation?.substation_id ? <Edit2 size={20} color="#047d60" /> : <MapPin size={20} color="#047d60" />}
+                                {substation?.substation_id ? <Edit2 size={16} color="#047d60" /> : <MapPin size={16} color="#047d60" />}
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 600, color: '#1e293b', letterSpacing: '-0.3px', fontFamily: "'Poppins', sans-serif" }}>
+                                <h2 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1e293b', letterSpacing: '-0.01em', fontFamily: "'Poppins', sans-serif" }}>
                                     {substation?.substation_id ? substation.name : 'Add New Substation'}
                                 </h2>
                                 {substation?.substation_id && (
-                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-                                        <span style={{ fontSize: '0.75rem', color: '#047d60', fontWeight: 700, fontFamily: "'Poppins', sans-serif" }}>
+                                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '3px' }}>
+                                        <span style={{ fontSize: '0.7rem', color: '#047d60', fontWeight: 700, fontFamily: 'monospace' }}>
                                             {substation.substation_id}
                                         </span>
                                         {substation.region && <span style={pillStyle('default', null)}>{substation.region}</span>}
@@ -1760,13 +1763,14 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                             </div>
                         </div>
                         <button onClick={onCancel} style={{
-                            background: '#f1f5f9', border: 'none', color: '#64748b',
-                            cursor: 'pointer', padding: '8px', borderRadius: '8px', transition: 'all 0.2s'
+                            background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#64748b',
+                            cursor: 'pointer', padding: '6px', borderRadius: '7px', transition: 'all 0.15s',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}
                             onMouseEnter={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#334155'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b'; }}
                         >
-                            <X size={20} />
+                            <X size={16} />
                         </button>
                     </div>
 
@@ -1774,14 +1778,16 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
                             {/* Sidebar - Navigation Shortcuts */}
                             <div style={{
-                                width: '240px',
+                                width: '200px',
+                                flexShrink: 0,
                                 background: '#f8fafc',
                                 borderRight: '1px solid #e2e8f0',
                                 display: 'flex',
                                 flexDirection: 'column',
-                                padding: '1rem'
+                                padding: '0.75rem',
+                                overflowY: 'auto',
                             }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                 {[
                                     { id: 'details', label: 'Details & Location', icon: MapPin },
                                     { id: 'load', label: 'Load Transformers', icon: Zap, count: loadTransformers.length },
@@ -1797,25 +1803,30 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                                         disabled={tab.id !== 'details' && !canManageAssets}
                                         style={{
                                             ...tabButtonStyle(false),
-                                            opacity: (tab.id !== 'details' && !canManageAssets) ? 0.5 : 1,
+                                            opacity: (tab.id !== 'details' && !canManageAssets) ? 0.4 : 1,
                                             justifyContent: 'space-between',
                                             background: 'transparent',
-                                            color: '#64748b'
+                                            color: '#475569',
+                                            width: '100%',
                                         }}
+                                        onMouseEnter={e => { if (!(tab.id !== 'details' && !canManageAssets)) e.currentTarget.style.background = '#e8f0fe20'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                            <tab.icon size={16} />
-                                            <span>{tab.label}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                            <tab.icon size={13} style={{ flexShrink: 0 }} />
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tab.label}</span>
                                         </div>
                                         {tab.count !== undefined && (
                                             <span style={{
-                                                fontSize: '0.65rem',
+                                                fontSize: '0.6rem',
                                                 background: '#e2e8f0',
                                                 color: '#64748b',
-                                                padding: '2px 8px',
-                                                borderRadius: '12px',
+                                                padding: '1px 6px',
+                                                borderRadius: '10px',
                                                 fontFamily: 'monospace',
-                                                fontWeight: 700
+                                                fontWeight: 700,
+                                                flexShrink: 0,
+                                                marginLeft: '4px',
                                             }}>
                                                 {tab.count}
                                             </span>
@@ -1825,35 +1836,35 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                             </div>
 
                             {!canManageAssets && (
-                                <div style={{ marginTop: 'auto', padding: '1.25rem', background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                        <AlertTriangle size={14} color="#b45309" />
-                                        <span style={{ fontSize: '0.75rem', color: '#b45309', fontWeight: 600 }}>Assets Locked</span>
+                                <div style={{ marginTop: 'auto', padding: '0.85rem', background: '#fef3c7', borderRadius: '7px', border: '1px solid #fcd34d' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                        <AlertTriangle size={12} color="#b45309" />
+                                        <span style={{ fontSize: '0.68rem', color: '#b45309', fontWeight: 600 }}>Assets Locked</span>
                                     </div>
-                                    <div style={{ fontSize: '0.7rem', color: '#92400e', lineHeight: 1.4 }}>
-                                        Save the substation details first to unlock asset management.
+                                    <div style={{ fontSize: '0.63rem', color: '#92400e', lineHeight: 1.4 }}>
+                                        Save substation details first to unlock asset management.
                                     </div>
                                 </div>
                             )}
                         </div>
 
                         {/* Content Area - Single Page Form */}
-                        <div style={{ flex: 1, padding: '2rem', overflowY: 'auto', background: '#fff' }} className="custom-scrollbar">
+                        <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', background: '#fff' }} className="custom-scrollbar">
                             <form id="substation-form" onSubmit={(e) => {
                                 e.preventDefault();
                                 const { substation_id, sld, sld_file, transformers, incoming_bays, created_at, updated_at, state, region, ...editableData } = formData;
                                 onSave(editableData);
                                 setIsEditingDetails(false);
-                            }} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            }} style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
 
                                 {/* Section: Details & Location */}
                                 <div id="details">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
-                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.65rem' }}>
+                                        <div style={{ width: '26px', height: '26px', borderRadius: '7px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             <MapPin size={15} color="#047d60" />
                                         </div>
                                         <div style={{ flex: 1 }}>
-                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Details & Location</h3>
+                                            <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Details & Location</h3>
                                             <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Substation identity and coordinates</div>
                                         </div>
                                         <button type="button" onClick={() => { if (isEditingDetails) { setFormData(substation || { mnemonic: '', name: '', ownership: 'TNB', voltage: '', grid: '', latitude: '', longitude: '' }); } setIsEditingDetails(!isEditingDetails); }} disabled={loading} style={{
@@ -1947,12 +1958,12 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
                                 {/* Section: Load Transformers */}
                                 <div id="load">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
-                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.65rem' }}>
+                                        <div style={{ width: '26px', height: '26px', borderRadius: '7px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             <Zap size={15} color="#047d60" />
                                         </div>
                                         <div>
-                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Load Transformers</h3>
+                                            <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Load Transformers</h3>
                                             <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>HV/LV step-down units</div>
                                         </div>
                                         <span style={{
@@ -2055,12 +2066,12 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
                                 {/* Section: Interbus Transformers */}
                                 <div id="auto">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
-                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.65rem' }}>
+                                        <div style={{ width: '26px', height: '26px', borderRadius: '7px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             <Database size={15} color="#047d60" />
                                         </div>
                                         <div>
-                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Interbus Transformers</h3>
+                                            <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Interbus Transformers</h3>
                                             <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>HV/HV step-down units</div>
                                         </div>
                                         <span style={{
@@ -2139,12 +2150,12 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
                                 {/* Section: Incoming Branches */}
                                 <div id="branch">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
-                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.65rem' }}>
+                                        <div style={{ width: '26px', height: '26px', borderRadius: '7px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             <GitBranch size={15} color="#047d60" />
                                         </div>
                                         <div>
-                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Incoming Branches</h3>
+                                            <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Incoming Branches</h3>
                                             <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Feeder & line connections</div>
                                         </div>
                                         <span style={{
@@ -2222,12 +2233,12 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
 {/* Section: Load Shedding Relays */}
                                 <div id="lsr">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
-                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.65rem' }}>
+                                        <div style={{ width: '26px', height: '26px', borderRadius: '7px', background: 'rgba(4,125,96,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             <ShieldAlert size={15} color="#047d60" />
                                         </div>
                                         <div>
-                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Load Shedding Relays</h3>
+                                            <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Load Shedding Relays</h3>
                                             <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Site Load Shedding Scheme Matrix</div>
                                         </div>
                                         <span style={{
@@ -2335,12 +2346,12 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
 
                                 {/* Section: Critical Customers */}
                                 <div id="critical">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '0.875rem' }}>
-                                        <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(239,68,68,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.65rem' }}>
+                                        <div style={{ width: '26px', height: '26px', borderRadius: '7px', background: 'rgba(239,68,68,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                             <Users size={15} color="#ef4444" />
                                         </div>
                                         <div>
-                                            <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Critical Substations</h3>
+                                            <h3 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', fontFamily: "'Poppins', sans-serif", letterSpacing: '-0.01em' }}>Critical Substations</h3>
                                             <div style={{ fontSize: '0.62rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '1px' }}>Critical customers supplied by this substation</div>
                                         </div>
                                         <span style={{ fontSize: '0.62rem', fontWeight: 700, background: criticalAssets.length > 0 ? 'rgba(239,68,68,0.08)' : '#f1f5f9', color: criticalAssets.length > 0 ? '#ef4444' : '#94a3b8', padding: '2px 8px', borderRadius: '20px', border: `1px solid ${criticalAssets.length > 0 ? 'rgba(239,68,68,0.2)' : '#e2e8f0'}` }}>
@@ -2436,17 +2447,18 @@ const SubstationForm = ({ substation, onSave, onCancel, onSLDUpload, onSubstatio
                         </div>
                         {/* Footer — outside scroll area, always pinned to bottom */}
                         </div>
-                        <div style={{ flexShrink: 0, padding: '0.75rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid #e2e8f0', background: '#fff' }}>
+                        <div style={{ flexShrink: 0, padding: '0.65rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
                             <button type="button" onClick={onCancel} style={{
-                                padding: '0.5rem 1rem', borderRadius: '0.5rem', fontSize: '0.8rem',
-                                background: 'transparent', border: '1px solid #e2e8f0', color: '#64748b',
-                                fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s'
+                                padding: '0.42rem 1rem', borderRadius: '7px', fontSize: '0.75rem',
+                                background: '#fff', border: '1px solid #e2e8f0', color: '#64748b',
+                                fontWeight: 500, cursor: 'pointer', transition: 'all 0.15s',
+                                fontFamily: "'Poppins', sans-serif",
                             }}>
                                 Cancel
                             </button>
-                            <button type="submit" form="substation-form" disabled={loading} className="btn-primary" style={{ padding: '0.5rem 1.25rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px', opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
-                                {loading ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-                                {loading ? 'Saving...' : (substation?.substation_id ? 'Save Metadata' : 'Create Substation')}
+                            <button type="submit" form="substation-form" disabled={loading} className="btn-primary" style={{ padding: '0.42rem 1.1rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '5px', opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+                                {loading ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
+                                {loading ? 'Saving…' : (substation?.substation_id ? 'Save Metadata' : 'Create Substation')}
                             </button>
                         </div>
                     </div>
