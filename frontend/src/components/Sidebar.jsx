@@ -9,6 +9,7 @@ import {
     Boxes,
     Building2,
     ShieldAlert,
+    Zap,
     Unplug,
     MonitorPlay,
     PencilRuler,
@@ -39,6 +40,7 @@ const NAV_GROUPS = [
         items: [
             { id: 'list',                  label: 'Substation',           icon: Building2 },
             { id: 'critical-substations',  label: 'Critical Substations', icon: ShieldAlert },
+            { id: 'ls-relay',              label: 'LS Relay',             icon: Zap },
         ],
     },
     {

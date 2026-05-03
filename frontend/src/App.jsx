@@ -20,6 +20,7 @@ import SnapshotManager from './components/SnapshotManager';
 import LoadSheddingSchemeReviewer from './components/LoadSheddingSchemeReviewer';
 import LoadSheddingDesigner from './components/LoadSheddingDesigner';
 import CriticalSubstationManager from './components/CriticalSubstationManager';
+import LSRelayManager from './components/LSRelayManager';
 import SubstationProfileModal from './components/SubstationProfileModal';
 import api from './api';
 import LoginForm from './components/LoginForm';
@@ -418,7 +419,7 @@ const App = () => {
                         </motion.div>
                     )}
 
-                    {effectiveView !== 'critical-substations' && effectiveView !== 'load-shedding-designer' && effectiveView !== 'dashboard' && effectiveView !== 'list' && effectiveView !== 'snapshots' && effectiveView !== 'load-shedding-viewer' && (
+                    {effectiveView !== 'critical-substations' && effectiveView !== 'ls-relay' && effectiveView !== 'load-shedding-designer' && effectiveView !== 'dashboard' && effectiveView !== 'list' && effectiveView !== 'snapshots' && effectiveView !== 'load-shedding-viewer' && (
                         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                                 <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>
@@ -654,6 +655,10 @@ const App = () => {
 
                 {effectiveView === 'load-shedding-designer' && (
                     <LoadSheddingDesigner />
+                )}
+
+                {effectiveView === 'ls-relay' && (
+                    <LSRelayManager isStaff={isStaff} />
                 )}
 
                 {effectiveView === 'critical-substations' && (
