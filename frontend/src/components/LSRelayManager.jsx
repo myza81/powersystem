@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    BarChart2, Building2, FileSpreadsheet, Zap,
+    BarChart2, Building2, FileSpreadsheet,
     ChevronDown, ChevronUp, Search, X, Upload,
-    CheckCircle, XCircle, Loader2,
+    CheckCircle, XCircle,
 } from 'lucide-react';
+import { LuCircuitBoard } from 'react-icons/lu';
+import { CardLoader } from './Loader';
 import api from '../api';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -556,12 +558,7 @@ const LSRelayManager = ({ isStaff }) => {
     const totalInactiveRelays = relays.length - totalActiveRelays;
 
     if (loading) {
-        return (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px', gap: '0.5rem', color: 'var(--text-2)' }}>
-                <Loader2 size={20} className="spin" />
-                <span>Loading relay data…</span>
-            </div>
-        );
+        return <CardLoader show message="Loading relay data…" />;
     }
 
     return (
@@ -569,7 +566,7 @@ const LSRelayManager = ({ isStaff }) => {
             {/* Page header */}
             <div style={{ marginBottom: '1.25rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.2rem' }}>
-                    <Zap size={20} color="var(--accent)" />
+                    <LuCircuitBoard size={20} color="var(--accent)" />
                     <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>LS Relay Management</h2>
                 </div>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-2)', margin: 0 }}>

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutGrid, BarChart2, ShieldAlert, Info } from 'lucide-react';
 import api from '../api';
+import { CardLoader } from './Loader';
 import CriticalSubstationCard from './CriticalSubstationCard';
 import CriticalSubstationListRow from './CriticalSubstationListRow';
 import SubstationFilter from './SubstationFilter';
@@ -225,6 +226,8 @@ const CriticalSubstationManager = ({ isStaff, onEditSubstation }) => {
         transition: 'all 0.15s',
         whiteSpace: 'nowrap',
     });
+
+    if (loading) return <CardLoader show message="Loading critical substations…" />;
 
     return (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>

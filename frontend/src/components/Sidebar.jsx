@@ -9,7 +9,6 @@ import {
     Boxes,
     Building2,
     ShieldAlert,
-    Zap,
     Unplug,
     MonitorPlay,
     PencilRuler,
@@ -20,6 +19,7 @@ import {
     User,
     Ghost,
 } from 'lucide-react';
+import { LuCircuitBoard } from 'react-icons/lu';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // ── Navigation structure ────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ const NAV_GROUPS = [
         items: [
             { id: 'list',                  label: 'Substation',           icon: Building2 },
             { id: 'critical-substations',  label: 'Critical Substations', icon: ShieldAlert },
-            { id: 'ls-relay',              label: 'LS Relay',             icon: Zap },
+            { id: 'ls-relay',              label: 'LS Relay',             icon: LuCircuitBoard },
         ],
     },
     {
