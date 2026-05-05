@@ -536,14 +536,14 @@ const CriticalSubstationManager = ({ isStaff, onEditSubstation }) => {
                                             <div>
                                                 {panelTitle('Load Shedding Scheme — Available Relay Substations by Region')}
                                                 <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '-0.5rem', marginBottom: '0.85rem' }}>
-                                                    Relay-installed substations minus those identified as critical — available headroom for load shedding design
+                                                    Active-relay substations minus critical substations
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
                                                 {[
                                                     { label: 'Total Relay Subs', value: totalRelay, color: '#0f172a', hint: 'Total number of substations that have an active relay installed in the network.' },
                                                     { label: 'Critical (excluded)', value: totalCritRelay, color: '#ef4444', hint: "This metric only counts substations with an ACTIVE RELAY installed. It differs from 'Regional Coverage - Critical vs Total Substations' which counts ALL critical substations (with or without relay)." },
-                                                    { label: 'Available', value: totalAvailable, color: '#047d60', hint: 'Total relay substations minus those that are critical.' },
+                                                    { label: 'Available', value: totalAvailable, color: '#047d60', hint: 'Active-relay substations minus critical substations. Existing scheme assignments are not excluded in this panel.' },
                                                 ].map(({ label, value, color, hint }) => (
                                                     <div key={label} style={{ textAlign: 'center', padding: '0.5rem 0.9rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', minWidth: '80px', position: 'relative' }}>
                                                         <div style={{ fontSize: '1.3rem', fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
