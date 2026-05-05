@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     BarChart2, Building2, FileSpreadsheet,
-    ChevronDown, ChevronUp, Search, X, Upload,
+    ChevronDown, ChevronUp, Info, Upload,
     CheckCircle, XCircle,
 } from 'lucide-react';
 import { LuCircuitBoard } from 'react-icons/lu';
 import { CardLoader } from './Loader';
+import SubstationFilter from './SubstationFilter';
 import api from '../api';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -17,81 +18,203 @@ const TABS = [
     { id: 'scanner', label: 'Scanner', icon: FileSpreadsheet },
 ];
 
+const DEFAULT_FILTERS = {
+    region: 'All',
+    grid: 'All',
+    state: 'All',
+    voltage: 'All',
+    ownership: 'All',
+    search: '',
+    hasRelay: 'All',
+    commissionYear: 'All',
+    transformerYear: 'All',
+    schemeType: 'All',
+};
+
 const thStyle = {
-    padding: '0.55rem 0.75rem',
+    padding: '0.65rem 0.85rem',
     textAlign: 'left',
-    fontWeight: 600,
-    fontSize: '0.78rem',
-    color: 'var(--text-2)',
+    fontWeight: 700,
+    fontSize: 'var(--text-xs)',
+    color: 'var(--text-3)',
     whiteSpace: 'nowrap',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
 };
 const tdStyle = {
-    padding: '0.55rem 0.75rem',
+    padding: '0.65rem 0.85rem',
     color: 'var(--text-1)',
     verticalAlign: 'middle',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-const SelectFilter = ({ value, onChange, options, label }) => (
-    <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        style={{
-            padding: '0.35rem 0.6rem',
-            border: '1px solid var(--border)',
-            borderRadius: '6px',
-            background: 'var(--surface-1)',
-            color: 'var(--text-1)',
-            fontSize: '0.8rem',
-        }}
-    >
-        {options.map(o => <option key={o} value={o}>{o === 'All' ? `All ${label}` : o}</option>)}
-    </select>
-);
+const formatMw = (value) => {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return 'N/A';
+    return `${Number(value).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} MW`;
+};
+
+const sumMw = (items) => items.reduce((sum, item) => {
+    if (item.current_mw === null || item.current_mw === undefined) return sum;
+    const mw = Number(item.current_mw);
+    return Number.isFinite(mw) ? sum + mw : sum;
+}, 0);
+
+const InfoTooltip = ({ text }) => {
+    const [position, setPosition] = useState(null);
+
+    const show = (event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        setPosition({
+            top: rect.top - 8,
+            left: rect.left + rect.width / 2,
+        });
+    };
+
+    return (
+        <span
+            tabIndex={0}
+            onMouseEnter={show}
+            onMouseLeave={() => setPosition(null)}
+            onFocus={show}
+            onBlur={() => setPosition(null)}
+            style={{ display: 'inline-flex', alignItems: 'center', cursor: 'help', flexShrink: 0 }}
+        >
+            <Info size={12} strokeWidth={2.4} color="var(--text-3)" />
+            {position && (
+                <span style={{
+                    position: 'fixed',
+                    top: position.top,
+                    left: position.left,
+                    transform: 'translate(-50%, -100%)',
+                    width: 235,
+                    padding: '7px 10px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'rgba(15, 23, 42, 0.96)',
+                    color: '#f8fafc',
+                    boxShadow: 'var(--shadow-lg)',
+                    fontSize: '0.7rem',
+                    fontWeight: 500,
+                    lineHeight: 1.45,
+                    letterSpacing: 0,
+                    textTransform: 'none',
+                    whiteSpace: 'normal',
+                    textAlign: 'left',
+                    zIndex: 10000,
+                    pointerEvents: 'none',
+                }}>
+                    {text}
+                </span>
+            )}
+        </span>
+    );
+};
+
+const aggregateRelayMw = (relaysForSubstation) => {
+    const seen = new Set();
+    let total = 0;
+
+    relaysForSubstation.forEach(relay => {
+        [
+            ...(relay.load_transformers || []).map(asset => ({ asset, type: 'LT' })),
+            ...(relay.auto_transformers || []).map(asset => ({ asset, type: 'AT' })),
+        ].forEach(({ asset, type }, index) => {
+            const key = `${type}-${asset.id || asset.bay_id || asset.display_name || asset.transformer_no || `${relay.id || 'relay'}-${index}`}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+
+            const mw = Number(asset.current_mw);
+            if (Number.isFinite(mw)) total += mw;
+        });
+    });
+
+    return total;
+};
+
+const assetLabel = (asset, type) => {
+    if (asset.display_name) return asset.display_name;
+    if (type === 'LT') return `T${asset.transformer_no ?? '?'}`;
+    if (type === 'AT') return `AT${asset.transformer_no ?? '?'}`;
+    if (type === 'IB') {
+        const toSub = asset.to_substation_detail?.substation_id || asset.to_substation || 'Unknown';
+        return `${toSub} Cct ${asset.ckt_id || '-'}`;
+    }
+    return asset.bay_id || 'Asset';
+};
 
 const RelayRow = ({ relay }) => {
-    const ltCount = (relay.load_transformers || []).length;
-    const ibCount = (relay.incoming_branches || []).length;
-    const atCount = (relay.auto_transformers || []).length;
+    const loadTransformers = relay.load_transformers || [];
+    const incomingBranches = relay.incoming_branches || [];
+    const autoTransformers = relay.auto_transformers || [];
+    const rows = [
+        ...loadTransformers.map(asset => ({ asset, type: 'LT' })),
+        ...incomingBranches.map(asset => ({ asset, type: 'IB' })),
+        ...autoTransformers.map(asset => ({ asset, type: 'AT' })),
+    ];
+    const totalMw = sumMw([...loadTransformers, ...autoTransformers]);
     return (
-        <div style={{
-            display: 'flex', alignItems: 'center', gap: '0.6rem',
-            padding: '0.45rem 0.75rem',
-            background: 'var(--surface-2)',
-            borderRadius: '6px',
-            border: '1px solid var(--border)',
-            fontSize: '0.8rem',
-        }}>
-            {relay.is_active
-                ? <CheckCircle size={13} color="#22c55e" />
-                : <XCircle size={13} color="#94a3b8" />}
-            <span style={{ fontWeight: 600, color: 'var(--text-1)' }}>
-                {relay.relay_name || `Relay #${relay.id}`}
-            </span>
-            {relay.target_voltage != null && (
-                <span style={{ color: 'var(--text-2)', fontSize: '0.73rem' }}>
-                    {relay.target_voltage} Hz
-                </span>
-            )}
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
-                {ltCount > 0 && <span style={{ fontSize: '0.7rem', color: 'var(--text-2)' }}>{ltCount} LT</span>}
-                {ibCount > 0 && <span style={{ fontSize: '0.7rem', color: 'var(--text-2)' }}>{ibCount} IB</span>}
-                {atCount > 0 && <span style={{ fontSize: '0.7rem', color: 'var(--text-2)' }}>{atCount} AT</span>}
-            </div>
-            {relay.notes && (
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-2)', fontStyle: 'italic', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {relay.notes}
-                </span>
-            )}
+        <div style={{ overflowX: 'auto', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-card)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
+                <thead>
+                    <tr style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border-default)' }}>
+                        <th style={thStyle}>Voltage Level</th>
+                        <th style={thStyle}>LT / IB Details</th>
+                        <th style={{ ...thStyle, textAlign: 'right' }}>MW</th>
+                        <th style={{ ...thStyle, textAlign: 'right' }}>Aggregate MW</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.map(({ asset, type }, index) => (
+                        <tr key={`${type}-${asset.id || asset.bay_id}`} style={{ borderBottom: '1px solid var(--border-default)' }}>
+                            {index === 0 && (
+                                <td rowSpan={rows.length} style={{ ...tdStyle, verticalAlign: 'top' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                        {relay.is_active
+                                            ? <CheckCircle size={13} color="#22c55e" />
+                                            : <XCircle size={13} color="#94a3b8" />}
+                                        <span style={{ fontWeight: 700 }}>{relay.target_voltage != null ? `${relay.target_voltage} kV` : 'Unknown'}</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.68rem', color: 'var(--text-2)', marginTop: '0.25rem' }}>
+                                        {relay.relay_name || `Relay #${relay.id}`}
+                                    </div>
+                                </td>
+                            )}
+                            <td style={tdStyle}>
+                                <div style={{ fontWeight: 700 }}>{assetLabel(asset, type)}</div>
+                                <div style={{ fontSize: '0.66rem', color: 'var(--text-3)', marginTop: 1 }}>
+                                    {type} · {asset.bay_id || asset.to_substation_detail?.name || '-'}
+                                </div>
+                            </td>
+                            <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: type === 'IB' ? 'var(--text-3)' : 'var(--brand-mid)' }}>
+                                {formatMw(asset.current_mw)}
+                            </td>
+                            {index === 0 && (
+                                <td rowSpan={rows.length} style={{ ...tdStyle, textAlign: 'right', verticalAlign: 'top', fontWeight: 800, color: 'var(--brand-dark)' }}>
+                                    {formatMw(totalMw)}
+                                    <div style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-3)', marginTop: 2 }}>
+                                        LT/AT only
+                                    </div>
+                                </td>
+                            )}
+                        </tr>
+                    ))}
+                    {rows.length === 0 && (
+                        <tr>
+                            <td colSpan={4} style={{ padding: '0.9rem', textAlign: 'center', color: 'var(--text-2)' }}>
+                                No LT or IB details configured.
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
         </div>
     );
 };
 
 const BreakdownTable = ({ data, columns, keyFn }) => (
-    <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '0.5rem' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+    <div style={{ overflowX: 'auto', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', marginBottom: '0.5rem', background: 'var(--surface-card)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
             <thead>
-                <tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                <tr style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border-default)' }}>
                     {columns.map(c => (
                         <th key={c.key} style={{ ...thStyle, textAlign: c.right ? 'right' : 'left' }}>{c.label}</th>
                     ))}
@@ -99,7 +222,7 @@ const BreakdownTable = ({ data, columns, keyFn }) => (
             </thead>
             <tbody>
                 {data.map(row => (
-                    <tr key={keyFn(row)} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <tr key={keyFn(row)} style={{ borderBottom: '1px solid var(--border-default)' }}>
                         {columns.map(c => (
                             <td key={c.key} style={{ ...tdStyle, textAlign: c.right ? 'right' : 'left' }}>
                                 {c.render ? c.render(row) : row[c.key]}
@@ -122,53 +245,65 @@ const BreakdownTable = ({ data, columns, keyFn }) => (
 const makeGroupCols = (firstKey, firstLabel) => [
     { key: firstKey, label: firstLabel },
     { key: 'subs', label: 'Substations', right: true },
-    { key: 'totalRelays', label: 'Total Relays', right: true },
     {
-        key: 'activeRelays', label: 'Active', right: true,
+        key: 'assigned', label: 'Assigned', right: true,
+        render: row => <span style={{ fontWeight: 600, color: row.assigned > 0 ? 'var(--brand-mid)' : 'var(--text-3)' }}>{row.assigned}</span>,
+    },
+    {
+        key: 'notAssigned', label: 'Not Assigned', right: true,
+        render: row => {
+            const n = row.subs - row.assigned;
+            return <span style={{ fontWeight: 600, color: n > 0 ? '#f59e0b' : 'var(--text-3)' }}>{n}</span>;
+        },
+    },
+    {
+        key: 'notAssignedMw',
+        label: 'Not Assigned (MW)',
+        right: true,
         render: row => (
-            <span style={{
-                fontWeight: 600,
-                color: row.activeRelays === row.totalRelays ? '#22c55e'
-                    : row.activeRelays > 0 ? '#f59e0b' : '#94a3b8',
-            }}>
-                {row.activeRelays}
+            <span style={{ fontWeight: 700, color: row.notAssignedMw > 0 ? '#b45309' : 'var(--text-3)' }}>
+                {formatMw(row.notAssignedMw)}
             </span>
         ),
     },
     {
-        key: 'inactive', label: 'Inactive', right: true,
-        render: row => {
-            const n = row.totalRelays - row.activeRelays;
-            return <span style={{ color: n > 0 ? '#ef4444' : '#94a3b8' }}>{n}</span>;
-        },
+        key: 'availableUnassigned',
+        label: (
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem' }}>
+                Available Unassigned
+                <InfoTooltip text="Substations without scheme assignment, excluding critical substations." />
+            </span>
+        ),
+        right: true,
+        render: row => (
+            <span style={{ fontWeight: 600, color: row.availableUnassigned > 0 ? '#0f766e' : 'var(--text-3)' }}>
+                {row.availableUnassigned}
+            </span>
+        ),
+    },
+    {
+        key: 'availableUnassignedMw',
+        label: (
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem' }}>
+                Available Unassigned (MW)
+                <InfoTooltip text="Aggregate LT/AT MW from available unassigned substations." />
+            </span>
+        ),
+        right: true,
+        render: row => (
+            <span style={{ fontWeight: 700, color: row.availableUnassignedMw > 0 ? 'var(--brand-dark)' : 'var(--text-3)' }}>
+                {formatMw(row.availableUnassignedMw)}
+            </span>
+        ),
     },
 ];
-
-const StatCard = ({ label, value, sub, color }) => (
-    <div style={{
-        padding: '1rem 1.25rem',
-        background: 'var(--surface-1)',
-        borderRadius: '8px',
-        border: '1px solid var(--border)',
-        flex: '1 1 140px',
-        minWidth: '120px',
-    }}>
-        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            {label}
-        </div>
-        <div style={{ fontSize: '1.7rem', fontWeight: 700, color: color || 'var(--text-1)', lineHeight: 1 }}>
-            {value}
-        </div>
-        {sub && <div style={{ fontSize: '0.73rem', color: 'var(--text-2)', marginTop: '0.2rem' }}>{sub}</div>}
-    </div>
-);
 
 const SectionHeader = ({ title }) => (
     <div style={{
         fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-2)',
         margin: '1.5rem 0 0.6rem',
         textTransform: 'uppercase', letterSpacing: '0.07em',
-        borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem',
+        borderBottom: '1px solid var(--border-default)', paddingBottom: '0.35rem',
     }}>
         {title}
     </div>
@@ -177,88 +312,50 @@ const SectionHeader = ({ title }) => (
 // ── Tab: Population ──────────────────────────────────────────────────────────
 const PopulationTab = ({
     filteredSubs, relayMap,
-    search, setSearch,
-    regionFilter, setRegionFilter,
-    gridFilter, setGridFilter,
-    voltageFilter, setVoltageFilter,
-    regions, grids, voltages,
     expandedSub, setExpandedSub,
-    totalCount,
 }) => (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
-            <div style={{ position: 'relative', flex: '1 1 200px' }}>
-                <Search size={13} style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-2)', pointerEvents: 'none' }} />
-                <input
-                    type="text"
-                    placeholder="Search by ID, mnemonic or name…"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    style={{
-                        width: '100%',
-                        padding: '0.38rem 1.8rem 0.38rem 2rem',
-                        border: '1px solid var(--border)', borderRadius: '6px',
-                        background: 'var(--surface-1)', color: 'var(--text-1)',
-                        fontSize: '0.8rem', boxSizing: 'border-box',
-                    }}
-                />
-                {search && (
-                    <button
-                        onClick={() => setSearch('')}
-                        style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-2)', padding: 0 }}
-                    >
-                        <X size={12} />
-                    </button>
-                )}
-            </div>
-            <SelectFilter value={regionFilter} onChange={setRegionFilter} options={regions} label="Regions" />
-            <SelectFilter value={gridFilter} onChange={setGridFilter} options={grids} label="Grids" />
-            <SelectFilter value={voltageFilter} onChange={setVoltageFilter} options={voltages} label="Voltages" />
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-2)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
-                {filteredSubs.length} / {totalCount} substations
-            </span>
-        </div>
-
-        {/* Table */}
-        <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+        <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', background: 'var(--surface-card)', boxShadow: 'var(--shadow-sm)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                    <tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                    <tr style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border-default)' }}>
                         <th style={thStyle}>Sub ID</th>
                         <th style={thStyle}>Name</th>
                         <th style={{ ...thStyle, textAlign: 'center' }}>kV</th>
                         <th style={thStyle}>Region</th>
                         <th style={thStyle}>Grid</th>
-                        <th style={{ ...thStyle, textAlign: 'center' }}>Relays</th>
-                        <th style={{ ...thStyle, textAlign: 'center' }}>Active</th>
+                        <th style={{ ...thStyle, textAlign: 'center' }}>Voltage Assignments</th>
                         <th style={thStyle}>Scheme Types</th>
                     </tr>
                 </thead>
                 <tbody>
                     {filteredSubs.map(sub => {
                         const rels = relayMap[sub.substation_id] || [];
-                        const activeCount = rels.filter(r => r.is_active).length;
                         const isExpanded = expandedSub === sub.substation_id;
                         return (
                             <React.Fragment key={sub.substation_id}>
                                 <tr
                                     onClick={() => setExpandedSub(isExpanded ? null : sub.substation_id)}
                                     style={{
-                                        borderBottom: isExpanded ? 'none' : '1px solid var(--border)',
+                                        borderBottom: isExpanded ? 'none' : '1px solid var(--border-default)',
                                         cursor: 'pointer',
-                                        background: isExpanded ? 'var(--surface-2)' : 'transparent',
+                                        background: isExpanded ? 'rgba(4,125,96,0.05)' : 'transparent',
                                         transition: 'background 0.1s',
                                     }}
-                                    onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'var(--surface-1)'; }}
+                                    onMouseEnter={e => { if (!isExpanded) e.currentTarget.style.background = 'var(--surface-hover)'; }}
                                     onMouseLeave={e => { if (!isExpanded) e.currentTarget.style.background = 'transparent'; }}
                                 >
                                     <td style={tdStyle}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                             {isExpanded
-                                                ? <ChevronUp size={13} color="var(--accent)" />
+                                                ? <ChevronUp size={13} color="var(--brand-mid)" />
                                                 : <ChevronDown size={13} color="var(--text-2)" />}
                                             <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{sub.substation_id}</span>
+                                            {sub.is_critical && (
+                                                <span title="Critical substation" style={{ display: 'inline-flex', alignItems: 'center', color: '#dc2626' }}>
+                                                    <Info size={13} strokeWidth={2.4} />
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
                                     <td style={tdStyle}>
@@ -269,19 +366,14 @@ const PopulationTab = ({
                                     <td style={{ ...tdStyle, color: 'var(--text-2)' }}>{sub.region || '—'}</td>
                                     <td style={{ ...tdStyle, color: 'var(--text-2)' }}>{sub.grid || '—'}</td>
                                     <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 600 }}>{rels.length}</td>
-                                    <td style={{ ...tdStyle, textAlign: 'center' }}>
-                                        <span style={{ fontWeight: 600, color: activeCount > 0 ? '#22c55e' : '#94a3b8' }}>
-                                            {activeCount}
-                                        </span>
-                                    </td>
                                     <td style={tdStyle}>
                                         <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
                                             {(sub.relay_scheme_types || []).map(t => (
                                                 <span key={t} style={{
                                                     padding: '1px 6px', borderRadius: '4px',
                                                     fontSize: '0.68rem', fontWeight: 600,
-                                                    background: 'var(--accent-bg, #3b82f622)',
-                                                    color: 'var(--accent)',
+                                                    background: 'rgba(4,125,96,0.08)',
+                                                    color: 'var(--brand-dark)',
                                                 }}>{t}</span>
                                             ))}
                                         </div>
@@ -291,10 +383,10 @@ const PopulationTab = ({
                                 {/* Expanded relay detail */}
                                 {isExpanded && (
                                     <tr>
-                                        <td colSpan={8} style={{
+                                        <td colSpan={7} style={{
                                             padding: '0.6rem 1rem 0.75rem 2.5rem',
-                                            background: 'var(--surface-2)',
-                                            borderBottom: '1px solid var(--border)',
+                                            background: 'rgba(4,125,96,0.05)',
+                                            borderBottom: '1px solid var(--border-default)',
                                         }}>
                                             <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>
                                                 Relay Details
@@ -310,7 +402,7 @@ const PopulationTab = ({
                     })}
                     {filteredSubs.length === 0 && (
                         <tr>
-                            <td colSpan={8} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-2)' }}>
+                            <td colSpan={7} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-2)' }}>
                                 No substations match the current filters.
                             </td>
                         </tr>
@@ -322,27 +414,8 @@ const PopulationTab = ({
 );
 
 // ── Tab: Analytics ───────────────────────────────────────────────────────────
-const AnalyticsTab = ({ subsWithRelays, relays, totalActiveRelays, totalInactiveRelays, byRegion, byGrid, byVoltage, bySchemeType }) => {
-    const totalRelays = relays.length;
-    const activeRatio = totalRelays > 0 ? Math.round((totalActiveRelays / totalRelays) * 100) : 0;
-
-    return (
-        <div style={{ overflowY: 'auto', flex: 1, paddingRight: '0.25rem' }}>
-            {/* Summary cards */}
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <StatCard label="Substations with Relays" value={subsWithRelays.length} />
-                <StatCard label="Total Relays" value={totalRelays} />
-                <StatCard
-                    label="Active Relays" value={totalActiveRelays}
-                    sub={`${activeRatio}% of total`}
-                    color="#22c55e"
-                />
-                <StatCard
-                    label="Inactive Relays" value={totalInactiveRelays}
-                    color={totalInactiveRelays > 0 ? '#f59e0b' : 'var(--text-1)'}
-                />
-            </div>
-
+const AnalyticsTab = ({ byRegion, byGrid, byVoltage, bySchemeType }) => (
+    <div style={{ overflowY: 'auto', flex: 1, paddingRight: '0.25rem' }}>
             <SectionHeader title="By Region" />
             <BreakdownTable
                 data={byRegion}
@@ -380,21 +453,20 @@ const AnalyticsTab = ({ subsWithRelays, relays, totalActiveRelays, totalInactive
                     />
                 </>
             )}
-        </div>
-    );
-};
+    </div>
+);
 
 // ── Tab: Scanner ─────────────────────────────────────────────────────────────
 const ScannerTab = () => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, minHeight: '260px' }}>
         <div style={{
-            border: '2px dashed var(--border)',
-            borderRadius: '12px',
+            border: '2px dashed var(--border-default)',
+            borderRadius: 'var(--radius-md)',
             padding: '3rem 4rem',
             textAlign: 'center',
-            background: 'var(--surface-1)',
+            background: 'var(--surface-card)',
         }}>
-            <Upload size={38} color="var(--border)" style={{ marginBottom: '0.9rem' }} />
+            <Upload size={38} color="var(--border-strong)" style={{ marginBottom: '0.9rem' }} />
             <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-1)', marginBottom: '0.35rem' }}>
                 Excel File Scanner
             </div>
@@ -425,11 +497,7 @@ const LSRelayManager = ({ isStaff }) => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('population');
 
-    // Population filters
-    const [search, setSearch] = useState('');
-    const [regionFilter, setRegionFilter] = useState('All');
-    const [gridFilter, setGridFilter] = useState('All');
-    const [voltageFilter, setVoltageFilter] = useState('All');
+    const [filterCriteria, setFilterCriteria] = useState(DEFAULT_FILTERS);
     const [expandedSub, setExpandedSub] = useState(null);
 
     useEffect(() => {
@@ -461,50 +529,46 @@ const LSRelayManager = ({ isStaff }) => {
         substations.filter(s => (relayMap[s.substation_id]?.length ?? 0) > 0),
     [substations, relayMap]);
 
-    // Filter options (derived from substations-with-relays only)
-    const regions = useMemo(() => {
-        const set = new Set(subsWithRelays.map(s => s.region).filter(Boolean));
-        return ['All', ...[...set].sort()];
-    }, [subsWithRelays]);
-
-    const grids = useMemo(() => {
-        const set = new Set(subsWithRelays.map(s => s.grid).filter(Boolean));
-        return ['All', ...[...set].sort()];
-    }, [subsWithRelays]);
-
-    const voltages = useMemo(() => {
-        const vs = [...new Set(subsWithRelays.map(s => String(s.voltage)).filter(v => v && v !== 'null'))];
-        vs.sort((a, b) => {
-            const ai = VOLTAGE_ORDER.indexOf(Number(a));
-            const bi = VOLTAGE_ORDER.indexOf(Number(b));
-            return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-        });
-        return ['All', ...vs];
+    const schemeTypeOptions = useMemo(() => {
+        const types = new Set();
+        subsWithRelays.forEach(s => (s.relay_scheme_types || []).forEach(type => types.add(type)));
+        return ['All', 'None', ...[...types].sort()];
     }, [subsWithRelays]);
 
     const filteredSubs = useMemo(() => {
+        const { region, grid, state, voltage, search, schemeType } = filterCriteria;
         const q = search.toLowerCase();
         return subsWithRelays.filter(s => {
-            if (regionFilter !== 'All' && s.region !== regionFilter) return false;
-            if (gridFilter !== 'All' && s.grid !== gridFilter) return false;
-            if (voltageFilter !== 'All' && String(s.voltage) !== voltageFilter) return false;
+            if (region !== 'All' && s.region !== region) return false;
+            if (grid !== 'All' && s.grid !== grid) return false;
+            if (state !== 'All' && s.state !== state) return false;
+            if (voltage !== 'All' && String(s.voltage) !== String(voltage)) return false;
             if (q && !s.substation_id.toLowerCase().includes(q) &&
                 !s.name.toLowerCase().includes(q) &&
                 !(s.mnemonic || '').toLowerCase().includes(q)) return false;
+            if (schemeType === 'None' && (s.relay_scheme_types || []).length > 0) return false;
+            if (schemeType !== 'All' && schemeType !== 'None' && !(s.relay_scheme_types || []).includes(schemeType)) return false;
             return true;
         });
-    }, [subsWithRelays, search, regionFilter, gridFilter, voltageFilter]);
+    }, [subsWithRelays, filterCriteria]);
 
     // Analytics breakdowns
     const byRegion = useMemo(() => {
         const map = {};
         subsWithRelays.forEach(s => {
             const key = s.region || 'Unknown';
-            if (!map[key]) map[key] = { region: key, subs: 0, totalRelays: 0, activeRelays: 0 };
-            const rels = relayMap[s.substation_id] || [];
+            if (!map[key]) map[key] = { region: key, subs: 0, assigned: 0, notAssignedMw: 0, availableUnassigned: 0, availableUnassignedMw: 0 };
+            const isAssigned = (s.relay_scheme_types || []).length > 0;
             map[key].subs++;
-            map[key].totalRelays += rels.length;
-            map[key].activeRelays += rels.filter(r => r.is_active).length;
+            if (isAssigned) map[key].assigned++;
+            else if (!s.is_critical) {
+                map[key].availableUnassigned++;
+                const mw = aggregateRelayMw(relayMap[s.substation_id] || []);
+                map[key].notAssignedMw += mw;
+                map[key].availableUnassignedMw += mw;
+            } else {
+                map[key].notAssignedMw += aggregateRelayMw(relayMap[s.substation_id] || []);
+            }
         });
         return Object.values(map).sort((a, b) => b.subs - a.subs);
     }, [subsWithRelays, relayMap]);
@@ -513,11 +577,18 @@ const LSRelayManager = ({ isStaff }) => {
         const map = {};
         subsWithRelays.forEach(s => {
             const key = s.grid || 'Unknown';
-            if (!map[key]) map[key] = { grid: key, subs: 0, totalRelays: 0, activeRelays: 0 };
-            const rels = relayMap[s.substation_id] || [];
+            if (!map[key]) map[key] = { grid: key, subs: 0, assigned: 0, notAssignedMw: 0, availableUnassigned: 0, availableUnassignedMw: 0 };
+            const isAssigned = (s.relay_scheme_types || []).length > 0;
             map[key].subs++;
-            map[key].totalRelays += rels.length;
-            map[key].activeRelays += rels.filter(r => r.is_active).length;
+            if (isAssigned) map[key].assigned++;
+            else if (!s.is_critical) {
+                map[key].availableUnassigned++;
+                const mw = aggregateRelayMw(relayMap[s.substation_id] || []);
+                map[key].notAssignedMw += mw;
+                map[key].availableUnassignedMw += mw;
+            } else {
+                map[key].notAssignedMw += aggregateRelayMw(relayMap[s.substation_id] || []);
+            }
         });
         return Object.values(map).sort((a, b) => b.subs - a.subs);
     }, [subsWithRelays, relayMap]);
@@ -529,12 +600,19 @@ const LSRelayManager = ({ isStaff }) => {
             if (!map[key]) map[key] = {
                 voltage: Number(s.voltage) || 0,
                 label: s.voltage ? `${s.voltage} kV` : 'Unknown',
-                subs: 0, totalRelays: 0, activeRelays: 0,
+                subs: 0, assigned: 0, notAssignedMw: 0, availableUnassigned: 0, availableUnassignedMw: 0,
             };
-            const rels = relayMap[s.substation_id] || [];
+            const isAssigned = (s.relay_scheme_types || []).length > 0;
             map[key].subs++;
-            map[key].totalRelays += rels.length;
-            map[key].activeRelays += rels.filter(r => r.is_active).length;
+            if (isAssigned) map[key].assigned++;
+            else if (!s.is_critical) {
+                map[key].availableUnassigned++;
+                const mw = aggregateRelayMw(relayMap[s.substation_id] || []);
+                map[key].notAssignedMw += mw;
+                map[key].availableUnassignedMw += mw;
+            } else {
+                map[key].notAssignedMw += aggregateRelayMw(relayMap[s.substation_id] || []);
+            }
         });
         return Object.values(map).sort((a, b) => {
             const ai = VOLTAGE_ORDER.indexOf(a.voltage);
@@ -554,28 +632,13 @@ const LSRelayManager = ({ isStaff }) => {
         return Object.values(map).sort((a, b) => b.subs - a.subs);
     }, [substations]);
 
-    const totalActiveRelays = useMemo(() => relays.filter(r => r.is_active).length, [relays]);
-    const totalInactiveRelays = relays.length - totalActiveRelays;
-
     if (loading) {
         return <CardLoader show message="Loading relay data…" />;
     }
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            {/* Page header */}
-            <div style={{ marginBottom: '1.25rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.2rem' }}>
-                    <LuCircuitBoard size={20} color="var(--accent)" />
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>LS Relay Management</h2>
-                </div>
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-2)', margin: 0 }}>
-                    {subsWithRelays.length} substations · {relays.length} relays ({totalActiveRelays} active)
-                </p>
-            </div>
-
-            {/* Tab bar */}
-            <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid var(--border)', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-default)', flexShrink: 0, background: 'var(--surface-card)', padding: '0 2rem', zIndex: 20 }}>
                 {TABS.map(tab => {
                     const Icon = tab.icon;
                     const active = activeTab === tab.id;
@@ -585,14 +648,15 @@ const LSRelayManager = ({ isStaff }) => {
                             onClick={() => setActiveTab(tab.id)}
                             style={{
                                 display: 'flex', alignItems: 'center', gap: '0.4rem',
-                                padding: '0.5rem 1rem',
+                                padding: '0.6rem 1.25rem',
                                 background: 'none', border: 'none', cursor: 'pointer',
-                                borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
-                                color: active ? 'var(--accent)' : 'var(--text-2)',
-                                fontWeight: active ? 600 : 400,
-                                fontSize: '0.85rem',
+                                borderBottom: active ? '2px solid var(--brand-mid)' : '2px solid transparent',
+                                color: active ? 'var(--brand-dark)' : 'var(--text-2)',
+                                fontWeight: active ? 600 : 500,
+                                fontSize: 'var(--text-sm)',
                                 marginBottom: '-1px',
-                                transition: 'color 0.15s',
+                                transition: 'all 0.15s',
+                                whiteSpace: 'nowrap',
                             }}
                         >
                             <Icon size={14} />
@@ -602,27 +666,61 @@ const LSRelayManager = ({ isStaff }) => {
                 })}
             </div>
 
-            {/* Tab content */}
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            {activeTab === 'population' && (
+                <SubstationFilter
+                    substations={subsWithRelays}
+                    currentFilters={filterCriteria}
+                    onUpdateFilters={setFilterCriteria}
+                    extraLabel="Scheme Type"
+                    extraValue={filterCriteria.schemeType}
+                    onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, schemeType: val }))}
+                    extraOptions={schemeTypeOptions}
+                    showRelayFilter={false}
+                    pageTitle="LS Relay"
+                    resultCount={filteredSubs.length}
+                    icon={LuCircuitBoard}
+                />
+            )}
+
+            {activeTab === 'analytics' && (
+                <div style={{
+                    flexShrink: 0,
+                    height: 52,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0 1.5rem',
+                    background: 'var(--surface-card)',
+                    borderBottom: '1px solid var(--border-default)',
+                }}>
+                    <BarChart2 size={16} color="var(--brand-mid)" strokeWidth={2} />
+                    <span style={{ fontWeight: 700, fontSize: 'var(--text-md)', color: 'var(--text-1)', letterSpacing: '-0.02em' }}>
+                        Relay Analytics
+                    </span>
+                    <span style={{
+                        background: 'var(--surface-raised)',
+                        border: '1px solid var(--border-default)',
+                        borderRadius: 'var(--radius-pill)',
+                        fontSize: 'var(--text-xs)',
+                        fontWeight: 700,
+                        color: 'var(--text-2)',
+                        padding: '1px 8px',
+                    }}>
+                        {subsWithRelays.length.toLocaleString()} substations
+                    </span>
+                </div>
+            )}
+
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '1rem 1.5rem 1.5rem' }} className="custom-scrollbar">
                 {activeTab === 'population' && (
                     <PopulationTab
                         filteredSubs={filteredSubs}
                         relayMap={relayMap}
-                        search={search} setSearch={setSearch}
-                        regionFilter={regionFilter} setRegionFilter={setRegionFilter}
-                        gridFilter={gridFilter} setGridFilter={setGridFilter}
-                        voltageFilter={voltageFilter} setVoltageFilter={setVoltageFilter}
-                        regions={regions} grids={grids} voltages={voltages}
                         expandedSub={expandedSub} setExpandedSub={setExpandedSub}
-                        totalCount={subsWithRelays.length}
                     />
                 )}
                 {activeTab === 'analytics' && (
                     <AnalyticsTab
-                        subsWithRelays={subsWithRelays}
-                        relays={relays}
-                        totalActiveRelays={totalActiveRelays}
-                        totalInactiveRelays={totalInactiveRelays}
                         byRegion={byRegion}
                         byGrid={byGrid}
                         byVoltage={byVoltage}

@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db.models import Sum
 from core.models import (
     Substation,
     LoadTransformer,
@@ -10,6 +11,111 @@ from core.models import (
     LoadSheddingRelay,
 )
 from api.v1.serializers.critical import CriticalAssetSerializer
+
+
+def _get_snapshot_from_context(context):
+    from core.models import NetworkSnapshot
+    snapshot_id = context.get('snapshot_id')
+    if snapshot_id:
+        return NetworkSnapshot.objects.filter(id=snapshot_id).first()
+    cache_key = '_latest_snapshot'
+    if cache_key not in context:
+        context[cache_key] = NetworkSnapshot.objects.order_by('-timestamp').first()
+    return context[cache_key]
+
+
+def _get_substation_load_totals(context, substation):
+    snapshot = _get_snapshot_from_context(context)
+    if not snapshot or not substation:
+        return {'p_mw': None, 'q_mvar': None}
+
+    substation_id = getattr(substation, 'substation_id', substation)
+    cache = context.setdefault('_substation_load_totals', {})
+    cache_key = (str(snapshot.id), substation_id)
+    if cache_key in cache:
+        return cache[cache_key]
+
+    from core.models import TopologyBus, NetworkLoad
+    bus_ids = TopologyBus.objects.filter(
+        topology_version=snapshot.topology_version,
+        substation_id=substation_id,
+    ).values_list('id', flat=True)
+    totals = NetworkLoad.objects.filter(snapshot=snapshot, bus_id__in=bus_ids, in_service=True).aggregate(
+        p=Sum('p_mw'),
+        q=Sum('q_mvar'),
+    )
+    cache[cache_key] = {
+        'p_mw': round(totals['p'] or 0.0, 2),
+        'q_mvar': round(totals['q'] or 0.0, 2),
+    }
+    return cache[cache_key]
+
+
+def _sum_matching_loads(loads, load_ids):
+    normalized_ids = {str(load_id).strip() for load_id in load_ids if load_id is not None and str(load_id).strip()}
+    matched = [
+        load for load in loads
+        if str(load.load_id).strip() in normalized_ids
+    ]
+    if not matched:
+        return None
+    return {
+        'p_mw': round(sum(load.p_mw or 0.0 for load in matched), 2),
+        'q_mvar': round(sum(load.q_mvar or 0.0 for load in matched), 2),
+    }
+
+
+def _get_transformer_load_totals(context, transformer_obj, equipment_type='load_transformer', load_prefix='T'):
+    snapshot = _get_snapshot_from_context(context)
+    if not snapshot or not transformer_obj or transformer_obj.transformer_no is None:
+        return {'p_mw': None, 'q_mvar': None}
+
+    transformer_no = transformer_obj.transformer_no
+    substation = transformer_obj.substation
+    substation_id = getattr(substation, 'substation_id', substation)
+    load_ids = [str(transformer_no), f'{transformer_no} ']
+    if load_prefix:
+        load_ids.append(f'{load_prefix}{transformer_no}')
+
+    cache = context.setdefault('_transformer_load_totals', {})
+    cache_key = (str(snapshot.id), equipment_type, transformer_obj.id)
+    if cache_key in cache:
+        return cache[cache_key]
+
+    from core.models import EquipmentTopologyMap, TopologyBus, NetworkLoad
+
+    map_filter = {
+        'topology_version': snapshot.topology_version,
+        'equipment_type': equipment_type,
+    }
+    if equipment_type == 'auto_transformer':
+        map_filter['auto_transformer'] = transformer_obj
+    else:
+        map_filter['load_transformer'] = transformer_obj
+
+    mapping = EquipmentTopologyMap.objects.filter(**map_filter).select_related(
+        'topology_transformer__from_bus',
+        'topology_transformer__to_bus',
+        'topology_transformer__tertiary_bus',
+    ).first()
+
+    if mapping and mapping.topology_transformer:
+        tx = mapping.topology_transformer
+        mapped_ids = load_ids + [tx.ckt_id, str(tx.ckt_id).strip()]
+        mapped_bus_ids = [bus_id for bus_id in [tx.to_bus_id, tx.from_bus_id, tx.tertiary_bus_id] if bus_id]
+        mapped_loads = list(NetworkLoad.objects.filter(snapshot=snapshot, bus_id__in=mapped_bus_ids, in_service=True))
+        mapped_totals = _sum_matching_loads(mapped_loads, mapped_ids)
+        if mapped_totals is not None:
+            cache[cache_key] = mapped_totals
+            return cache[cache_key]
+
+    bus_ids = TopologyBus.objects.filter(
+        topology_version=snapshot.topology_version,
+        substation_id=substation_id,
+    ).values_list('id', flat=True)
+    substation_loads = list(NetworkLoad.objects.filter(snapshot=snapshot, bus_id__in=bus_ids, in_service=True))
+    cache[cache_key] = _sum_matching_loads(substation_loads, load_ids) or {'p_mw': 0.0, 'q_mvar': 0.0}
+    return cache[cache_key]
 
 class SubstationSerializer(serializers.ModelSerializer):
     """
@@ -33,17 +139,12 @@ class SubstationSerializer(serializers.ModelSerializer):
         read_only_fields = ['substation_id', 'sld', 'created_at', 'updated_at', 'region', 'state']
 
     def get_snapshot(self):
-        from core.models import NetworkSnapshot
-        snapshot_id = self.context.get('snapshot_id')
-        if snapshot_id:
-            return NetworkSnapshot.objects.filter(id=snapshot_id).first()
-        return NetworkSnapshot.objects.order_by('-timestamp').first()
+        return _get_snapshot_from_context(self.context)
 
     def get_total_pload_mw(self, obj):
         snapshot = self.get_snapshot()
         if not snapshot:
             return 0.0
-        from django.db.models import Sum
         from core.models import TopologyBus, NetworkLoad
         bus_ids = TopologyBus.objects.filter(
             topology_version=snapshot.topology_version,
@@ -112,13 +213,26 @@ class WritableAssetField(serializers.PrimaryKeyRelatedField):
         return super().to_representation(value)
 
 class LoadTransformerSerializer(serializers.ModelSerializer):
+    display_name = serializers.SerializerMethodField()
+    current_mw = serializers.SerializerMethodField()
+    current_mvar = serializers.SerializerMethodField()
+
+    def get_display_name(self, obj):
+        return f'T{obj.transformer_no}'
+
+    def get_current_mw(self, obj):
+        return _get_transformer_load_totals(self.context, obj, 'load_transformer').get('p_mw')
+
+    def get_current_mvar(self, obj):
+        return _get_transformer_load_totals(self.context, obj, 'load_transformer').get('q_mvar')
+
     class Meta:
         model = LoadTransformer
         fields = [
-            'id', 'bay_id', 'substation', 'transformer_no',
+            'id', 'bay_id', 'display_name', 'substation', 'transformer_no',
             'hv_voltage', 'hv_breaker_number',
             'lv_voltage', 'lv_breaker_number',
-            'capacity_mva', 'commissioning_date',
+            'capacity_mva', 'commissioning_date', 'current_mw', 'current_mvar',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['bay_id', 'created_at', 'updated_at']
@@ -126,6 +240,9 @@ class LoadTransformerSerializer(serializers.ModelSerializer):
 
 class IncomingBranchSerializer(serializers.ModelSerializer):
     to_substation_detail = serializers.SerializerMethodField()
+    display_name = serializers.SerializerMethodField()
+    current_mw = serializers.SerializerMethodField()
+    current_mvar = serializers.SerializerMethodField()
 
     def get_to_substation_detail(self, obj):
         s = obj.to_substation
@@ -139,11 +256,21 @@ class IncomingBranchSerializer(serializers.ModelSerializer):
             'voltage': s.voltage,
         }
 
+    def get_display_name(self, obj):
+        to_id = obj.to_substation.substation_id if obj.to_substation else 'Unknown'
+        return f'{to_id} Cct {obj.ckt_id}'
+
+    def get_current_mw(self, obj):
+        return None
+
+    def get_current_mvar(self, obj):
+        return None
+
     class Meta:
         model = IncomingBranch
         fields = [
-            'id', 'bay_id', 'substation', 'to_substation', 'to_substation_detail', 'ckt_id',
-            'breaker_number', 'commissioning_date',
+            'id', 'bay_id', 'display_name', 'substation', 'to_substation', 'to_substation_detail', 'ckt_id',
+            'breaker_number', 'commissioning_date', 'current_mw', 'current_mvar',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['bay_id', 'created_at', 'updated_at']
@@ -156,13 +283,26 @@ class IncomingBranchAliasSerializer(serializers.ModelSerializer):
 
 
 class AutoTransformerSerializer(serializers.ModelSerializer):
+    display_name = serializers.SerializerMethodField()
+    current_mw = serializers.SerializerMethodField()
+    current_mvar = serializers.SerializerMethodField()
+
+    def get_display_name(self, obj):
+        return f'AT{obj.transformer_no}'
+
+    def get_current_mw(self, obj):
+        return _get_transformer_load_totals(self.context, obj, 'auto_transformer', load_prefix='AT').get('p_mw')
+
+    def get_current_mvar(self, obj):
+        return _get_transformer_load_totals(self.context, obj, 'auto_transformer', load_prefix='AT').get('q_mvar')
+
     class Meta:
         model = AutoTransformer
         fields = [
-            'id', 'bay_id', 'substation', 'transformer_no',
+            'id', 'bay_id', 'display_name', 'substation', 'transformer_no',
             'hv_voltage', 'hv_breaker_number',
             'lv_voltage', 'lv_breaker_number',
-            'capacity_mva', 'commissioning_date',
+            'capacity_mva', 'commissioning_date', 'current_mw', 'current_mvar',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['bay_id', 'created_at', 'updated_at']

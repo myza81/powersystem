@@ -24,6 +24,7 @@ class SubstationViewSet(viewsets.ModelViewSet):
                 'load_shedding_relays__load_transformers',
                 'load_shedding_relays__auto_transformers',
                 'load_shedding_relays__incoming_branches',
+                'load_shedding_relays__incoming_branches__to_substation',
                 'critical_assets',
                 'critical_assets__category',
                 'critical_assets__load_transformers',
@@ -54,14 +55,26 @@ class SubstationViewSet(viewsets.ModelViewSet):
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
         if self.action == 'list':
-            from core.models import LoadSheddingTransformerBay, LoadSheddingPocketBay
+            from core.models import LoadSheddingTransformerBay, LoadSheddingPocketBay, LoadSheddingPocketBoundary
             scheme_types_map = {}
             stages_map = {}
+
+            active_published_version_filter = {
+                'stage__version__status': 'active',
+                'stage__version__is_active': True,
+                'stage__version__published_at__isnull': False,
+            }
+            active_published_pocket_version_filter = {
+                'pocket__stage__version__status': 'active',
+                'pocket__stage__version__is_active': True,
+                'pocket__stage__version__published_at__isnull': False,
+            }
 
             # Transformer bays — relay__substation__substation_id is the live path;
             # frozen_substation_id is the fallback when the relay has been deleted (SET_NULL).
             tx_rows = (
                 LoadSheddingTransformerBay.objects
+                .filter(**active_published_version_filter)
                 .select_related('stage__version', 'relay__substation')
                 .values(
                     'relay__substation__substation_id',
@@ -81,6 +94,7 @@ class SubstationViewSet(viewsets.ModelViewSet):
             # same maps so pocket substations appear when filtering by stage or scheme type.
             pocket_rows = (
                 LoadSheddingPocketBay.objects
+                .filter(**active_published_version_filter)
                 .select_related('stage__version')
                 .values('stage__version__scheme_type', 'stage__stage_number', 'topology_cache')
             )
@@ -92,6 +106,26 @@ class SubstationViewSet(viewsets.ModelViewSet):
                     if sid:
                         scheme_types_map.setdefault(sid, set()).add(scheme_type)
                         stages_map.setdefault(sid, set()).add(stage_number)
+
+            # Pocket boundaries are relay assignments too. These are not always present in
+            # topology_cache, so include the boundary relay substation directly.
+            boundary_rows = (
+                LoadSheddingPocketBoundary.objects
+                .filter(**active_published_pocket_version_filter)
+                .select_related('pocket__stage__version', 'relay__substation')
+                .values(
+                    'relay__substation__substation_id',
+                    'frozen_substation_id',
+                    'pocket__stage__version__scheme_type',
+                    'pocket__stage__stage_number',
+                )
+            )
+            for row in boundary_rows:
+                sid = row['relay__substation__substation_id'] or row['frozen_substation_id']
+                if not sid:
+                    continue
+                scheme_types_map.setdefault(sid, set()).add(row['pocket__stage__version__scheme_type'])
+                stages_map.setdefault(sid, set()).add(row['pocket__stage__stage_number'])
 
             ctx['scheme_types_map'] = scheme_types_map
             ctx['stages_map'] = stages_map

@@ -64,7 +64,12 @@ class LoadSheddingRelayViewSet(BaseBayAssetViewSet):
     search_fields = ['id', 'substation__substation_id']
 
     def get_queryset(self):
-        queryset = super().get_queryset().order_by('substation__substation_id', '-id')
+        queryset = super().get_queryset().select_related('substation').prefetch_related(
+            'load_transformers__substation',
+            'incoming_branches__substation',
+            'incoming_branches__to_substation',
+            'auto_transformers__substation',
+        ).order_by('substation__substation_id', '-id')
         substation = self.request.query_params.get('substation')
         if substation:
             queryset = queryset.filter(substation__substation_id=substation)
