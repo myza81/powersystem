@@ -331,6 +331,7 @@ function ManualIslandModal({ pocket, stageIdx, substationMwList, substationMwLoa
                     ) : filtered.map(s => {
                         const checked = selected.has(s.substation_id);
                         const isBlocked = blocked.has(s.substation_id);
+                        const blockedReason = s.blocked_reason || null;
                         return (
                             <div
                                 key={s.substation_id}
@@ -338,7 +339,7 @@ function ManualIslandModal({ pocket, stageIdx, substationMwList, substationMwLoa
                                     if (isBlocked) return;
                                     setSelected(prev => { const next = new Set(prev); if (next.has(s.substation_id)) next.delete(s.substation_id); else next.add(s.substation_id); return next; });
                                 }}
-                                title={isBlocked ? `Rule 3: ${s.substation_id} is already a direct bay in another stage` : undefined}
+                                title={isBlocked ? blockedReason || `Rule 3: ${s.substation_id} is already a direct bay in another stage` : undefined}
                                 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 1.5rem', cursor: isBlocked ? 'not-allowed' : 'pointer', background: isBlocked ? '#fef2f2' : checked ? '#fff7ed' : 'transparent', borderBottom: '1px solid #f8fafc', opacity: isBlocked ? 0.7 : 1 }}
                                 onMouseEnter={e => { if (!checked && !isBlocked) e.currentTarget.style.background = '#f8fafc'; }}
                                 onMouseLeave={e => { e.currentTarget.style.background = isBlocked ? '#fef2f2' : checked ? '#fff7ed' : 'transparent'; }}
@@ -349,7 +350,7 @@ function ManualIslandModal({ pocket, stageIdx, substationMwList, substationMwLoa
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: '0.72rem', fontWeight: 700, color: isBlocked ? '#ef4444' : '#0f172a' }}>{s.substation_id}</div>
                                     <div style={{ fontSize: '0.62rem', color: isBlocked ? '#fca5a5' : '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {isBlocked ? 'Rule 3: already a direct bay' : `${s.name}${s.voltage ? ` · ${s.voltage}kV` : ''}`}
+                                        {isBlocked ? (blockedReason || 'Rule 3: already a direct bay') : `${s.name}${s.voltage ? ` · ${s.voltage}kV` : ''}`}
                                     </div>
                                 </div>
                                 <div style={{ fontSize: '0.68rem', fontFamily: 'monospace', fontWeight: 600, color: isBlocked ? '#fca5a5' : s.mw > 0 ? '#0f172a' : '#cbd5e1', flexShrink: 0 }}>
@@ -467,6 +468,20 @@ const buildPublishedRows = (stageDetails, substations, relays) => {
         });
     });
     return rows;
+};
+
+const BLOCKED_LOAD_SHEDDING_OWNERSHIPS = new Set(['IPP', 'LSS']);
+
+const getBlockedOwnershipLabel = (substationId, substations) => {
+    const sub = (substations || []).find(s => String(s.substation_id) === String(substationId));
+    const ownership = String(sub?.ownership || '').trim().toUpperCase();
+    return BLOCKED_LOAD_SHEDDING_OWNERSHIPS.has(ownership) ? ownership : null;
+};
+
+const getBlockedLoadSheddingSubs = (substationIds, substations) => {
+    return [...new Set((substationIds || []).filter(Boolean))]
+        .map(subId => ({ subId, ownership: getBlockedOwnershipLabel(subId, substations) }))
+        .filter(row => row.ownership);
 };
 
 const buildComparisonRowsComp = (rowsA, rowsB) => {
@@ -773,8 +788,41 @@ const LoadSheddingDesigner = () => {
             });
         }
 
+        // Rule 4: IPP/LSS substations cannot be part of load shedding — hard block
+        {
+            const directMap = {};
+            const pocketMap = {};
+            stages.forEach(stage => {
+                (stage.transformer_bays || []).forEach(bay => {
+                    const subId = bay.relay_substation_id;
+                    if (!subId) return;
+                    if (!directMap[subId]) directMap[subId] = [];
+                    directMap[subId].push(stage.label);
+                });
+                (stage.computed_pockets || []).forEach(pocket => {
+                    [
+                        ...(pocket.pocket_substations || []),
+                        ...(pocket.manual_substations || []),
+                    ].forEach(subId => {
+                        if (!subId) return;
+                        if (!pocketMap[subId]) pocketMap[subId] = [];
+                        if (!pocketMap[subId].includes(stage.label)) pocketMap[subId].push(stage.label);
+                    });
+                });
+            });
+            getBlockedLoadSheddingSubs([...Object.keys(directMap), ...Object.keys(pocketMap)], substations).forEach(({ subId, ownership }) => {
+                violations.push({
+                    rule: 4,
+                    severity: 'error',
+                    substation_id: subId,
+                    stage_label: [...new Set([...(directMap[subId] || []), ...(pocketMap[subId] || [])])].join(', '),
+                    message: `${subId} belongs to ${ownership} and cannot be part of load shedding, including inside pockets.`,
+                });
+            });
+        }
+
         return violations;
-    }, [stages, schemeType, alertConfigs, criticalAssets, protectedBaysData]);
+    }, [stages, schemeType, alertConfigs, criticalAssets, protectedBaysData, substations]);
 
     // Derive per-rule enforcement modes for the current scheme type
     const currentRule1Enforcement = useMemo(() => {
@@ -1360,6 +1408,15 @@ const LoadSheddingDesigner = () => {
                     return;
                 }
             }
+
+            // Rule 4: IPP/LSS substations are never allowed in load shedding
+            {
+                const blockedOwnership = getBlockedOwnershipLabel(subId, substations);
+                if (blockedOwnership) {
+                    alert(`Blocked: ${subId} belongs to ${blockedOwnership}. Rule 4 prevents IPP and LSS substations from being part of load shedding.`);
+                    return;
+                }
+            }
         }
 
         const activeBays = [...active.transformer_bays, {
@@ -1430,6 +1487,12 @@ const LoadSheddingDesigner = () => {
 
     const toggleTransformerInStage = (relay, transformerVal) => {
         const transformerId = typeof transformerVal === 'object' ? transformerVal.id : transformerVal;
+        const subId = relay.substation_id || relay.substation;
+        const blockedOwnership = getBlockedOwnershipLabel(subId, substations);
+        if (blockedOwnership) {
+            alert(`Blocked: ${subId} belongs to ${blockedOwnership}. Rule 4 prevents IPP and LSS substations from being part of load shedding.`);
+            return;
+        }
         const currentStages = [...stages];
         const active = { ...currentStages[activeStageIdx] };
         
@@ -1468,7 +1531,6 @@ const LoadSheddingDesigner = () => {
                 transformers: [{ id: transformerId }]
             });
             // Fetch substation data if missing
-            const subId = relay.substation_id || relay.substation;
             if (!detailedSubstations[subId]) {
                 Promise.all([
                     api.get(`/substations/${subId}/`),
@@ -1590,6 +1652,13 @@ const LoadSheddingDesigner = () => {
             return;
         }
 
+        const blockedSubs = getBlockedLoadSheddingSubs(pocketSubs, substations);
+        if (blockedSubs.length > 0) {
+            const labels = blockedSubs.map(({ subId, ownership }) => `${subId} (${ownership})`).join(', ');
+            alert(`Blocked: ${labels}. Rule 4 prevents IPP and LSS substations from being part of load shedding, including inside pockets.`);
+            return;
+        }
+
         const brs2 = stages[activeStageIdx].pocket_branches || [];
         const gk = (s, v) => `${s}||${v || ''}`;
         const grps = {};
@@ -1631,7 +1700,15 @@ const LoadSheddingDesigner = () => {
             setSubstationMwLoading(true);
             try {
                 const res = await api.get('/load-shedding-pocket-bays/substation-mw/');
-                setSubstationMwList(res.data || []);
+                setSubstationMwList((res.data || []).map(item => {
+                    const blockedOwnership = getBlockedOwnershipLabel(item.substation_id, substations);
+                    return {
+                        ...item,
+                        blocked_reason: blockedOwnership
+                            ? `Rule 4: ${item.substation_id} belongs to ${blockedOwnership} and cannot be part of load shedding`
+                            : null,
+                    };
+                }));
             } catch (e) {
                 console.error('Failed to load substation MW list', e);
             } finally {
@@ -1641,6 +1718,12 @@ const LoadSheddingDesigner = () => {
     };
 
     const handleSaveManualOverride = async (pocket, stageIdx, selectedList) => {
+        const blockedSubs = getBlockedLoadSheddingSubs(selectedList, substations);
+        if (blockedSubs.length > 0) {
+            const labels = blockedSubs.map(({ subId, ownership }) => `${subId} (${ownership})`).join(', ');
+            alert(`Blocked: ${labels}. Rule 4 prevents IPP and LSS substations from being part of load shedding, including inside pockets.`);
+            return;
+        }
         const res = await api.patch(
             `/load-shedding-pocket-bays/${pocket.id}/manual-override/`,
             { manual_substations: selectedList }
@@ -3631,6 +3714,9 @@ const LoadSheddingDesigner = () => {
                                         <div>
                                             <strong>Rule 3 — No Direct/Pocket Overlap:</strong> A substation cannot be assigned as both a direct load transformer bay and as an isolated substation inside a pocket bay (topology-derived or manual override) within the same version. Scope: version-wide across all stages. This rule is always a hard block with no configurable enforcement.
                                         </div>
+                                        <div style={{ marginTop: '0.45rem' }}>
+                                            <strong>Rule 4 — No IPP/LSS Substations:</strong> Substations with ownership `IPP` or `LSS` cannot be part of load shedding at all. This includes direct transformer bay assignments and any substation contained within a pocket. This rule is always a hard block with no configurable enforcement.
+                                        </div>
                                     </div>
                                 </div>
 
@@ -4187,11 +4273,14 @@ const LoadSheddingDesigner = () => {
                     substationMwLoading={substationMwLoading}
                     onClose={() => setManualIslandPocket(null)}
                     onSave={handleSaveManualOverride}
-                    blockedSubIds={new Set(
-                        stages.flatMap(stage =>
+                    blockedSubIds={new Set([
+                        ...stages.flatMap(stage =>
                             (stage.transformer_bays || []).map(bay => bay.relay_substation_id).filter(Boolean)
-                        )
-                    )}
+                        ),
+                        ...substationMwList
+                            .filter(item => Boolean(item.blocked_reason))
+                            .map(item => item.substation_id),
+                    ])}
                 />
             )}
         </AnimatePresence>

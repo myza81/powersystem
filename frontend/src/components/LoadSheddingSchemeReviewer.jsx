@@ -95,6 +95,8 @@ const buildRows = (stageDetails, substations, relays) => {
                 substationId: sub?.substation_id || bay.relay_substation_id || '',
                 region: sub?.region || '—',
                 grid: sub?.grid || '—',
+                ownership: sub?.ownership || '—',
+                impactedSubstations: [sub?.substation_id || bay.relay_substation_id || ''].filter(Boolean),
                 state: sub?.state || '—',
                 voltage,
                 feeder,
@@ -125,10 +127,11 @@ const buildRows = (stageDetails, substations, relays) => {
                     boundaryCount: boundaries.length,
                     boundarySubstationIds: boundaries.map(b => b.relay_substation_id).filter(Boolean),
                     isolatedSubstations: pocket.topology_cache?.isolated_substations || [],
+                    impactedSubstations: pocket.topology_cache?.isolated_substations || [],
                     mw: pocketMW,
                     threshold1, delay1, threshold2, delay2,
                     // neutral values so filter pass-throughs work
-                    substationName: '', substationId: '', region: '—', grid: '—', state: '—', voltage: '—', feeder: '', breakerNumber: '',
+                    substationName: '', substationId: '', region: '—', grid: '—', ownership: '—', state: '—', voltage: '—', feeder: '', breakerNumber: '',
                 });
             }
 
@@ -159,6 +162,8 @@ const buildRows = (stageDetails, substations, relays) => {
                     substationId: sub?.substation_id || boundary.relay_substation_id || '',
                     region: sub?.region || '—',
                     grid: sub?.grid || '—',
+                    ownership: sub?.ownership || '—',
+                    impactedSubstations: pocket.topology_cache?.isolated_substations || [],
                     state: sub?.state || '—',
                     voltage: sub?.voltage || '—',
                     feeder,
@@ -266,6 +271,21 @@ const FilterDropdown = ({ label, value, onChange, options }) => (
         </select>
     </div>
 );
+
+const getImpactedOwnerships = (row, substations) => {
+    const impactedIds = row.impactedSubstations || [];
+    if (!impactedIds.length) {
+        return row.ownership && row.ownership !== '—' ? [row.ownership] : [];
+    }
+    const ownerships = new Set();
+    impactedIds.forEach(subId => {
+        const sub = substations?.find(s => s.substation_id === subId);
+        const ownership = String(sub?.ownership || '').trim();
+        if (ownership) ownerships.add(ownership);
+    });
+    if (!ownerships.size && row.ownership && row.ownership !== '—') ownerships.add(row.ownership);
+    return [...ownerships].sort();
+};
 
 const CriticalBadge = ({ label = 'Critical Substation', style: extraStyle = {} }) => {
     const [hovered, setHovered] = useState(false);
@@ -431,6 +451,7 @@ const LoadSheddingSchemeReviewer = () => {
     const [filterStage, setFilterStage] = useState('All');
     const [filterRegion, setFilterRegion] = useState('All');
     const [filterGrid, setFilterGrid] = useState('All');
+    const [filterImpactedOwnership, setFilterImpactedOwnership] = useState('All');
     const [filterType, setFilterType] = useState('All');
     const [showExportModal, setShowExportModal] = useState(false);
     const [selectedExportCols, setSelectedExportCols] = useState(
@@ -742,6 +763,14 @@ const LoadSheddingSchemeReviewer = () => {
         return [{ value: 'All', label: 'All Grids' }, ...grids.map(g => ({ value: g, label: g }))];
     }, [allRows]);
 
+    const ownershipOptions = useMemo(() => {
+        const ownerships = new Set();
+        allRows.forEach(row => {
+            getImpactedOwnerships(row, substations).forEach(o => ownerships.add(o));
+        });
+        return [{ value: 'All', label: 'All Impacted Ownership' }, ...[...ownerships].sort().map(o => ({ value: o, label: o }))];
+    }, [allRows, substations]);
+
     // Comparison computed data
     const availableSchemeTypes = useMemo(() =>
         [...new Set(publishedVersions.map(v => v.scheme_type))].sort(),
@@ -818,6 +847,10 @@ const LoadSheddingSchemeReviewer = () => {
             if (filterStage !== 'All' && row.stageId !== filterStage) return false;
             if (filterRegion !== 'All' && row.region !== filterRegion) return false;
             if (filterGrid !== 'All' && row.grid !== filterGrid) return false;
+            if (filterImpactedOwnership !== 'All') {
+                const impactedOwnerships = getImpactedOwnerships(row, substations);
+                if (!impactedOwnerships.includes(filterImpactedOwnership)) return false;
+            }
             if (filterType !== 'All') {
                 // treat pocket_boundary as 'pocket' for type filter
                 const effectiveType = row.type === 'pocket_boundary' ? 'pocket' : row.type;
@@ -852,7 +885,7 @@ const LoadSheddingSchemeReviewer = () => {
         });
 
         return result;
-    }, [allRows, filterStage, filterRegion, filterGrid, filterType, search]);
+    }, [allRows, substations, filterStage, filterRegion, filterGrid, filterImpactedOwnership, filterType, search]);
 
     // Group filtered rows by stage for display
     const groupedRows = useMemo(() => {
@@ -1039,8 +1072,8 @@ const LoadSheddingSchemeReviewer = () => {
 
                 {/* ── Command bar ───────────────────────────────────────────── */}
                 {(() => {
-                    const hasActiveFilters = filterStage !== 'All' || filterRegion !== 'All' || filterGrid !== 'All' || filterType !== 'All';
-                    const activeFilterCount = [filterStage, filterRegion, filterGrid, filterType].filter(v => v !== 'All').length;
+                    const hasActiveFilters = filterStage !== 'All' || filterRegion !== 'All' || filterGrid !== 'All' || filterImpactedOwnership !== 'All' || filterType !== 'All';
+                    const activeFilterCount = [filterStage, filterRegion, filterGrid, filterImpactedOwnership, filterType].filter(v => v !== 'All').length;
                     const chipStyle = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px 2px 10px', background: 'rgba(4,125,96,0.08)', border: '1px solid rgba(4,125,96,0.2)', borderRadius: 'var(--radius-pill)', color: 'var(--brand-dark)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' };
                     return (
                         <>
@@ -1232,8 +1265,9 @@ const LoadSheddingSchemeReviewer = () => {
                                             {filterStage !== 'All' && <button onClick={() => setFilterStage('All')} style={chipStyle}>Stage: {filterStage} <X size={10} strokeWidth={2.5} /></button>}
                                             {filterRegion !== 'All' && <button onClick={() => setFilterRegion('All')} style={chipStyle}>{filterRegion} <X size={10} strokeWidth={2.5} /></button>}
                                             {filterGrid !== 'All' && <button onClick={() => setFilterGrid('All')} style={chipStyle}>{filterGrid} <X size={10} strokeWidth={2.5} /></button>}
+                                            {filterImpactedOwnership !== 'All' && <button onClick={() => setFilterImpactedOwnership('All')} style={chipStyle}>Impacted Ownership: {filterImpactedOwnership} <X size={10} strokeWidth={2.5} /></button>}
                                             {filterType !== 'All' && <button onClick={() => setFilterType('All')} style={chipStyle}>Type: {filterType} <X size={10} strokeWidth={2.5} /></button>}
-                                            <button onClick={() => { setFilterStage('All'); setFilterRegion('All'); setFilterGrid('All'); setFilterType('All'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer' }}>
+                                            <button onClick={() => { setFilterStage('All'); setFilterRegion('All'); setFilterGrid('All'); setFilterImpactedOwnership('All'); setFilterType('All'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer' }}>
                                                 <RotateCcw size={10} /> Clear all
                                             </button>
                                         </div>
@@ -1254,11 +1288,12 @@ const LoadSheddingSchemeReviewer = () => {
                                                 <FilterDropdown label="Stage" value={filterStage} onChange={setFilterStage} options={stageOptions} />
                                                 <FilterDropdown label="Region" value={filterRegion} onChange={setFilterRegion} options={regionOptions} />
                                                 <FilterDropdown label="Grid" value={filterGrid} onChange={setFilterGrid} options={gridOptions} />
+                                                <FilterDropdown label="Impacted Ownership" value={filterImpactedOwnership} onChange={setFilterImpactedOwnership} options={ownershipOptions} />
                                                 <FilterDropdown label="Assignment Type" value={filterType} onChange={setFilterType} options={typeOptions} />
                                                 {hasActiveFilters && (
                                                     <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                                                         <button
-                                                            onClick={() => { setFilterStage('All'); setFilterRegion('All'); setFilterGrid('All'); setFilterType('All'); }}
+                                                            onClick={() => { setFilterStage('All'); setFilterRegion('All'); setFilterGrid('All'); setFilterImpactedOwnership('All'); setFilterType('All'); }}
                                                             style={{ display: 'flex', alignItems: 'center', gap: 4, height: 33, padding: '0 10px', background: '#fff', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-2)', fontSize: 'var(--text-xs)', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s' }}
                                                             onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--c-danger)'}
                                                             onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-default)'}
@@ -1664,6 +1699,7 @@ const LoadSheddingSchemeReviewer = () => {
                                             { label: 'Rule 1 Violations', desc: 'Cross-scheme overlap', count: complianceReport.summary.rule1_count, color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
                                             { label: 'Rule 2 Violations', desc: 'Critical in restricted stage', count: complianceReport.summary.rule2_count, color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
                                             { label: 'Rule 3 Violations', desc: 'Direct/pocket overlap', count: complianceReport.summary.rule3_count ?? 0, color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
+                                            { label: 'Rule 4 Violations', desc: 'IPP/LSS in shedding', count: complianceReport.summary.rule4_count ?? 0, color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
                                             { label: 'Total Violations', desc: 'All rules combined', count: complianceReport.summary.total, color: complianceReport.summary.total === 0 ? '#22c55e' : '#ef4444', bg: complianceReport.summary.total === 0 ? '#f0fdf4' : '#fef2f2', border: complianceReport.summary.total === 0 ? '#bbf7d0' : '#fecaca' },
                                         ].map(({ label, desc, count, color, bg, border }) => (
                                             <div key={label} style={{ flex: '1 1 160px', padding: '1rem 1.25rem', borderRadius: '10px', background: bg, border: `1px solid ${border}` }}>
@@ -1788,6 +1824,40 @@ const LoadSheddingSchemeReviewer = () => {
                                                             <td style={{ padding: '0.65rem 1rem', fontWeight: 600, color: '#0f172a' }}>{v.substation_id}</td>
                                                             <td style={{ padding: '0.65rem 1rem', color: '#dc2626' }}>{(v.direct_stages || []).map(s => s.stage_label).join(', ')}</td>
                                                             <td style={{ padding: '0.65rem 1rem', color: '#dc2626' }}>{(v.pocket_stages || []).map(s => s.stage_label).join(', ')}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        )}
+                                    </div>
+
+                                    {/* Rule 4 table */}
+                                    <div style={{ borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                        <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '0.6rem', background: '#f8fafc' }}>
+                                            <FaShieldHalved size={13} color="#ef4444" />
+                                            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Rule 4 — IPP/LSS Substations in Load Shedding</span>
+                                        </div>
+                                        {(complianceReport.rule4_violations || []).length === 0 ? (
+                                            <div style={{ padding: '1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.78rem' }}>No violations</div>
+                                        ) : (
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                                                <thead>
+                                                    <tr style={{ background: '#f8fafc' }}>
+                                                        {['Substation', 'Ownership', 'Direct Bay Stage(s)', 'Pocket Stage(s)'].map(h => (
+                                                            <th key={h} style={{ padding: '0.6rem 1rem', textAlign: 'left', color: '#64748b', fontWeight: 600, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e2e8f0' }}>{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {(complianceReport.rule4_violations || []).map((v, i) => (
+                                                        <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}
+                                                            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                        >
+                                                            <td style={{ padding: '0.65rem 1rem', fontWeight: 600, color: '#0f172a' }}>{v.substation_id}</td>
+                                                            <td style={{ padding: '0.65rem 1rem', color: '#dc2626', fontWeight: 700 }}>{v.ownership}</td>
+                                                            <td style={{ padding: '0.65rem 1rem', color: '#dc2626' }}>{(v.direct_stages || []).map(s => s.stage_label).join(', ') || '—'}</td>
+                                                            <td style={{ padding: '0.65rem 1rem', color: '#dc2626' }}>{(v.pocket_stages || []).map(s => s.stage_label).join(', ') || '—'}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>

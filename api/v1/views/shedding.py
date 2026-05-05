@@ -9,6 +9,8 @@ from api.v1.permissions import IsStaffOrSuperuser, IsSuperuser
 
 logger = logging.getLogger(__name__)
 
+BLOCKED_LOAD_SHEDDING_OWNERSHIPS = {'IPP', 'LSS'}
+
 from core.models import (
     LoadSheddingSetting,
     LoadSheddingVersion,
@@ -72,6 +74,19 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
     queryset = LoadSheddingVersion.objects.all()
     serializer_class = LoadSheddingVersionSerializer
     search_fields = ['review_year']
+
+    @staticmethod
+    def _find_blocked_substations(substation_ids):
+        ids = [sid for sid in set(substation_ids or []) if sid]
+        if not ids:
+            return []
+        from core.models import Substation
+        return list(
+            Substation.objects
+            .filter(substation_id__in=ids, ownership__in=BLOCKED_LOAD_SHEDDING_OWNERSHIPS)
+            .values('substation_id', 'name', 'ownership')
+            .order_by('substation_id')
+        )
 
     def get_permissions(self):
         # Public read: viewer and compliance endpoints are accessible to all
@@ -397,6 +412,30 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
         created_tbs = []  # compute_mw after commit
         created_pbs = []  # compute_topology after commit
 
+        direct_sub_ids = set()
+        pocket_sub_ids = set()
+        for sdata in stages_data:
+            for tb_data in sdata.get('transformer_bays') or []:
+                try:
+                    relay = LoadSheddingRelay.objects.select_related('substation').get(id=tb_data.get('relay'))
+                    if relay.substation:
+                        direct_sub_ids.add(relay.substation.substation_id)
+                except LoadSheddingRelay.DoesNotExist:
+                    pass
+            for pocket_data in sdata.get('computed_pockets') or []:
+                pocket_sub_ids.update(pocket_data.get('manual_substations') or [])
+                pocket_sub_ids.update(pocket_data.get('pocket_substations') or [])
+
+        blocked_subs = self._find_blocked_substations(direct_sub_ids | pocket_sub_ids)
+        if blocked_subs:
+            labels = ', '.join(f"{row['substation_id']} ({row['ownership']})" for row in blocked_subs)
+            return Response(
+                {
+                    'error': 'Rule 4 violation: IPP and LSS substations cannot be part of load shedding, including pocket substations: ' + labels
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         with db_transaction.atomic():
             version.stages.all().delete()
 
@@ -509,18 +548,6 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
 
         # Rule 3 server-side validation: no substation can appear as both a direct bay and a pocket substation
         # within the same version (version-wide, all stages).
-        direct_sub_ids = set()
-        pocket_sub_ids = set()
-        for sdata in stages_data:
-            for tb_data in sdata.get('transformer_bays') or []:
-                try:
-                    relay = LoadSheddingRelay.objects.select_related('substation').get(id=tb_data.get('relay'))
-                    if relay.substation:
-                        direct_sub_ids.add(relay.substation.substation_id)
-                except LoadSheddingRelay.DoesNotExist:
-                    pass
-            for pocket_data in sdata.get('computed_pockets') or []:
-                pocket_sub_ids.update(pocket_data.get('manual_substations') or [])
         overlap = direct_sub_ids & pocket_sub_ids
         if overlap:
             return Response(
@@ -794,6 +821,18 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
                     'pocket_stages': pocket_sub_map[sub_id],
                 })
 
+        # --- Rule 4: IPP/LSS substations cannot be part of load shedding ---
+        rule4_violations = []
+        blocked_rows = self._find_blocked_substations(set(direct_bay_map.keys()) | set(pocket_sub_map.keys()))
+        blocked_by_id = {row['substation_id']: row for row in blocked_rows}
+        for sub_id, row in blocked_by_id.items():
+            rule4_violations.append({
+                'substation_id': sub_id,
+                'ownership': row['ownership'],
+                'direct_stages': direct_bay_map.get(sub_id, []),
+                'pocket_stages': pocket_sub_map.get(sub_id, []),
+            })
+
         active_version_info = {
             scheme: {
                 'version_id': str(v.id),
@@ -809,11 +848,13 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
             'rule1_violations': rule1_violations,
             'rule2_violations': rule2_violations,
             'rule3_violations': rule3_violations,
+            'rule4_violations': rule4_violations,
             'summary': {
                 'rule1_count': len(rule1_violations),
                 'rule2_count': len(rule2_violations),
                 'rule3_count': len(rule3_violations),
-                'total': len(rule1_violations) + len(rule2_violations) + len(rule3_violations),
+                'rule4_count': len(rule4_violations),
+                'total': len(rule1_violations) + len(rule2_violations) + len(rule3_violations) + len(rule4_violations),
             },
         })
 
@@ -940,6 +981,19 @@ class LoadSheddingPocketBayViewSet(BaseSheddingViewSet):
             unknown = [s for s in raw_ids if s not in existing]
             if unknown:
                 return Response({"error": f"Unknown substation IDs: {unknown}"}, status=status.HTTP_400_BAD_REQUEST)
+
+            blocked = list(
+                Substation.objects
+                .filter(substation_id__in=raw_ids, ownership__in=BLOCKED_LOAD_SHEDDING_OWNERSHIPS)
+                .values('substation_id', 'ownership')
+                .order_by('substation_id')
+            )
+            if blocked:
+                labels = ', '.join(f"{row['substation_id']} ({row['ownership']})" for row in blocked)
+                return Response(
+                    {"error": f"Rule 4 violation: IPP and LSS substations cannot be part of load shedding. Remove: {labels}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         pocket.manual_substations = raw_ids
         pocket.save(update_fields=['manual_substations'])

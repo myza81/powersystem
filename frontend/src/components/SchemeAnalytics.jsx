@@ -133,6 +133,11 @@ const PieChart = ({ data, size = 120 }) => {
     );
 };
 
+const getOwnershipLabel = (ownership) => {
+    const cleaned = String(ownership || '').trim();
+    return cleaned || 'Unknown';
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [] }) => {
@@ -240,6 +245,85 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
             .sort((a, b) => (Number(b.kv) || 0) - (Number(a.kv) || 0));
         const maxVoltMW = Math.max(...voltages.map(v => v.mw), 1);
 
+        // ── Ownership distribution ────────────────────────────────────────
+        const ownershipMap = new Map();
+        const ensureOwnership = (subId) => {
+            const sub = subLookup[subId];
+            const ownership = getOwnershipLabel(sub?.ownership);
+            if (!ownershipMap.has(ownership)) {
+                ownershipMap.set(ownership, {
+                    ownership,
+                    mw: 0,
+                    assignmentCount: 0,
+                    pocketAssignmentCount: 0,
+                    txAssignmentCount: 0,
+                    substationIds: new Set(),
+                    pocketSubstationIds: new Set(),
+                });
+            }
+            return ownershipMap.get(ownership);
+        };
+        const addOwnershipAssignment = (subId, mw, source) => {
+            if (!subId) return;
+            const entry = ensureOwnership(subId);
+            entry.assignmentCount += 1;
+            entry.mw += Number(mw) || 0;
+            entry.substationIds.add(subId);
+            if (source === 'pocket') {
+                entry.pocketAssignmentCount += 1;
+                entry.pocketSubstationIds.add(subId);
+            } else {
+                entry.txAssignmentCount += 1;
+            }
+        };
+
+        stageDetails.forEach(stage => {
+            (stage.transformer_bays || []).forEach(bay => {
+                addOwnershipAssignment(bay.relay_substation_id, bay.mw_cache?.mw || 0, 'tx');
+            });
+
+            (stage.pocket_bays || []).forEach(pocket => {
+                const card = {
+                    pocket_substations: pocket.topology_cache?.isolated_substations || [],
+                    substation_mw: pocket.topology_cache?.substation_mw || {},
+                    total_p_mw: pocket.topology_cache?.mw || 0,
+                };
+                const pocketSubs = card.pocket_substations || [];
+                if (!pocketSubs.length) return;
+
+                const totalLoadInPocket = pocketSubs.reduce((sum, sId) => {
+                    const sub = subLookup[sId];
+                    return sum + (parseFloat(sub?.total_pload_mw) || 0);
+                }, 0);
+
+                pocketSubs.forEach(subId => {
+                    let subMW = 0;
+                    if (card.substation_mw?.[subId]?.total_p_mw != null) {
+                        subMW = card.substation_mw[subId].total_p_mw;
+                    } else if (totalLoadInPocket > 0) {
+                        subMW = ((parseFloat(subLookup[subId]?.total_pload_mw) || 0) / totalLoadInPocket) * (card.total_p_mw || 0);
+                    } else {
+                        subMW = (card.total_p_mw || 0) / (pocketSubs.length || 1);
+                    }
+                    addOwnershipAssignment(subId, subMW, 'pocket');
+                });
+            });
+        });
+
+        const ownerships = [...ownershipMap.values()]
+            .map(entry => ({
+                ownership: entry.ownership,
+                mw: entry.mw,
+                assignmentCount: entry.assignmentCount,
+                txAssignmentCount: entry.txAssignmentCount,
+                pocketAssignmentCount: entry.pocketAssignmentCount,
+                substationCount: entry.substationIds.size,
+                pocketSubstationCount: entry.pocketSubstationIds.size,
+            }))
+            .sort((a, b) => b.substationCount - a.substationCount || b.assignmentCount - a.assignmentCount || a.ownership.localeCompare(b.ownership));
+        const maxOwnershipAssignments = Math.max(...ownerships.map(o => o.assignmentCount), 1);
+        const maxOwnershipSubstations = Math.max(...ownerships.map(o => o.substationCount), 1);
+
         // ── Critical substation exposure ───────────────────────────────────
         const critRows = dataRows.filter(r => r.isCritical);
         const critMW = critRows.reduce((sum, r) => sum + (r.mw != null ? Number(r.mw) : 0), 0);
@@ -316,6 +400,7 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
             regions, maxRegionMW,
             grids, maxGridMW,
             voltages, maxVoltMW,
+            ownerships, maxOwnershipAssignments, maxOwnershipSubstations,
             critRows, critMW, critByStage,
             duplicates,
             stageRegionData,
@@ -328,6 +413,7 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
         regions, maxRegionMW,
         grids, maxGridMW,
         voltages, maxVoltMW,
+        ownerships, maxOwnershipAssignments, maxOwnershipSubstations,
         critRows, critMW, critByStage,
         duplicates,
         stageRegionData,
@@ -566,6 +652,46 @@ const SchemeAnalytics = ({ allRows, substations, schemeMetrics, stageDetails = [
                     )}
                 </SectionCard>
             </div>
+
+            <SectionCard
+                title="Ownership Distribution"
+                desc="Assigned substations and assignment occurrences grouped by ownership. Pocket isolated substations are included in these totals, not just the pocket boundary rows."
+            >
+                {ownerships.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.78rem', padding: '1rem' }}>No ownership data</div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                        {ownerships.map(item => (
+                            <div key={item.ownership} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 1fr 90px', gap: '10px', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0f172a' }}>{item.ownership}</div>
+                                    <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>{fmt(item.mw)} MW</div>
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '4px' }}>
+                                        <span style={{ fontSize: '0.6rem', color: '#64748b' }}>Substations</span>
+                                        <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#0f172a' }}>{item.substationCount}</span>
+                                    </div>
+                                    <HBar value={item.substationCount} max={maxOwnershipSubstations} color="#0ea5e9" height={6} />
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '4px' }}>
+                                        <span style={{ fontSize: '0.6rem', color: '#64748b' }}>Assignments</span>
+                                        <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#0f172a' }}>{item.assignmentCount}</span>
+                                    </div>
+                                    <HBar value={item.assignmentCount} max={maxOwnershipAssignments} color="#10b981" height={6} />
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '0.58rem', color: '#94a3b8' }}>Pocket subs</div>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: item.pocketSubstationCount > 0 ? '#f97316' : '#cbd5e1' }}>
+                                        {item.pocketSubstationCount}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </SectionCard>
 
             {/* ── Panel 4: Regional Distribution + Regional by Stage ───── */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
