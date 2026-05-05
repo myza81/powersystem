@@ -15,6 +15,10 @@ const SubstationFilter = ({
     extraValue,
     onExtraChange,
     extraOptions = null,
+    secondaryExtraLabel = null,
+    secondaryExtraValue,
+    onSecondaryExtraChange,
+    secondaryExtraOptions = null,
     showVoltage = true,
     showRelayFilter = true,
     viewMode = 'grid',
@@ -79,6 +83,7 @@ const SubstationFilter = ({
     const resetFilters = () => {
         onUpdateFilters({ region: 'All', grid: 'All', state: 'All', voltage: 'All', ownership: 'All', search: '', hasRelay: 'All', commissionYear: 'All', transformerYear: 'All' });
         if (onExtraChange) onExtraChange('All');
+        if (onSecondaryExtraChange) onSecondaryExtraChange('All');
     };
 
     // Build active filter chips for display
@@ -89,11 +94,14 @@ const SubstationFilter = ({
         if (state !== 'All')             chips.push({ key: 'state',           label: state,           clear: () => updateFilter('state', 'All') });
         if (showVoltage && voltage != null && voltage !== 'All') chips.push({ key: 'voltage', label: `${voltage} kV`, clear: () => updateFilter('voltage', 'All') });
         if (currentExtraValue !== 'All') chips.push({ key: 'ownership',       label: currentExtraValue, clear: () => onExtraChange ? onExtraChange('All') : updateFilter('ownership', 'All') });
+        if (secondaryExtraLabel && secondaryExtraValue !== undefined && secondaryExtraValue !== 'All') {
+            chips.push({ key: 'secondaryExtra', label: `${secondaryExtraLabel}: ${secondaryExtraValue}`, clear: () => onSecondaryExtraChange?.('All') });
+        }
         if (showRelayFilter && hasRelay !== 'All') chips.push({ key: 'hasRelay', label: `Relay: ${hasRelay}`, clear: () => updateFilter('hasRelay', 'All') });
         if (commissionYear !== 'All')    chips.push({ key: 'commissionYear',  label: `Built ${commissionYear}`, clear: () => updateFilter('commissionYear', 'All') });
         if (transformerYear !== 'All')   chips.push({ key: 'transformerYear', label: `TX ${transformerYear}`, clear: () => updateFilter('transformerYear', 'All') });
         return chips;
-    }, [region, grid, state, voltage, currentExtraValue, hasRelay, commissionYear, transformerYear, showRelayFilter]);
+    }, [region, grid, state, voltage, currentExtraValue, secondaryExtraLabel, secondaryExtraValue, hasRelay, commissionYear, transformerYear, showRelayFilter]);
 
     const hasActiveFilters = activeChips.length > 0 || search !== '';
 
@@ -300,6 +308,14 @@ const SubstationFilter = ({
                                     >
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.65rem', marginTop: '0.65rem', paddingTop: '0.65rem', borderTop: '1px solid var(--border-subtle)' }}>
                                             <FilterDropdown label={extraLabel} value={currentExtraValue} options={ownerships} onChange={v => onExtraChange ? onExtraChange(v) : updateFilter('ownership', v)} />
+                                            {secondaryExtraLabel && (
+                                                <FilterDropdown
+                                                    label={secondaryExtraLabel}
+                                                    value={secondaryExtraValue || 'All'}
+                                                    options={secondaryExtraOptions || ['All']}
+                                                    onChange={v => onSecondaryExtraChange?.(v)}
+                                                />
+                                            )}
                                             {showRelayFilter && <FilterDropdown label="LS Relay" value={hasRelay || 'All'} options={['All', 'Active', 'None']} onChange={v => updateFilter('hasRelay', v)} />}
                                             <FilterDropdown label="Substation Built" value={commissionYear || 'All'} options={decades} onChange={v => updateFilter('commissionYear', v)} />
                                             <FilterDropdown label="TX Commissioned" value={transformerYear || 'All'} options={['All', 'None', ...txDecades.filter(y => y !== 'All')]} onChange={v => updateFilter('transformerYear', v)} />

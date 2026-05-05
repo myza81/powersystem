@@ -29,6 +29,7 @@ const DEFAULT_FILTERS = {
     commissionYear: 'All',
     transformerYear: 'All',
     schemeType: 'All',
+    relayStatus: 'All',
 };
 
 const thStyle = {
@@ -271,7 +272,7 @@ const makeGroupCols = (firstKey, firstLabel) => [
         label: (
             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem' }}>
                 Available Unassigned
-                <InfoTooltip text="Substations without scheme assignment, excluding critical substations." />
+                <InfoTooltip text="Substations with at least one active LS relay and no scheme assignment, excluding critical substations." />
             </span>
         ),
         right: true,
@@ -286,7 +287,7 @@ const makeGroupCols = (firstKey, firstLabel) => [
         label: (
             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.25rem' }}>
                 Available Unassigned (MW)
-                <InfoTooltip text="Aggregate LT/AT MW from available unassigned substations." />
+                <InfoTooltip text="Aggregate LT/AT MW from available unassigned substations with at least one active LS relay." />
             </span>
         ),
         right: true,
@@ -536,9 +537,11 @@ const LSRelayManager = ({ isStaff }) => {
     }, [subsWithRelays]);
 
     const filteredSubs = useMemo(() => {
-        const { region, grid, state, voltage, search, schemeType } = filterCriteria;
+        const { region, grid, state, voltage, search, schemeType, relayStatus } = filterCriteria;
         const q = search.toLowerCase();
         return subsWithRelays.filter(s => {
+            const relaysForSubstation = relayMap[s.substation_id] || [];
+            const hasActiveRelay = relaysForSubstation.some(r => r.is_active);
             if (region !== 'All' && s.region !== region) return false;
             if (grid !== 'All' && s.grid !== grid) return false;
             if (state !== 'All' && s.state !== state) return false;
@@ -548,9 +551,11 @@ const LSRelayManager = ({ isStaff }) => {
                 !(s.mnemonic || '').toLowerCase().includes(q)) return false;
             if (schemeType === 'None' && (s.relay_scheme_types || []).length > 0) return false;
             if (schemeType !== 'All' && schemeType !== 'None' && !(s.relay_scheme_types || []).includes(schemeType)) return false;
+            if (relayStatus === 'Active' && !hasActiveRelay) return false;
+            if (relayStatus === 'Not Active' && hasActiveRelay) return false;
             return true;
         });
-    }, [subsWithRelays, filterCriteria]);
+    }, [subsWithRelays, filterCriteria, relayMap]);
 
     // Analytics breakdowns
     const byRegion = useMemo(() => {
@@ -559,15 +564,19 @@ const LSRelayManager = ({ isStaff }) => {
             const key = s.region || 'Unknown';
             if (!map[key]) map[key] = { region: key, subs: 0, assigned: 0, notAssignedMw: 0, availableUnassigned: 0, availableUnassignedMw: 0 };
             const isAssigned = (s.relay_scheme_types || []).length > 0;
+            const relaysForSubstation = relayMap[s.substation_id] || [];
+            const activeRelays = relaysForSubstation.filter(r => r.is_active);
             map[key].subs++;
             if (isAssigned) map[key].assigned++;
             else if (!s.is_critical) {
-                map[key].availableUnassigned++;
-                const mw = aggregateRelayMw(relayMap[s.substation_id] || []);
+                const mw = aggregateRelayMw(relaysForSubstation);
                 map[key].notAssignedMw += mw;
-                map[key].availableUnassignedMw += mw;
+                if (activeRelays.length > 0) {
+                    map[key].availableUnassigned++;
+                    map[key].availableUnassignedMw += aggregateRelayMw(activeRelays);
+                }
             } else {
-                map[key].notAssignedMw += aggregateRelayMw(relayMap[s.substation_id] || []);
+                map[key].notAssignedMw += aggregateRelayMw(relaysForSubstation);
             }
         });
         return Object.values(map).sort((a, b) => b.subs - a.subs);
@@ -579,15 +588,19 @@ const LSRelayManager = ({ isStaff }) => {
             const key = s.grid || 'Unknown';
             if (!map[key]) map[key] = { grid: key, subs: 0, assigned: 0, notAssignedMw: 0, availableUnassigned: 0, availableUnassignedMw: 0 };
             const isAssigned = (s.relay_scheme_types || []).length > 0;
+            const relaysForSubstation = relayMap[s.substation_id] || [];
+            const activeRelays = relaysForSubstation.filter(r => r.is_active);
             map[key].subs++;
             if (isAssigned) map[key].assigned++;
             else if (!s.is_critical) {
-                map[key].availableUnassigned++;
-                const mw = aggregateRelayMw(relayMap[s.substation_id] || []);
+                const mw = aggregateRelayMw(relaysForSubstation);
                 map[key].notAssignedMw += mw;
-                map[key].availableUnassignedMw += mw;
+                if (activeRelays.length > 0) {
+                    map[key].availableUnassigned++;
+                    map[key].availableUnassignedMw += aggregateRelayMw(activeRelays);
+                }
             } else {
-                map[key].notAssignedMw += aggregateRelayMw(relayMap[s.substation_id] || []);
+                map[key].notAssignedMw += aggregateRelayMw(relaysForSubstation);
             }
         });
         return Object.values(map).sort((a, b) => b.subs - a.subs);
@@ -603,15 +616,19 @@ const LSRelayManager = ({ isStaff }) => {
                 subs: 0, assigned: 0, notAssignedMw: 0, availableUnassigned: 0, availableUnassignedMw: 0,
             };
             const isAssigned = (s.relay_scheme_types || []).length > 0;
+            const relaysForSubstation = relayMap[s.substation_id] || [];
+            const activeRelays = relaysForSubstation.filter(r => r.is_active);
             map[key].subs++;
             if (isAssigned) map[key].assigned++;
             else if (!s.is_critical) {
-                map[key].availableUnassigned++;
-                const mw = aggregateRelayMw(relayMap[s.substation_id] || []);
+                const mw = aggregateRelayMw(relaysForSubstation);
                 map[key].notAssignedMw += mw;
-                map[key].availableUnassignedMw += mw;
+                if (activeRelays.length > 0) {
+                    map[key].availableUnassigned++;
+                    map[key].availableUnassignedMw += aggregateRelayMw(activeRelays);
+                }
             } else {
-                map[key].notAssignedMw += aggregateRelayMw(relayMap[s.substation_id] || []);
+                map[key].notAssignedMw += aggregateRelayMw(relaysForSubstation);
             }
         });
         return Object.values(map).sort((a, b) => {
@@ -675,6 +692,10 @@ const LSRelayManager = ({ isStaff }) => {
                     extraValue={filterCriteria.schemeType}
                     onExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, schemeType: val }))}
                     extraOptions={schemeTypeOptions}
+                    secondaryExtraLabel="Status"
+                    secondaryExtraValue={filterCriteria.relayStatus}
+                    onSecondaryExtraChange={(val) => setFilterCriteria(prev => ({ ...prev, relayStatus: val }))}
+                    secondaryExtraOptions={['All', 'Active', 'Not Active']}
                     showRelayFilter={false}
                     pageTitle="LS Relay"
                     resultCount={filteredSubs.length}
