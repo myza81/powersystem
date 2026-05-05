@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db import transaction as db_transaction
+from django.db.models import Prefetch
 from api.v1.permissions import IsStaffOrSuperuser, IsSuperuser
 
 logger = logging.getLogger(__name__)
@@ -80,24 +81,28 @@ class LoadSheddingVersionViewSet(BaseSheddingViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        queryset = LoadSheddingVersion.objects.select_related(
+            'created_by',
+            'published_by',
+        ).prefetch_related('stages__settings')
 
         # Superuser sees everything (all drafts + published)
         if user and user.is_authenticated and user.is_superuser:
-            return LoadSheddingVersion.objects.all()
+            return queryset
 
         # Staff sees own drafts + null-owner drafts + all published versions.
         # Null-owner drafts exist when a version was created outside a normal request context
         # (e.g. a direct DB seed); without this, staff get 404 trying to delete them.
         if user and user.is_authenticated and user.is_staff:
             from django.db.models import Q
-            return LoadSheddingVersion.objects.filter(
+            return queryset.filter(
                 Q(status__in=['active', 'deactivated'])
                 | Q(status='draft', created_by=user)
                 | Q(status='draft', created_by__isnull=True)
             )
 
         # Guest / anonymous: published versions only
-        return LoadSheddingVersion.objects.filter(status__in=['active', 'deactivated'])
+        return queryset.filter(status__in=['active', 'deactivated'])
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -828,6 +833,24 @@ class LoadSheddingStageViewSet(BaseSheddingViewSet):
         version = self.request.query_params.get('version')
         if version:
             queryset = queryset.filter(version_id=version)
+        if self.request.query_params.get('include_bays') == 'true' or self.action == 'retrieve':
+            transformer_bays = LoadSheddingTransformerBay.objects.select_related(
+                'relay__substation',
+            ).prefetch_related('transformers')
+            pocket_boundaries = LoadSheddingPocketBoundary.objects.select_related(
+                'relay__substation',
+            ).prefetch_related(
+                'branches__substation',
+                'branches__to_substation',
+            )
+            pocket_bays = LoadSheddingPocketBay.objects.prefetch_related(
+                Prefetch('boundaries', queryset=pocket_boundaries),
+            )
+            queryset = queryset.select_related('version').prefetch_related(
+                'settings',
+                Prefetch('transformer_bays', queryset=transformer_bays),
+                Prefetch('pocket_bays', queryset=pocket_bays),
+            )
         return queryset
 
 

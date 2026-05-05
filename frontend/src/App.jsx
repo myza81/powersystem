@@ -244,7 +244,7 @@ const App = () => {
     }, [substations, filterCriteria]);
 
     const handleSave = async (data) => {
-        console.log("App handleSave received data:", JSON.stringify(data, null, 2));
+        // console.log("App handleSave received data:", JSON.stringify(data, null, 2));
         setLoading(true);
         setStatus(null); // Clear previous status
         try {
@@ -433,202 +433,202 @@ const App = () => {
                     )}
 
                     {effectiveView === 'list' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                        <SubstationFilter
-                            substations={substations}
-                            currentFilters={filterCriteria}
-                            onUpdateFilters={setFilterCriteria}
-                            onRegister={isStaff ? () => { setSelectedSub(null); setView('create'); } : null}
-                            pageTitle="Substation Assets"
-                            resultCount={filteredSubstations.length}
-                            viewMode={listDisplayMode}
-                            onViewModeChange={setListDisplayMode}
-                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                            <SubstationFilter
+                                substations={substations}
+                                currentFilters={filterCriteria}
+                                onUpdateFilters={setFilterCriteria}
+                                onRegister={isStaff ? () => { setSelectedSub(null); setView('create'); } : null}
+                                pageTitle="Substation Assets"
+                                resultCount={filteredSubstations.length}
+                                viewMode={listDisplayMode}
+                                onViewModeChange={setListDisplayMode}
+                            />
 
-                        {/* Content — scrolls independently */}
-                        <div style={{ flex: 1, padding: '1rem 1.5rem 1.5rem', overflowY: 'auto', minHeight: 0 }}>
-                            {listDisplayMode === 'grid' ? (
-                                <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
-                                    <AnimatePresence>
-                                        {filteredSubstations.map(sub => (
-                                            <SubstationCard
-                                                key={sub.substation_id}
-                                                substation={sub}
-                                                isStaff={isStaff}
-                                                onEdit={() => setProfileSub(sub)}
-                                                onViewSld={setViewingSld}
-                                                onLocate={setLocatingSubstation}
-                                            />
-                                        ))}
-                                    </AnimatePresence>
-                                </div>
-                            ) : (
-                                <div style={{ 
-                                    background: 'rgba(255, 255, 255, 0.7)', 
-                                    borderRadius: '12px', 
-                                    border: '1px solid rgba(4, 125, 96, 0.15)',
-                                    boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    height: '100%',
-                                    overflow: 'hidden'
-                                }}>
-                                    <div style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: '1.5fr 0.8fr 1fr 0.8fr 120px',
-                                        gap: '1rem',
-                                        padding: '0.75rem 1.25rem',
-                                        background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))',
-                                        borderBottom: '1px solid rgba(4, 125, 96, 0.15)',
-                                        position: 'sticky',
-                                        top: 0,
-                                        zIndex: 10,
-                                        flexShrink: 0
-                                    }}>
-                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Substation</div>
-                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Voltage</div>
-                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ownership</div>
-                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Region</div>
-                                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</div>
-                                    </div>
-                                    <div style={{ flex: 1, overflowY: 'auto' }}>
+                            {/* Content — scrolls independently */}
+                            <div style={{ flex: 1, padding: '1rem 1.5rem 1.5rem', overflowY: 'auto', minHeight: 0 }}>
+                                {listDisplayMode === 'grid' ? (
+                                    <div className="substation-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.5rem' }}>
                                         <AnimatePresence>
                                             {filteredSubstations.map(sub => (
-                                                <SubstationListRow
+                                                <SubstationCard
                                                     key={sub.substation_id}
                                                     substation={sub}
                                                     isStaff={isStaff}
-                                                    onEdit={() => { setSelectedSub(sub); setView('edit'); }}
+                                                    onEdit={() => setProfileSub(sub)}
                                                     onViewSld={setViewingSld}
                                                     onLocate={setLocatingSubstation}
                                                 />
                                             ))}
                                         </AnimatePresence>
                                     </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Substation Location Map Modal */}
-                <AnimatePresence>
-                    {locatingSubstation && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            style={{
-                                position: 'fixed',
-                                top: 0,
-                                left: 0,
-                                width: '100%',
-                                height: '100%',
-                                background: 'rgba(255,255,255,0.85)',
-                                backdropFilter: 'blur(10px)',
-                                zIndex: 2000,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: '2rem'
-                            }}
-                            onClick={() => setLocatingSubstation(null)}
-                        >
-                            <motion.div
-                                initial={{ scale: 0.9, y: 20 }}
-                                animate={{ scale: 1, y: 0 }}
-                                exit={{ scale: 0.9, y: 20 }}
-                                onClick={(e) => e.stopPropagation()}
-                                style={{
-                                    width: '100%',
-                                    maxWidth: '1000px',
-                                    background: '#ffffff',
-                                    borderRadius: '16px',
-                                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                                    overflow: 'hidden',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    boxShadow: '0 20px 50px rgba(0,0,0,0.1)'
-                                }}
-                            >
-                                <div style={{
-                                    padding: '1.5rem',
-                                    borderBottom: '1px solid rgba(255,255,255,0.1)',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    background: 'rgba(16, 185, 129, 0.05)'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                        <div style={{ padding: '8px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px' }}>
-                                            <MapPin size={20} color="#10b981" />
+                                ) : (
+                                    <div style={{
+                                        background: 'rgba(255, 255, 255, 0.7)',
+                                        borderRadius: '12px',
+                                        border: '1px solid rgba(4, 125, 96, 0.15)',
+                                        boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        height: '100%',
+                                        overflow: 'hidden'
+                                    }}>
+                                        <div style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: '1.5fr 0.8fr 1fr 0.8fr 120px',
+                                            gap: '1rem',
+                                            padding: '0.75rem 1.25rem',
+                                            background: 'linear-gradient(135deg, rgba(4, 125, 96, 0.1), rgba(5, 150, 105, 0.05))',
+                                            borderBottom: '1px solid rgba(4, 125, 96, 0.15)',
+                                            position: 'sticky',
+                                            top: 0,
+                                            zIndex: 10,
+                                            flexShrink: 0
+                                        }}>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Substation</div>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Voltage</div>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ownership</div>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Region</div>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#047d60', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</div>
                                         </div>
-                                        <div>
-                                            <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#111827' }}>
-                                                {locatingSubstation.name}
-                                            </h3>
-                                            <div style={{ fontSize: '0.85rem', color: 'rgba(75, 85, 99, 0.8)', marginTop: '2px' }}>
-                                                {locatingSubstation.substation_id} • {locatingSubstation.state || 'Unknown State'}
-                                            </div>
+                                        <div style={{ flex: 1, overflowY: 'auto' }}>
+                                            <AnimatePresence>
+                                                {filteredSubstations.map(sub => (
+                                                    <SubstationListRow
+                                                        key={sub.substation_id}
+                                                        substation={sub}
+                                                        isStaff={isStaff}
+                                                        onEdit={() => { setSelectedSub(sub); setView('edit'); }}
+                                                        onViewSld={setViewingSld}
+                                                        onLocate={setLocatingSubstation}
+                                                    />
+                                                ))}
+                                            </AnimatePresence>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => setLocatingSubstation(null)}
-                                        style={{
-                                            background: 'rgba(16, 185, 129, 0.1)',
-                                            border: 'none',
-                                            borderRadius: '8px',
-                                            padding: '8px',
-                                            color: '#10b981',
-                                            cursor: 'pointer',
-                                            transition: 'background 0.2s'
-                                        }}
-                                        onMouseEnter={(e) => e.target.style.background = 'rgba(16, 185, 129, 0.2)'}
-                                        onMouseLeave={(e) => e.target.style.background = 'rgba(16, 185, 129, 0.1)'}
-                                    >
-                                        <X size={20} />
-                                    </button>
-                                </div>
-                                <div style={{ padding: '1rem', height: '600px' }}>
-                                    <SubstationMap
-                                        data={[locatingSubstation]}
-                                        focusLocation={locatingSubstation}
-                                    />
-                                </div>
-                            </motion.div>
-                        </motion.div>
+                                )}
+                            </div>
+                        </div>
                     )}
-                </AnimatePresence>
 
-                {effectiveView === 'create' || effectiveView === 'edit' ? (
-                    <SubstationForm
-                        substation={selectedSub}
-                        initialAssetId={initialAssetId}
-                        onSave={handleSave}
-                        onSubstationRefresh={handleRefreshSubstation}
-                        onCancel={() => { setView('list'); setInitialAssetId(null); }}
-                        onConfigEdit={() => setView('config')}
-                        onSLDUpload={handleSLDUpload}
-                        status={status}
-                        loading={loading}
-                    />
-                ) : null}
+                    {/* Substation Location Map Modal */}
+                    <AnimatePresence>
+                        {locatingSubstation && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                style={{
+                                    position: 'fixed',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    background: 'rgba(255,255,255,0.85)',
+                                    backdropFilter: 'blur(10px)',
+                                    zIndex: 2000,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '2rem'
+                                }}
+                                onClick={() => setLocatingSubstation(null)}
+                            >
+                                <motion.div
+                                    initial={{ scale: 0.9, y: 20 }}
+                                    animate={{ scale: 1, y: 0 }}
+                                    exit={{ scale: 0.9, y: 20 }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                        width: '100%',
+                                        maxWidth: '1000px',
+                                        background: '#ffffff',
+                                        borderRadius: '16px',
+                                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                                        overflow: 'hidden',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        boxShadow: '0 20px 50px rgba(0,0,0,0.1)'
+                                    }}
+                                >
+                                    <div style={{
+                                        padding: '1.5rem',
+                                        borderBottom: '1px solid rgba(255,255,255,0.1)',
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        background: 'rgba(16, 185, 129, 0.05)'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{ padding: '8px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px' }}>
+                                                <MapPin size={20} color="#10b981" />
+                                            </div>
+                                            <div>
+                                                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#111827' }}>
+                                                    {locatingSubstation.name}
+                                                </h3>
+                                                <div style={{ fontSize: '0.85rem', color: 'rgba(75, 85, 99, 0.8)', marginTop: '2px' }}>
+                                                    {locatingSubstation.substation_id} • {locatingSubstation.state || 'Unknown State'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setLocatingSubstation(null)}
+                                            style={{
+                                                background: 'rgba(16, 185, 129, 0.1)',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                padding: '8px',
+                                                color: '#10b981',
+                                                cursor: 'pointer',
+                                                transition: 'background 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => e.target.style.background = 'rgba(16, 185, 129, 0.2)'}
+                                            onMouseLeave={(e) => e.target.style.background = 'rgba(16, 185, 129, 0.1)'}
+                                        >
+                                            <X size={20} />
+                                        </button>
+                                    </div>
+                                    <div style={{ padding: '1rem', height: '600px' }}>
+                                        <SubstationMap
+                                            data={[locatingSubstation]}
+                                            focusLocation={locatingSubstation}
+                                        />
+                                    </div>
+                                </motion.div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
-                {effectiveView === 'config' && (
-                    <ConfigurationEditor
-                        substation={selectedSub}
-                        onSave={handleSave}
-                        onCancel={() => setView('list')}
-                        onViewSld={setViewingSld}
-                    />
-                )}
+                    {effectiveView === 'create' || effectiveView === 'edit' ? (
+                        <SubstationForm
+                            substation={selectedSub}
+                            initialAssetId={initialAssetId}
+                            onSave={handleSave}
+                            onSubstationRefresh={handleRefreshSubstation}
+                            onCancel={() => { setView('list'); setInitialAssetId(null); }}
+                            onConfigEdit={() => setView('config')}
+                            onSLDUpload={handleSLDUpload}
+                            status={status}
+                            loading={loading}
+                        />
+                    ) : null}
 
-                {effectiveView === 'dashboard' && (
-                    <LoadDashboard substations={substations} />
-                )}
+                    {effectiveView === 'config' && (
+                        <ConfigurationEditor
+                            substation={selectedSub}
+                            onSave={handleSave}
+                            onCancel={() => setView('list')}
+                            onViewSld={setViewingSld}
+                        />
+                    )}
+
+                    {effectiveView === 'dashboard' && (
+                        <LoadDashboard substations={substations} />
+                    )}
 
 
-                {/* {effectiveView === 'topology' && (
+                    {/* {effectiveView === 'topology' && (
                     <TopologyValidation
                         onEditSubstation={(substationId) => {
                             const sub = substations.find(s => s.substation_id === substationId);
@@ -640,64 +640,64 @@ const App = () => {
                     />
                 )} */}
 
-                {effectiveView === 'dev-tools' && (
-                    <DevTools onBack={() => setView('list')} />
-                )}
+                    {effectiveView === 'dev-tools' && (
+                        <DevTools onBack={() => setView('list')} />
+                    )}
 
-                {effectiveView === 'snapshots' && (
-                    <SnapshotManager />
-                )}
+                    {effectiveView === 'snapshots' && (
+                        <SnapshotManager />
+                    )}
 
 
-                {effectiveView === 'load-shedding-viewer' && (
-                    <LoadSheddingSchemeReviewer />
-                )}
+                    {effectiveView === 'load-shedding-viewer' && (
+                        <LoadSheddingSchemeReviewer />
+                    )}
 
-                {effectiveView === 'load-shedding-designer' && (
-                    <LoadSheddingDesigner />
-                )}
+                    {effectiveView === 'load-shedding-designer' && (
+                        <LoadSheddingDesigner />
+                    )}
 
-                {effectiveView === 'ls-relay' && (
-                    <LSRelayManager isStaff={isStaff} />
-                )}
+                    {effectiveView === 'ls-relay' && (
+                        <LSRelayManager isStaff={isStaff} />
+                    )}
 
-                {effectiveView === 'critical-substations' && (
-                    <CriticalSubstationManager
-                        isStaff={isStaff}
-                        onEditSubstation={(substationId, assetId) => {
-                            const sub = substations.find(s => s.substation_id === substationId);
-                            if (sub) {
-                                setSelectedSub(sub);
-                                setInitialAssetId(assetId);
-                                setView('edit');
-                            }
-                        }}
-                    />
-                )}
-
-                {viewingSld && (
-                    <SldViewer
-                        substation={viewingSld}
-                        onClose={() => setViewingSld(null)}
-                    />
-                )}
-
-                <AnimatePresence>
-                    {profileSub && (
-                        <SubstationProfileModal
-                            substation={profileSub}
-                            onClose={() => setProfileSub(null)}
-                            onEdit={isGuest ? null : () => {
-                                setProfileSub(null);
-                                setSelectedSub(profileSub);
-                                setView('edit');
+                    {effectiveView === 'critical-substations' && (
+                        <CriticalSubstationManager
+                            isStaff={isStaff}
+                            onEditSubstation={(substationId, assetId) => {
+                                const sub = substations.find(s => s.substation_id === substationId);
+                                if (sub) {
+                                    setSelectedSub(sub);
+                                    setInitialAssetId(assetId);
+                                    setView('edit');
+                                }
                             }}
                         />
                     )}
-                </AnimatePresence>
 
-            </div>
-        </MainLayout>
+                    {viewingSld && (
+                        <SldViewer
+                            substation={viewingSld}
+                            onClose={() => setViewingSld(null)}
+                        />
+                    )}
+
+                    <AnimatePresence>
+                        {profileSub && (
+                            <SubstationProfileModal
+                                substation={profileSub}
+                                onClose={() => setProfileSub(null)}
+                                onEdit={isGuest ? null : () => {
+                                    setProfileSub(null);
+                                    setSelectedSub(profileSub);
+                                    setView('edit');
+                                }}
+                            />
+                        )}
+                    </AnimatePresence>
+
+                </div>
+            </MainLayout>
         </>
     );
 };

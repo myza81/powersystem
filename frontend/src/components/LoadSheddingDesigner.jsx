@@ -811,7 +811,7 @@ const LoadSheddingDesigner = () => {
 
             const [userRes, relayRes, versionRes, settingsRes, subsRes, criticalRes] = await Promise.all([
                 api.get('/users/me/'),
-                api.get('/load-shedding-relays/'),
+                api.get('/load-shedding-relays/?include_loads=false'),
                 api.get('/load-shedding-versions/'),
                 api.get('/load-shedding-settings/'),
                 api.get('/substations/'),

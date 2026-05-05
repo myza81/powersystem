@@ -56,6 +56,8 @@ class SubstationViewSet(viewsets.ModelViewSet):
         ctx = super().get_serializer_context()
         if self.action == 'list':
             from core.models import LoadSheddingTransformerBay, LoadSheddingPocketBay, LoadSheddingPocketBoundary
+            from core.models import NetworkLoad, NetworkSnapshot
+            from django.db.models import Sum
             scheme_types_map = {}
             stages_map = {}
 
@@ -129,6 +131,25 @@ class SubstationViewSet(viewsets.ModelViewSet):
 
             ctx['scheme_types_map'] = scheme_types_map
             ctx['stages_map'] = stages_map
+
+            snapshot = NetworkSnapshot.objects.order_by('-timestamp').first()
+            if snapshot:
+                ctx['substation_load_mw_map'] = {
+                    row['bus__substation_id']: round(row['total'] or 0.0, 2)
+                    for row in (
+                        NetworkLoad.objects
+                        .filter(
+                            snapshot=snapshot,
+                            bus__topology_version=snapshot.topology_version,
+                            bus__substation__isnull=False,
+                        )
+                        .values('bus__substation_id')
+                        .annotate(total=Sum('p_mw'))
+                    )
+                }
+                ctx['_latest_snapshot'] = snapshot
+            else:
+                ctx['substation_load_mw_map'] = {}
         return ctx
 
     def get_permissions(self):

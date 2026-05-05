@@ -456,7 +456,7 @@ const LoadSheddingSchemeReviewer = () => {
             const [vRes, sRes, rRes, cRes] = await Promise.all([
                 api.get('/load-shedding-versions/'),
                 api.get('/substations/'),
-                api.get('/load-shedding-relays/'),
+                api.get('/load-shedding-relays/?include_loads=false'),
                 api.get('/critical-assets/'),
             ]);
             setAllVersions(vRes.data);

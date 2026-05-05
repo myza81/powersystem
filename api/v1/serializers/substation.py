@@ -24,6 +24,10 @@ def _get_snapshot_from_context(context):
     return context[cache_key]
 
 
+def _include_current_loads(context):
+    return context.get('include_current_loads', True)
+
+
 def _get_substation_load_totals(context, substation):
     snapshot = _get_snapshot_from_context(context)
     if not snapshot or not substation:
@@ -142,6 +146,10 @@ class SubstationSerializer(serializers.ModelSerializer):
         return _get_snapshot_from_context(self.context)
 
     def get_total_pload_mw(self, obj):
+        precomputed = self.context.get('substation_load_mw_map')
+        if precomputed is not None:
+            return precomputed.get(obj.substation_id, 0.0)
+
         snapshot = self.get_snapshot()
         if not snapshot:
             return 0.0
@@ -221,9 +229,13 @@ class LoadTransformerSerializer(serializers.ModelSerializer):
         return f'T{obj.transformer_no}'
 
     def get_current_mw(self, obj):
+        if not _include_current_loads(self.context):
+            return None
         return _get_transformer_load_totals(self.context, obj, 'load_transformer').get('p_mw')
 
     def get_current_mvar(self, obj):
+        if not _include_current_loads(self.context):
+            return None
         return _get_transformer_load_totals(self.context, obj, 'load_transformer').get('q_mvar')
 
     class Meta:
@@ -291,9 +303,13 @@ class AutoTransformerSerializer(serializers.ModelSerializer):
         return f'AT{obj.transformer_no}'
 
     def get_current_mw(self, obj):
+        if not _include_current_loads(self.context):
+            return None
         return _get_transformer_load_totals(self.context, obj, 'auto_transformer', load_prefix='AT').get('p_mw')
 
     def get_current_mvar(self, obj):
+        if not _include_current_loads(self.context):
+            return None
         return _get_transformer_load_totals(self.context, obj, 'auto_transformer', load_prefix='AT').get('q_mvar')
 
     class Meta:

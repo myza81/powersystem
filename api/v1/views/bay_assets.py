@@ -13,6 +13,13 @@ from api.v1.permissions import IsStaffOrSuperuser
 class BaseBayAssetViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        include_loads = self.request.query_params.get('include_loads')
+        if include_loads is not None:
+            context['include_current_loads'] = include_loads.lower() not in {'0', 'false', 'no'}
+        return context
+
     def get_permissions(self):
         if self.request.method in permissions.SAFE_METHODS:
             return [permissions.AllowAny()]
