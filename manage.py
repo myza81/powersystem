@@ -6,7 +6,7 @@ import sys
 
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'powersystem_core.settings')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'gridshed.settings')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

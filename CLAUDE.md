@@ -19,7 +19,7 @@ python manage.py runserver
 cd frontend && npm install && npm run dev
 
 # Celery (async tasks — optional)
-celery -A powersystem worker -l info
+celery -A gridshed worker -l info
 
 # After any model change — always commit the generated file
 python manage.py makemigrations
@@ -32,7 +32,7 @@ API: `http://localhost:8000/api/v1/` · Frontend dev server proxies to the backe
 ## Project Layout
 
 ```
-powersystem_core/   Django project (settings.py, urls.py)
+gridshed/           Django project (settings.py, urls.py)
 api/v1/             REST API — views/, serializers/
 core/               Django app — models/, migrations/, fixtures/
   models/
@@ -49,7 +49,7 @@ frontend/src/
 
 ## URL / Router
 
-All API endpoints are registered in `powersystem_core/urls.py` using `DefaultRouter`. Auth endpoints (`/users/me/`, `/users/login/`, `/users/logout/`) are declared separately before the router include. Dev-only export/import endpoints are gated behind `settings.DEBUG`.
+All API endpoints are registered in `gridshed/urls.py` using `DefaultRouter`. Auth endpoints (`/users/me/`, `/users/login/`, `/users/logout/`) are declared separately before the router include. Dev-only export/import endpoints are gated behind `settings.DEBUG`.
 
 ---
 
@@ -131,7 +131,7 @@ Rule 3 is enforced at three trigger points in the frontend: `addTransformerToSta
 ## Conventions
 
 - **Migrations**: every model edit ships with `makemigrations`. Always commit the generated file.
-- **API versioning**: all endpoints live under `api/v1/`. Add new ViewSets to `powersystem_core/urls.py`.
+- **API versioning**: all endpoints live under `api/v1/`. Add new ViewSets to `gridshed/urls.py`.
 - **Frontend API calls**: use the `api` Axios instance from `frontend/src/api.js` (handles CSRF automatically).
 - **Media files**: uploads go to `media/`. Never commit.
 - **Substation ID**: generated as `{mnemonic}{voltage}` (e.g. `JNKA132`). The `mnemonic` is a 4-letter site code.
